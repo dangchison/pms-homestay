@@ -1,0 +1,49 @@
+# Dev stack (docs/13 §1): PostgreSQL 16 + Redis 7 + Mailpit
+# Chạy: pnpm db:up (docker compose -f infra/docker/docker-compose.dev.yml up -d --wait)
+name: pms-dev
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pms
+    ports:
+      - '5432:5432'
+    volumes:
+      - pms_pg_data:/var/lib/postgresql/data
+      # Tạo app_user (non-superuser) — RLS chỉ có hiệu lực thật với user thường (ADR-0002)
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d pms']
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  redis:
+    image: redis:7
+    ports:
+      - '6379:6379'
+    volumes:
+      - pms_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - '1025:1025' # SMTP
+      - '8025:8025' # Web UI
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pms_pg_data:
+  pms_redis_data:

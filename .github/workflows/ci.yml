@@ -1,0 +1,112 @@
+# CI (docs/11 §CI): lint → typecheck → test (kèm PG16+Redis7 thật) → build
+# + gate "introspection clean" (ADR-0001) + security scan.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Test env (khớp test/setup.ts + docker-compose.dev.yml)
+  DATABASE_URL: postgresql://app_user:app_password@localhost:5432/pms
+  DATABASE_URL_MIGRATIONS: postgresql://postgres:postgres@localhost:5432/pms
+  REDIS_URL: redis://localhost:6379/0
+  JWT_ACCESS_SECRET: ci-access-secret-0123456789-0123456789
+  JWT_REFRESH_SECRET: ci-refresh-secret-0123456789-012345678
+  PII_ENC_KEY_CURRENT: 'k1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+  PII_HMAC_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+  S3_ENDPOINT: http://localhost:9000
+  S3_BUCKET: pms-ci
+  S3_ACCESS_KEY: ci
+  S3_SECRET_KEY: ci
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pms
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d pms"
+          --health-interval 3s --health-timeout 3s --health-retries 15
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s --health-timeout 3s --health-retries 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4 # đọc version từ packageManager
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Tạo app_user (non-superuser — RLS có hiệu lực thật)
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -d pms -f infra/docker/initdb/01-app-user.sql
+
+      - name: Migrations (SQL-first) + prisma db pull + generate
+        run: pnpm db:migrate
+
+      - name: Gate introspection-clean (ADR-0001 — schema.prisma phải khớp DB)
+        run: git diff --exit-code apps/api/prisma/schema.prisma
+
+      - name: Seed required (smoke)
+        run: pnpm db:seed:required
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test (unit + integration RLS + e2e)
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks (secret scan)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: pnpm audit (prod deps — chưa chặn merge ở scaffold)
+        run: pnpm audit --prod
+        continue-on-error: true

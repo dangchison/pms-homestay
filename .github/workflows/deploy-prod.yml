@@ -1,0 +1,15 @@
+# TODO(task 8.x — docs/11 §CI/CD): deploy production — manual gate (workflow_dispatch),
+# rolling + smoke test. Placeholder cho tới khi có hạ tầng.
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: |
+          echo "TODO(task 8.x): needs deploy-staging xanh + approval → rolling deploy + smoke"
+          exit 1

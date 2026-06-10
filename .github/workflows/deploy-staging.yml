@@ -1,0 +1,15 @@
+# TODO(task 8.x — docs/11 §CI/CD): deploy staging sau khi CI xanh trên main.
+# Placeholder — hạ tầng VPS/Doppler chưa tồn tại ở scaffold.
+name: Deploy Staging
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "TODO(task 8.x): build images (api.Dockerfile, web.Dockerfile)"
+          echo "→ push registry → ssh VPS docker compose up → smoke /health/readiness → notify"
+          exit 1

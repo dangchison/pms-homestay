@@ -1,0 +1,16 @@
+# TODO(task 8.3 — docs/11 §10): k6 benchmark chạy nightly (KHÔNG chạy per-PR).
+# Placeholder — k6 script + budget viết ở Sprint 6.
+name: Nightly Bench
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: '0 18 * * *' # 01:00 VN — bật khi task 8.3 hoàn thành
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "TODO(task 8.3): k6 run booking-flow.js — budget p95 đọc 200ms / ghi 500ms"
+          exit 1

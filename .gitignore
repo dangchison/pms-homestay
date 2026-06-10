@@ -1,0 +1,21 @@
+# deps
+node_modules/
+
+# builds
+dist/
+.next/
+out/
+*.tsbuildinfo
+.turbo/
+
+# env & secrets
+.env
+.env.local
+.env.*.local
+
+# test
+coverage/
+
+# misc
+.DS_Store
+*.log

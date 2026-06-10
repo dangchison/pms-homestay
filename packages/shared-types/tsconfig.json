@@ -1,0 +1,4 @@
+{
+  "extends": "@pms/tsconfig/node-library.json",
+  "include": ["src", "tsup.config.ts"]
+}

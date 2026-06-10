@@ -1,0 +1,13 @@
+{
+  "extends": "@pms/tsconfig/nestjs.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@core/*": ["src/core/*"],
+      "@modules/*": ["src/modules/*"]
+    }
+  },
+  "include": ["src", "test"]
+}

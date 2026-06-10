@@ -1,0 +1,13 @@
+packages:
+  - apps/*
+  - packages/*
+
+# pnpm 10: chỉ các dep này được chạy postinstall/build script
+onlyBuiltDependencies:
+  - esbuild
+  - '@swc/core'
+  - prisma
+  - '@prisma/client'
+  - '@prisma/engines'
+  - '@tailwindcss/oxide'
+  - sharp

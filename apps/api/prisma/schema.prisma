@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model pgmigrations {
+  id     Int      @id @default(autoincrement())
+  name   String   @db.VarChar(255)
+  run_on DateTime @db.Timestamp(6)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model subscription_plans {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code              String    @unique @db.VarChar(32)
+  name              String    @db.VarChar(128)
+  max_properties    Int
+  max_rooms         Int
+  max_users         Int
+  monthly_price_vnd BigInt
+  features          Json      @default("{}")
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime  @default(now()) @db.Timestamptz(6)
+  tenants           tenants[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model tenants {
+  id                   String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug                 String              @unique @db.VarChar(64)
+  display_name         String              @db.VarChar(255)
+  business_type        String?             @db.VarChar(32)
+  status               String              @default("TRIAL") @db.VarChar(16)
+  subscription_plan_id String?             @db.Uuid
+  trial_ends_at        DateTime?           @db.Timestamptz(6)
+  timezone             String              @default("Asia/Ho_Chi_Minh") @db.VarChar(64)
+  currency             String              @default("VND") @db.Char(3)
+  created_at           DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime            @default(now()) @db.Timestamptz(6)
+  subscription_plans   subscription_plans? @relation(fields: [subscription_plan_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([subscription_plan_id], map: "idx_tenants_plan")
+  @@index([status], map: "idx_tenants_status")
+}

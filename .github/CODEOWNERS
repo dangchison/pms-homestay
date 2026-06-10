@@ -1,0 +1,7 @@
+# TODO: thay bằng GitHub username/team thật khi đưa lên GitHub
+# Quy ước gợi ý (docs/14 §PR): mọi PR đụng migrations-sql / core/tenancy / core/crypto
+# bắt buộc review bởi owner kiến trúc.
+#
+# *                          @your-github-username
+# /infra/migrations-sql/     @backend-lead
+# /apps/api/src/core/        @backend-lead
