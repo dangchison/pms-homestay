@@ -14,29 +14,9 @@ import {
 import { type JwtClaims } from '@pms/shared-types';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
-import { AppException } from '@core/http/exceptions/app.exception';
+import { parseIfMatch } from '@/shared/if-match';
 import { CreateRoomDto, UpdateRoomDto } from './dto';
 import { RoomsService } from './rooms.service';
-
-/** If-Match header → version number (docs/05 §4.5). Hỗ trợ cả dạng có/không ngoặc kép. */
-function parseIfMatch(raw?: string): number {
-  if (!raw) {
-    throw new AppException({
-      code: 'IF_MATCH_REQUIRED',
-      title: 'PATCH cần header If-Match = version hiện tại',
-      status: 428,
-    });
-  }
-  const n = Number(raw.replace(/^W\//, '').replace(/"/g, '').trim());
-  if (!Number.isInteger(n) || n < 0) {
-    throw new AppException({
-      code: 'IF_MATCH_INVALID',
-      title: 'If-Match không hợp lệ',
-      status: 400,
-    });
-  }
-  return n;
-}
 
 /** /api/v1/rooms (docs/05). Tạo phòng tự sinh resource ROOM (ADR-0006). */
 @Controller('rooms')

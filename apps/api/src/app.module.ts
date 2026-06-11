@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '@core/auth/jwt-auth.guard';
 import { PermissionsGuard } from '@core/auth/permissions.guard';
 import { AppConfigModule } from '@core/config/config.module';
 import { type Env } from '@core/config/env.schema';
+import { CountersModule } from '@core/counters/counters.module';
 import { CryptoModule } from '@core/crypto/crypto.module';
 import { AppLoggerModule } from '@core/logger/logger.module';
 import { PrismaModule } from '@core/prisma/prisma.module';
@@ -12,6 +13,7 @@ import { RedisModule } from '@core/redis/redis.module';
 import { TenantGuard } from '@core/tenancy/tenant.guard';
 import { TenantResolverMiddleware } from '@core/tenancy/tenant-resolver.middleware';
 import { AuthPublicModule } from '@modules/auth-public/auth-public.module';
+import { BookingsModule } from '@modules/bookings/bookings.module';
 import { GuestsModule } from '@modules/guests/guests.module';
 import { HealthModule } from '@modules/health/health.module';
 import { PricingModule } from '@modules/pricing/pricing.module';
@@ -35,6 +37,7 @@ export class AppModule implements NestModule {
         PrismaModule,
         RedisModule,
         CryptoModule,
+        CountersModule,
         AuthCoreModule,
         AuthPublicModule,
         HealthModule,
@@ -44,6 +47,7 @@ export class AppModule implements NestModule {
         RatePlansModule,
         PricingModule,
         GuestsModule,
+        BookingsModule,
       ],
       providers: [
         TenantResolverMiddleware,

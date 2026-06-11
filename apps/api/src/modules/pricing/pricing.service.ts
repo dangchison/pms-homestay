@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { type JwtClaims, type QuoteRequest, type QuoteResponse } from '@pms/shared-types';
-import { PricingError, localDate, quote as computeQuote } from '@pms/pricing-engine';
-import { Prisma, type rate_plans } from '@prisma/client';
+import {
+  PricingError,
+  localDate,
+  quote as computeQuote,
+  type Quote as EngineQuote,
+} from '@pms/pricing-engine';
+import { Prisma, type quotes, type rate_plans } from '@prisma/client';
 import { PermissionService } from '@core/auth/permission.service';
 import { AppException } from '@core/http/exceptions/app.exception';
 import { PrismaService } from '@core/prisma/prisma.service';
@@ -40,35 +45,13 @@ export class PricingService {
       const timezone = property?.timezone ?? 'Asia/Ho_Chi_Minh';
 
       const plan = await this.resolvePlan(tx, resource, dto.mode, dto.rate_plan_id);
-      const rules = await tx.rate_plan_rules.findMany({ where: { rate_plan_id: plan.id } });
-      const holidayRows = await tx.vietnam_holidays.findMany({
-        where: {
-          holiday_date: {
-            gte: new Date(`${localDate(checkIn, timezone)}T00:00:00.000Z`),
-            lte: new Date(`${localDate(checkOut, timezone)}T00:00:00.000Z`),
-          },
-        },
+      const engineQuote = await this.computeForPlan(tx, plan, timezone, {
+        mode: dto.mode,
+        checkIn,
+        checkOut,
+        adults: dto.adults,
+        children: dto.children,
       });
-      const holidays = holidayRows.map(holidayRowToEngine);
-
-      let engineQuote;
-      try {
-        engineQuote = computeQuote(
-          { mode: dto.mode, checkIn, checkOut, adults: dto.adults, children: dto.children },
-          toRatePlanConfig(plan, rules, timezone),
-          holidays,
-        );
-      } catch (err) {
-        if (err instanceof PricingError) {
-          throw new AppException({
-            code: `PRICING_${err.code}`,
-            title: 'Không tính được giá',
-            status: 422,
-            detail: err.message,
-          });
-        }
-        throw err;
-      }
 
       const lineItems = engineQuote.lineItems.map(toApiLineItem);
       const expiresAt = new Date(Date.now() + QUOTE_TTL_MS);
@@ -127,7 +110,108 @@ export class PricingService {
     return count;
   }
 
+  /**
+   * ★ Verify quote khi tạo booking (docs/07 §6) — gọi TRONG tx booking (2.6).
+   * Re-calculate bằng plan hiện tại, lệch giá / hết hạn → 409 PRICE_CHANGED;
+   * sai resource/khoảng/chế độ → 422; đã dùng → 409. Trả quote row nếu hợp lệ.
+   */
+  async verifyQuoteForBooking(
+    tx: Tx,
+    quoteId: string,
+    expect: { resourceId: string; checkIn: Date; checkOut: Date; mode: QuoteRequest['mode'] },
+  ): Promise<quotes> {
+    const quote = await tx.quotes.findFirst({ where: { id: quoteId } });
+    if (!quote) {
+      throw new AppException({ code: 'QUOTE_NOT_FOUND', title: 'Báo giá không tồn tại', status: 404 });
+    }
+    if (quote.used_by_booking_id) {
+      throw new AppException({
+        code: 'QUOTE_ALREADY_USED',
+        title: 'Báo giá đã dùng cho booking khác',
+        status: 409,
+      });
+    }
+    if (
+      quote.resource_id !== expect.resourceId ||
+      quote.mode !== expect.mode ||
+      quote.check_in.getTime() !== expect.checkIn.getTime() ||
+      quote.check_out.getTime() !== expect.checkOut.getTime()
+    ) {
+      throw new AppException({
+        code: 'QUOTE_MISMATCH',
+        title: 'Báo giá không khớp resource/khoảng thời gian',
+        status: 422,
+      });
+    }
+    const priceChanged = (detail: string): AppException =>
+      new AppException({
+        code: 'PRICE_CHANGED',
+        title: 'Giá đã thay đổi — vui lòng báo giá lại',
+        status: 409,
+        detail,
+      });
+    if (quote.expires_at.getTime() < Date.now()) throw priceChanged('quote đã hết hạn');
+
+    const property = await tx.properties.findFirst({
+      where: { id: quote.property_id },
+      select: { timezone: true },
+    });
+    const plan = await tx.rate_plans.findFirst({ where: { id: quote.rate_plan_id } });
+    if (!plan) throw priceChanged('gói giá không còn');
+    const recalculated = await this.computeForPlan(
+      tx,
+      plan,
+      property?.timezone ?? 'Asia/Ho_Chi_Minh',
+      { mode: quote.mode, checkIn: quote.check_in, checkOut: quote.check_out, adults: quote.adults, children: quote.children },
+    );
+    if (recalculated.totalVnd !== Number(quote.total_vnd)) {
+      throw priceChanged(`giá mới ${recalculated.totalVnd} ≠ báo giá ${Number(quote.total_vnd)}`);
+    }
+    return quote;
+  }
+
   // ── Helpers ──────────────────────────────────────────────────────────────
+
+  /** Load rules + holidays cho plan rồi chạy engine (dùng chung quote + verify). */
+  private async computeForPlan(
+    tx: Tx,
+    plan: rate_plans,
+    timezone: string,
+    params: { mode: QuoteRequest['mode']; checkIn: Date; checkOut: Date; adults?: number; children?: number },
+  ): Promise<EngineQuote> {
+    const rules = await tx.rate_plan_rules.findMany({ where: { rate_plan_id: plan.id } });
+    const holidayRows = await tx.vietnam_holidays.findMany({
+      where: {
+        holiday_date: {
+          gte: new Date(`${localDate(params.checkIn, timezone)}T00:00:00.000Z`),
+          lte: new Date(`${localDate(params.checkOut, timezone)}T00:00:00.000Z`),
+        },
+      },
+    });
+    try {
+      return computeQuote(
+        {
+          mode: params.mode,
+          checkIn: params.checkIn,
+          checkOut: params.checkOut,
+          adults: params.adults,
+          children: params.children,
+        },
+        toRatePlanConfig(plan, rules, timezone),
+        holidayRows.map(holidayRowToEngine),
+      );
+    } catch (err) {
+      if (err instanceof PricingError) {
+        throw new AppException({
+          code: `PRICING_${err.code}`,
+          title: 'Không tính được giá',
+          status: 422,
+          detail: err.message,
+        });
+      }
+      throw err;
+    }
+  }
 
   private async loadResource(
     resourceId: string,

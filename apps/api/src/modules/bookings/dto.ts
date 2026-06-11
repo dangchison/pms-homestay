@@ -1,0 +1,21 @@
+import {
+  BookingStatusSchema,
+  CancelBookingRequestSchema,
+  CreateBookingRequestSchema,
+  OffsetPaginationQuerySchema,
+  UpdateBookingRequestSchema,
+} from '@pms/shared-types';
+import { z } from 'zod';
+import { createZodDto } from '@core/http/pipes/zod-validation.pipe';
+
+export class CreateBookingDto extends createZodDto(CreateBookingRequestSchema) {}
+export class UpdateBookingDto extends createZodDto(UpdateBookingRequestSchema) {}
+export class CancelBookingDto extends createZodDto(CancelBookingRequestSchema) {}
+
+const BookingListQuerySchema = OffsetPaginationQuerySchema.extend({
+  property_id: z.uuid().optional(),
+  status: BookingStatusSchema.optional(),
+  from: z.iso.datetime().optional(),
+  to: z.iso.datetime().optional(),
+});
+export class BookingListQueryDto extends createZodDto(BookingListQuerySchema) {}

@@ -24,10 +24,12 @@ describe('OccupancyService + EXCLUDE room_occupancy (task 2.1)', () => {
   let admin: Client;
   let prisma: PrismaClient;
   let tenantId: string;
+  let propertyId: string;
   let roomA: string;
   let roomB: string;
   let resWhole: string;
   let resRoomA: string;
+  let bookingSeq = 0;
 
   beforeAll(async () => {
     admin = new Client({ connectionString: process.env.DATABASE_URL_MIGRATIONS });
@@ -42,7 +44,7 @@ describe('OccupancyService + EXCLUDE room_occupancy (task 2.1)', () => {
       )
     ).rows[0].id;
 
-    const propertyId = (
+    propertyId = (
       await admin.query(
         `INSERT INTO properties (tenant_id, name, property_type, address_line, province)
          VALUES ($1, 'P', 'HOMESTAY', 'addr', 'Đà Nẵng') RETURNING id`,
@@ -81,15 +83,17 @@ describe('OccupancyService + EXCLUDE room_occupancy (task 2.1)', () => {
   });
 
   afterEach(async () => {
-    // room_occupancy commit qua từng test → reset; xoá block (cascade occupancy còn lại)
+    // reset state mỗi test: occupancy trước (không phụ thuộc), rồi block + booking
     await admin.query(`DELETE FROM room_occupancy WHERE tenant_id = $1`, [tenantId]);
     await admin.query(`DELETE FROM room_blocks WHERE tenant_id = $1`, [tenantId]);
+    await admin.query(`DELETE FROM bookings WHERE tenant_id = $1`, [tenantId]);
   });
 
   afterAll(async () => {
     if (admin) {
       await admin.query(`DELETE FROM room_occupancy WHERE tenant_id = $1`, [tenantId]);
       await admin.query(`DELETE FROM room_blocks WHERE tenant_id = $1`, [tenantId]);
+      await admin.query(`DELETE FROM bookings WHERE tenant_id = $1`, [tenantId]);
       await admin.query(`DELETE FROM resource_members WHERE tenant_id = $1`, [tenantId]);
       await admin.query(`DELETE FROM bookable_resources WHERE tenant_id = $1`, [tenantId]);
       await admin.query(`DELETE FROM rooms WHERE tenant_id = $1`, [tenantId]);
@@ -100,8 +104,25 @@ describe('OccupancyService + EXCLUDE room_occupancy (task 2.1)', () => {
     await prisma?.$disconnect();
   });
 
-  const bookRoom = (roomId: string, buffer: number, ci: number, co: number, bookingId = randomUUID()) =>
-    withTenant(prisma, tenantId, (tx) =>
+  /** Tạo booking THẬT để thoả FK room_occupancy → bookings (thêm ở task 2.6). */
+  const seedBooking = async (bookingId: string, ci: number, co: number): Promise<void> => {
+    bookingSeq += 1;
+    await admin.query(
+      `INSERT INTO bookings (id, tenant_id, property_id, resource_id, booking_code, mode, check_in, check_out, total_amount_vnd, status)
+       VALUES ($1, $2, $3, $4, $5, 'DAILY', $6, $7, 0, 'PENDING')`,
+      [bookingId, tenantId, propertyId, resRoomA, `BK-T-${bookingSeq}`, at(ci).toISOString(), at(co).toISOString()],
+    );
+  };
+
+  const bookRoom = async (
+    roomId: string,
+    buffer: number,
+    ci: number,
+    co: number,
+    bookingId = randomUUID(),
+  ): Promise<void> => {
+    await seedBooking(bookingId, ci, co);
+    return withTenant(prisma, tenantId, (tx) =>
       occ.insertForBooking(tx, {
         tenantId,
         bookingId,
@@ -110,6 +131,7 @@ describe('OccupancyService + EXCLUDE room_occupancy (task 2.1)', () => {
         checkOut: at(co),
       }),
     );
+  };
 
   it('memberRooms trả đúng phòng + buffer của resource WHOLE', async () => {
     const members = await withTenant(prisma, tenantId, (tx) => occ.memberRooms(tx, resWhole), {
@@ -157,10 +179,12 @@ describe('OccupancyService + EXCLUDE room_occupancy (task 2.1)', () => {
 
   it('★ WHOLE ↔ ROOM: nguyên căn chiếm A+B → đặt phòng A trùng giờ bị chặn', async () => {
     // Đặt nguyên căn (sinh occupancy cho cả A và B)
+    const wholeBooking = randomUUID();
+    await seedBooking(wholeBooking, 7, 9);
     await withTenant(prisma, tenantId, (tx) =>
       occ.insertForBooking(tx, {
         tenantId,
-        bookingId: randomUUID(),
+        bookingId: wholeBooking,
         members: [
           { room_id: roomA, buffer_minutes: 0 },
           { room_id: roomB, buffer_minutes: 30 },
