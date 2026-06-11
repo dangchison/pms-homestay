@@ -13,6 +13,11 @@ import { TenantGuard } from '@core/tenancy/tenant.guard';
 import { TenantResolverMiddleware } from '@core/tenancy/tenant-resolver.middleware';
 import { AuthPublicModule } from '@modules/auth-public/auth-public.module';
 import { HealthModule } from '@modules/health/health.module';
+import { PricingModule } from '@modules/pricing/pricing.module';
+import { PropertiesModule } from '@modules/properties/properties.module';
+import { RatePlansModule } from '@modules/rate-plans/rate-plans.module';
+import { ResourcesModule } from '@modules/resources/resources.module';
+import { RoomsModule } from '@modules/rooms/rooms.module';
 
 /**
  * Root module — nhận env đã validate từ bootstrap (fail-fast trước khi
@@ -32,6 +37,11 @@ export class AppModule implements NestModule {
         AuthCoreModule,
         AuthPublicModule,
         HealthModule,
+        PropertiesModule,
+        ResourcesModule,
+        RoomsModule,
+        RatePlansModule,
+        PricingModule,
       ],
       providers: [
         TenantResolverMiddleware,

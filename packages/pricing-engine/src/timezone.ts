@@ -24,6 +24,15 @@ export function localTime(instant: Date, timeZone: string): string {
   }).format(instant);
 }
 
+/**
+ * Thời điểm "giả UTC" mang đúng giờ tường minh ĐỊA PHƯƠNG — CHỈ dùng để so sánh
+ * trong cùng một khung local (vd đếm cửa sổ đêm hourly). KHÔNG phải instant thật.
+ * (VN không có DST nên trùng khít; nơi có DST có thể lệch 1h ở ranh giới chuyển.)
+ */
+export function localWallClock(instant: Date, timeZone: string): Date {
+  return new Date(`${localDate(instant, timeZone)}T${localTime(instant, timeZone)}:00Z`);
+}
+
 /** Thứ trong tuần (0 = CN … 6 = T7) theo timezone property. */
 export function localDayOfWeek(instant: Date, timeZone: string): number {
   const name = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(instant);

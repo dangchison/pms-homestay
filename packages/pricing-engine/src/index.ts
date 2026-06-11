@@ -13,10 +13,12 @@ export * from './types';
 export * from './holiday.types';
 export * from './round';
 export * from './timezone';
+export * from './dateutil';
 export { quoteHourly } from './hourly';
 export { quoteDaily } from './daily';
 export { quoteMonthly } from './monthly';
-export { applyRatePlanRules } from './rules';
+export { applyRatePlanRules, matchesDate, computeDatePrice } from './rules';
+export { line, buildQuote, computeDeposit } from './builder';
 
 /** Entry point hợp nhất theo docs/13 §6: quote(input, plan, holidays): Quote */
 export function quote(

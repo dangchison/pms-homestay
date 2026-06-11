@@ -8,12 +8,26 @@ import { buildErrorBody, requestIdOf } from '../exceptions/error-response';
  * 23P01 (exclusion_violation trên room_occupancy) là đường trả 409 BOOKING_OVERLAP
  * — lớp chống overbooking cuối cùng ở DB.
  */
-const PG_ERROR_MAP: Record<string, { status: number; code: string; title: string }> = {
+type MappedError = { status: number; code: string; title: string };
+
+/** SQLSTATE PostgreSQL → mã nghiệp vụ (raw query giữ nguyên SQLSTATE qua meta.code). */
+const PG_ERROR_MAP: Record<string, MappedError> = {
   '23P01': { status: 409, code: 'BOOKING_OVERLAP', title: 'Khoảng thời gian đã bị giữ/đặt' },
   '23505': { status: 409, code: 'DUPLICATE_RESOURCE', title: 'Dữ liệu đã tồn tại' },
   '23503': { status: 409, code: 'REFERENCE_VIOLATION', title: 'Dữ liệu tham chiếu không hợp lệ' },
   '40001': { status: 409, code: 'SERIALIZATION_CONFLICT', title: 'Xung đột giao dịch — thử lại' },
   '40P01': { status: 409, code: 'DEADLOCK_DETECTED', title: 'Xung đột giao dịch — thử lại' },
+};
+
+/**
+ * Mã lỗi Prisma cho thao tác MODEL (.create/.update/...): Prisma nuốt SQLSTATE,
+ * chỉ expose mã P-riêng → map sang cùng mã nghiệp vụ (docs/05). Raw query thì
+ * SQLSTATE còn trong meta.code (xem PG_ERROR_MAP).
+ */
+const PRISMA_ERROR_MAP: Record<string, MappedError> = {
+  P2002: { status: 409, code: 'DUPLICATE_RESOURCE', title: 'Dữ liệu đã tồn tại' },
+  P2003: { status: 409, code: 'REFERENCE_VIOLATION', title: 'Dữ liệu tham chiếu không hợp lệ' },
+  P2025: { status: 404, code: 'RESOURCE_NOT_FOUND', title: 'Không tìm thấy dữ liệu' },
 };
 
 interface PgLikeError {
@@ -22,12 +36,13 @@ interface PgLikeError {
   message?: string;
 }
 
-/** Tìm mã lỗi PG trong error thô của driver hoặc PrismaClientKnownRequestError. */
-function extractPgCode(err: unknown): string | undefined {
+/** Map lỗi đã biết (PG SQLSTATE thô/raw, hoặc Prisma model code) → mã nghiệp vụ. */
+function resolveMappedError(err: unknown): MappedError | undefined {
   if (typeof err !== 'object' || err === null) return undefined;
   const e = err as PgLikeError;
-  if (e.code && PG_ERROR_MAP[e.code]) return e.code;
-  if (e.meta?.code && PG_ERROR_MAP[e.meta.code]) return e.meta.code;
+  if (e.meta?.code && PG_ERROR_MAP[e.meta.code]) return PG_ERROR_MAP[e.meta.code];
+  if (e.code && PG_ERROR_MAP[e.code]) return PG_ERROR_MAP[e.code];
+  if (e.code && PRISMA_ERROR_MAP[e.code]) return PRISMA_ERROR_MAP[e.code];
   return undefined;
 }
 
@@ -59,9 +74,8 @@ export class PgErrorFilter implements ExceptionFilter {
       return;
     }
 
-    const pgCode = extractPgCode(exception);
-    if (pgCode) {
-      const mapped = PG_ERROR_MAP[pgCode]!;
+    const mapped = resolveMappedError(exception);
+    if (mapped) {
       res.status(mapped.status).json(
         buildErrorBody({
           ...mapped,

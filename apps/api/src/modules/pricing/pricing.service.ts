@@ -1,0 +1,203 @@
+import { Injectable } from '@nestjs/common';
+import { type JwtClaims, type QuoteRequest, type QuoteResponse } from '@pms/shared-types';
+import { PricingError, localDate, quote as computeQuote } from '@pms/pricing-engine';
+import { Prisma, type rate_plans } from '@prisma/client';
+import { PermissionService } from '@core/auth/permission.service';
+import { AppException } from '@core/http/exceptions/app.exception';
+import { PrismaService } from '@core/prisma/prisma.service';
+import { withTenant } from '@core/tenancy/with-tenant';
+import { holidayRowToEngine, toApiLineItem, toRatePlanConfig } from './pricing.mappers';
+
+type Tx = Prisma.TransactionClient;
+
+const QUOTE_TTL_MS = 15 * 60 * 1000; // docs/07 §6
+const PURGE_AFTER_DAYS = 7; // docs/03 §7 — cron night-audit (4.6) gọi
+
+@Injectable()
+export class PricingService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissionService: PermissionService,
+  ) {}
+
+  /**
+   * POST /pricing/quote (docs/07 §6): tính giá bằng pricing-engine + INSERT bảng
+   * `quotes` (snapshot rate_plan_version, line_items, expires 15'). Persist DB —
+   * KHÔNG Redis. Booking (2.6) gửi quote_id → re-calculate so khớp.
+   */
+  async quote(dto: QuoteRequest, user: JwtClaims): Promise<QuoteResponse> {
+    const checkIn = new Date(dto.check_in);
+    const checkOut = new Date(dto.check_out);
+
+    const resource = await this.loadResource(dto.resource_id, user);
+    await this.permissionService.authorizeOnProperty(user, resource.property_id, 'booking.create');
+
+    return withTenant(this.prisma, user.tnt, async (tx) => {
+      const property = await tx.properties.findFirst({
+        where: { id: resource.property_id },
+        select: { timezone: true },
+      });
+      const timezone = property?.timezone ?? 'Asia/Ho_Chi_Minh';
+
+      const plan = await this.resolvePlan(tx, resource, dto.mode, dto.rate_plan_id);
+      const rules = await tx.rate_plan_rules.findMany({ where: { rate_plan_id: plan.id } });
+      const holidayRows = await tx.vietnam_holidays.findMany({
+        where: {
+          holiday_date: {
+            gte: new Date(`${localDate(checkIn, timezone)}T00:00:00.000Z`),
+            lte: new Date(`${localDate(checkOut, timezone)}T00:00:00.000Z`),
+          },
+        },
+      });
+      const holidays = holidayRows.map(holidayRowToEngine);
+
+      let engineQuote;
+      try {
+        engineQuote = computeQuote(
+          { mode: dto.mode, checkIn, checkOut, adults: dto.adults, children: dto.children },
+          toRatePlanConfig(plan, rules, timezone),
+          holidays,
+        );
+      } catch (err) {
+        if (err instanceof PricingError) {
+          throw new AppException({
+            code: `PRICING_${err.code}`,
+            title: 'Không tính được giá',
+            status: 422,
+            detail: err.message,
+          });
+        }
+        throw err;
+      }
+
+      const lineItems = engineQuote.lineItems.map(toApiLineItem);
+      const expiresAt = new Date(Date.now() + QUOTE_TTL_MS);
+      const row = await tx.quotes.create({
+        data: {
+          tenant_id: user.tnt,
+          property_id: resource.property_id,
+          resource_id: resource.id,
+          rate_plan_id: plan.id,
+          rate_plan_version: plan.version,
+          mode: dto.mode,
+          check_in: checkIn,
+          check_out: checkOut,
+          adults: dto.adults ?? 1,
+          children: dto.children ?? 0,
+          line_items: lineItems as unknown as Prisma.InputJsonValue,
+          subtotal_vnd: BigInt(engineQuote.subtotalVnd),
+          discount_vnd: BigInt(engineQuote.discountVnd),
+          tax_vnd: BigInt(engineQuote.taxVnd),
+          total_vnd: BigInt(engineQuote.totalVnd),
+          expires_at: expiresAt,
+        },
+      });
+
+      return {
+        quote_id: row.id,
+        property_id: resource.property_id,
+        resource_id: resource.id,
+        rate_plan_id: plan.id,
+        rate_plan_version: plan.version,
+        mode: dto.mode,
+        check_in: checkIn.toISOString(),
+        check_out: checkOut.toISOString(),
+        adults: row.adults,
+        children: row.children,
+        line_items: lineItems,
+        subtotal_vnd: engineQuote.subtotalVnd,
+        discount_vnd: engineQuote.discountVnd,
+        tax_vnd: engineQuote.taxVnd,
+        total_vnd: engineQuote.totalVnd,
+        deposit_vnd: engineQuote.depositVnd,
+        expires_at: expiresAt.toISOString(),
+        holidays: engineQuote.holidays.map((h) => ({ date: h.date, name: h.name })),
+      };
+    });
+  }
+
+  /** Dọn quote hết hạn > 7 ngày chưa dùng (night-audit 4.6 gọi per tenant). */
+  async purgeExpired(tenantId: string): Promise<number> {
+    const cutoff = new Date(Date.now() - PURGE_AFTER_DAYS * 24 * 60 * 60 * 1000);
+    const { count } = await withTenant(this.prisma, tenantId, (tx) =>
+      tx.quotes.deleteMany({
+        where: { expires_at: { lt: cutoff }, used_by_booking_id: null },
+      }),
+    );
+    return count;
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  private async loadResource(
+    resourceId: string,
+    user: JwtClaims,
+  ): Promise<{ id: string; property_id: string }> {
+    const resource = await withTenant(
+      this.prisma,
+      user.tnt,
+      (tx) =>
+        tx.bookable_resources.findFirst({
+          where: { id: resourceId },
+          select: { id: true, property_id: true },
+        }),
+      { readOnly: true },
+    );
+    if (!resource) {
+      throw new AppException({
+        code: 'RESOURCE_NOT_FOUND',
+        title: 'Resource không tồn tại',
+        status: 404,
+      });
+    }
+    return resource;
+  }
+
+  /**
+   * Gói giá áp cho quote: rate_plan_id tường minh (verify cùng property + mode +
+   * active) hoặc gói gán cho resource (ưu tiên default) → fallback gói mặc định
+   * của property cho mode. Không có → 422.
+   */
+  private async resolvePlan(
+    tx: Tx,
+    resource: { id: string; property_id: string },
+    mode: string,
+    ratePlanId?: string,
+  ): Promise<rate_plans> {
+    if (ratePlanId) {
+      const plan = await tx.rate_plans.findFirst({ where: { id: ratePlanId } });
+      if (!plan || plan.property_id !== resource.property_id || plan.mode !== mode || !plan.is_active) {
+        throw new AppException({
+          code: 'RATE_PLAN_INVALID',
+          title: 'Gói giá không hợp lệ cho resource/chế độ này',
+          status: 422,
+        });
+      }
+      return plan;
+    }
+
+    const assigned = await tx.rate_plan_resources.findMany({
+      where: { resource_id: resource.id },
+      select: { rate_plan_id: true },
+    });
+    if (assigned.length > 0) {
+      const plans = await tx.rate_plans.findMany({
+        where: { id: { in: assigned.map((a) => a.rate_plan_id) }, mode: mode as never, is_active: true },
+        orderBy: [{ is_default: 'desc' }, { created_at: 'asc' }],
+      });
+      if (plans[0]) return plans[0];
+    }
+
+    const fallback = await tx.rate_plans.findFirst({
+      where: { property_id: resource.property_id, mode: mode as never, is_default: true, is_active: true },
+    });
+    if (!fallback) {
+      throw new AppException({
+        code: 'NO_APPLICABLE_RATE_PLAN',
+        title: 'Chưa có gói giá áp dụng cho resource/chế độ này',
+        status: 422,
+      });
+    }
+    return fallback;
+  }
+}

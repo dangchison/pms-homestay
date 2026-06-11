@@ -41,7 +41,17 @@ model tenants {
   currency             String                @default("VND") @db.Char(3)
   created_at           DateTime              @default(now()) @db.Timestamptz(6)
   updated_at           DateTime              @default(now()) @db.Timestamptz(6)
+  bookable_resources   bookable_resources[]
+  properties           properties[]
+  quotes               quotes[]
+  rate_plan_resources  rate_plan_resources[]
+  rate_plan_rules      rate_plan_rules[]
+  rate_plans           rate_plans[]
   refresh_tokens       refresh_tokens[]
+  resource_members     resource_members[]
+  room_blocks          room_blocks[]
+  room_occupancy       room_occupancy[]
+  rooms                rooms[]
   subscription_plans   subscription_plans?   @relation(fields: [subscription_plan_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   user_property_roles  user_property_roles[]
   users                users[]
@@ -85,16 +95,17 @@ model refresh_tokens {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model user_property_roles {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id   String    @db.Uuid
-  user_id     String    @db.Uuid
-  property_id String    @db.Uuid
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id   String     @db.Uuid
+  user_id     String     @db.Uuid
+  property_id String     @db.Uuid
   role        user_role
-  permissions Json      @default("{}")
-  granted_by  String?   @db.Uuid
-  granted_at  DateTime  @default(now()) @db.Timestamptz(6)
-  tenants     tenants   @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users       users     @relation(fields: [tenant_id, user_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  permissions Json       @default("{}")
+  granted_by  String?    @db.Uuid
+  granted_at  DateTime   @default(now()) @db.Timestamptz(6)
+  properties  properties @relation(fields: [tenant_id, property_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction, map: "fk_upr_property")
+  tenants     tenants    @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users       users      @relation(fields: [tenant_id, user_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([user_id, property_id, role])
   @@index([tenant_id, property_id], map: "idx_upr_property")
@@ -129,10 +140,279 @@ model users {
   @@unique([tenant_id, id])
 }
 
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model bookable_resources {
+  id                  String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id           String                 @db.Uuid
+  property_id         String                 @db.Uuid
+  type                bookable_resource_type
+  name                String                 @db.VarChar(255)
+  is_active           Boolean                @default(true)
+  created_at          DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime               @default(now()) @db.Timestamptz(6)
+  deleted_at          DateTime?              @db.Timestamptz(6)
+  tenants             tenants                @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  properties          properties             @relation(fields: [tenant_id, property_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  quotes              quotes[]
+  rate_plan_resources rate_plan_resources[]
+  resource_members    resource_members[]
+
+  @@unique([tenant_id, id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model properties {
+  id                          String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                   String                @db.Uuid
+  name                        String                @db.VarChar(255)
+  property_type               property_type
+  address_line                String                @db.VarChar(500)
+  ward                        String?               @db.VarChar(100)
+  district                    String?               @db.VarChar(100)
+  province                    String                @db.VarChar(100)
+  latitude                    Decimal?              @db.Decimal(10, 7)
+  longitude                   Decimal?              @db.Decimal(10, 7)
+  timezone                    String                @default("Asia/Ho_Chi_Minh") @db.VarChar(64)
+  is_rent_to_rent             Boolean               @default(false)
+  landlord_name               String?               @db.VarChar(255)
+  landlord_phone              String?               @db.VarChar(20)
+  rent_to_rent_contract_start DateTime?             @db.Date
+  rent_to_rent_contract_end   DateTime?             @db.Date
+  monthly_landlord_rent_vnd   BigInt?
+  police_business_code        String?               @db.VarChar(50)
+  metadata                    Json                  @default("{}")
+  created_at                  DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime              @default(now()) @db.Timestamptz(6)
+  deleted_at                  DateTime?             @db.Timestamptz(6)
+  bookable_resources          bookable_resources[]
+  tenants                     tenants               @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  rate_plans                  rate_plans[]
+  rooms                       rooms[]
+  user_property_roles         user_property_roles[]
+
+  @@unique([tenant_id, id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model resource_members {
+  tenant_id          String             @db.Uuid
+  resource_id        String             @db.Uuid
+  room_id            String             @db.Uuid
+  tenants            tenants            @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  bookable_resources bookable_resources @relation(fields: [tenant_id, resource_id], references: [tenant_id, id], onDelete: Cascade, onUpdate: NoAction)
+  rooms              rooms              @relation(fields: [tenant_id, room_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([resource_id, room_id])
+  @@index([room_id], map: "idx_resource_members_room")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model room_blocks {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id      String           @db.Uuid
+  room_id        String           @db.Uuid
+  start_at       DateTime         @db.Timestamptz(6)
+  end_at         DateTime         @db.Timestamptz(6)
+  reason         String           @db.VarChar(255)
+  created_by     String?          @db.Uuid
+  created_at     DateTime         @default(now()) @db.Timestamptz(6)
+  tenants        tenants          @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  rooms          rooms            @relation(fields: [tenant_id, room_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  room_occupancy room_occupancy[]
+
+  @@unique([tenant_id, id])
+  @@index([tenant_id, room_id], map: "idx_room_blocks_room")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This table contains exclusion constraints and requires additional setup for migrations. Visit https://pris.ly/d/exclusion-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model room_occupancy {
+  id          String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id   String                   @db.Uuid
+  room_id     String                   @db.Uuid
+  booking_id  String?                  @db.Uuid
+  block_id    String?                  @db.Uuid
+  period      Unsupported("tstzrange")
+  created_at  DateTime                 @default(now()) @db.Timestamptz(6)
+  room_blocks room_blocks?             @relation(fields: [tenant_id, block_id], references: [tenant_id, id], onDelete: Cascade, onUpdate: NoAction)
+  tenants     tenants                  @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  rooms       rooms                    @relation(fields: [tenant_id, room_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([block_id], map: "idx_occupancy_block")
+  @@index([booking_id], map: "idx_occupancy_booking")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model rooms {
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id           String              @db.Uuid
+  property_id         String              @db.Uuid
+  room_number         String              @db.VarChar(50)
+  display_name        String?             @db.VarChar(255)
+  description         String?
+  housekeeping_status housekeeping_status @default(CLEAN)
+  capacity_adults     Int                 @default(2)
+  capacity_children   Int                 @default(0)
+  size_sqm            Decimal?            @db.Decimal(6, 2)
+  amenities           Json                @default("[]")
+  photos              Json                @default("[]")
+  is_active           Boolean             @default(true)
+  buffer_minutes      Int                 @default(0)
+  notes               String?
+  version             Int                 @default(0)
+  created_at          DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime            @default(now()) @db.Timestamptz(6)
+  deleted_at          DateTime?           @db.Timestamptz(6)
+  resource_members    resource_members[]
+  room_blocks         room_blocks[]
+  room_occupancy      room_occupancy[]
+  tenants             tenants             @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  properties          properties          @relation(fields: [tenant_id, property_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([tenant_id, id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model rate_plan_resources {
+  tenant_id          String             @db.Uuid
+  rate_plan_id       String             @db.Uuid
+  resource_id        String             @db.Uuid
+  tenants            tenants            @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  rate_plans         rate_plans         @relation(fields: [tenant_id, rate_plan_id], references: [tenant_id, id], onDelete: Cascade, onUpdate: NoAction)
+  bookable_resources bookable_resources @relation(fields: [tenant_id, resource_id], references: [tenant_id, id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([rate_plan_id, resource_id])
+  @@index([resource_id], map: "idx_rate_plan_resources_resource")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model rate_plan_rules {
+  id                   String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id            String     @db.Uuid
+  rate_plan_id         String     @db.Uuid
+  rule_type            String     @db.VarChar(32)
+  start_date           DateTime?  @db.Date
+  end_date             DateTime?  @db.Date
+  days_of_week         Int[]
+  price_modifier_type  String     @db.VarChar(16)
+  price_modifier_value BigInt
+  priority             Int        @default(0)
+  notes                String?    @db.VarChar(255)
+  created_at           DateTime   @default(now()) @db.Timestamptz(6)
+  tenants              tenants    @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  rate_plans           rate_plans @relation(fields: [tenant_id, rate_plan_id], references: [tenant_id, id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([tenant_id, rate_plan_id], map: "idx_rate_plan_rules_plan")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model rate_plans {
+  id                              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                       String                @db.Uuid
+  property_id                     String                @db.Uuid
+  name                            String                @db.VarChar(255)
+  mode                            booking_mode
+  is_default                      Boolean               @default(false)
+  version                         Int                   @default(1)
+  base_price_vnd                  BigInt
+  deposit_type                    String                @default("NONE") @db.VarChar(16)
+  deposit_value                   BigInt                @default(0)
+  hourly_base_hours               Int?
+  hourly_extra_block_minutes      Int?
+  hourly_extra_block_price_vnd    BigInt?
+  hourly_overnight_surcharge_vnd  BigInt?
+  hourly_overnight_start          DateTime?             @db.Time(6)
+  hourly_overnight_end            DateTime?             @db.Time(6)
+  daily_checkin_time              DateTime?             @default(dbgenerated("'14:00:00'::time without time zone")) @db.Time(6)
+  daily_checkout_time             DateTime?             @default(dbgenerated("'12:00:00'::time without time zone")) @db.Time(6)
+  daily_early_checkin_fee_vnd     BigInt?
+  daily_late_checkout_fee_vnd     BigInt?
+  monthly_includes_utilities      Boolean?              @default(false)
+  monthly_electricity_per_kwh_vnd BigInt?
+  monthly_water_per_m3_vnd        BigInt?
+  effective_from                  DateTime              @db.Date
+  effective_to                    DateTime?             @db.Date
+  is_active                       Boolean               @default(true)
+  created_at                      DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at                      DateTime              @default(now()) @db.Timestamptz(6)
+  quotes                          quotes[]
+  rate_plan_resources             rate_plan_resources[]
+  rate_plan_rules                 rate_plan_rules[]
+  tenants                         tenants               @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  properties                      properties            @relation(fields: [tenant_id, property_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([tenant_id, id])
+  @@index([tenant_id, property_id], map: "idx_rate_plans_property")
+}
+
+model vietnam_holidays {
+  holiday_date  DateTime @id @db.Date
+  name          String   @db.VarChar(255)
+  is_substitute Boolean  @default(false)
+  source        String?  @db.VarChar(64)
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model quotes {
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id          String             @db.Uuid
+  property_id        String             @db.Uuid
+  resource_id        String             @db.Uuid
+  rate_plan_id       String             @db.Uuid
+  rate_plan_version  Int
+  mode               booking_mode
+  check_in           DateTime           @db.Timestamptz(6)
+  check_out          DateTime           @db.Timestamptz(6)
+  adults             Int                @default(1)
+  children           Int                @default(0)
+  line_items         Json
+  subtotal_vnd       BigInt
+  discount_vnd       BigInt             @default(0)
+  tax_vnd            BigInt             @default(0)
+  total_vnd          BigInt
+  expires_at         DateTime           @db.Timestamptz(6)
+  used_by_booking_id String?            @db.Uuid
+  created_at         DateTime           @default(now()) @db.Timestamptz(6)
+  tenants            tenants            @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  rate_plans         rate_plans         @relation(fields: [tenant_id, rate_plan_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  bookable_resources bookable_resources @relation(fields: [tenant_id, resource_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+}
+
 enum user_role {
   OWNER
   MANAGER
   STAFF
   HOUSEKEEPER
   ACCOUNTANT
+}
+
+enum bookable_resource_type {
+  ROOM
+  WHOLE
+}
+
+enum housekeeping_status {
+  CLEAN
+  DIRTY
+  CLEANING
+  INSPECTION
+}
+
+enum property_type {
+  HOMESTAY
+  RENT_TO_RENT
+  APARTMENT
+  HOTEL
+}
+
+enum booking_mode {
+  HOURLY
+  DAILY
+  MONTHLY
 }

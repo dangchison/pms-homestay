@@ -2,9 +2,14 @@ import { Prisma } from '@prisma/client';
 
 /**
  * Model có soft-delete (cột deleted_at) — thêm dần khi migration tạo bảng mới:
- * properties, rooms, guests, rate_plans, assets (docs/05 §soft-delete).
+ * guests, rate_plans, assets (docs/05 §soft-delete) sẽ bổ sung ở sprint sau.
  */
-export const SOFT_DELETABLE_MODELS = new Set<string>(['users']);
+export const SOFT_DELETABLE_MODELS = new Set<string>([
+  'users',
+  'properties', // task 2.1
+  'rooms', // task 2.1
+  'bookable_resources', // task 2.1
+]);
 
 function mentionsDeletedAt(where: unknown): boolean {
   return typeof where === 'object' && where !== null && 'deleted_at' in (where as object);

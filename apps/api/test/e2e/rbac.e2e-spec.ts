@@ -111,9 +111,17 @@ describe('RBAC guard + permission cache (task 1.8)', () => {
     tenantId = (await admin.query(`SELECT id FROM tenants WHERE slug = $1`, [tenantSlug])).rows[0]
       .id;
 
+    // Task 2.1 thêm FK user_property_roles(tenant_id, property_id) → properties:
+    // phải tạo property A & B thật trước khi gán role theo property.
+    await admin.query(
+      `INSERT INTO properties (id, tenant_id, name, property_type, address_line, province)
+       VALUES ($1, $3, 'Prop A', 'HOMESTAY', 'addr', 'Đà Nẵng'),
+              ($2, $3, 'Prop B', 'HOMESTAY', 'addr', 'Đà Nẵng')`,
+      [propertyA, propertyB, tenantId],
+    );
+
     // STAFF gán property A (user.invite endpoint thuộc module users sau —
-    // seed trực tiếp DB; user_property_roles FK tới properties hoãn 2.1 nên
-    // property id tự sinh dùng được)
+    // seed trực tiếp DB)
     const staffHash = await argon2.hash(PASSWORD, { type: argon2.argon2id });
     staffUserId = (
       await admin.query(
@@ -145,6 +153,10 @@ describe('RBAC guard + permission cache (task 1.8)', () => {
       );
       await admin.query(
         `DELETE FROM user_property_roles WHERE tenant_id IN (SELECT id FROM tenants WHERE slug = $1)`,
+        [tenantSlug],
+      );
+      await admin.query(
+        `DELETE FROM properties WHERE tenant_id IN (SELECT id FROM tenants WHERE slug = $1)`,
         [tenantSlug],
       );
       await admin.query(
