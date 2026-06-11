@@ -27,7 +27,8 @@ export type JwtClaims = z.infer<typeof JwtClaimsSchema>;
 export const LoginRequestSchema = z.object({
   email: z.email(),
   password: z.string().min(10, 'Mật khẩu tối thiểu 10 ký tự'),
-  totp_code: z.string().length(6).optional(),
+  /** TOTP 6 số hoặc backup code (8 hex) khi đã bật 2FA */
+  totp_code: z.string().min(6).max(16).optional(),
 });
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 
@@ -43,3 +44,46 @@ export const RegisterTenantRequestSchema = z.object({
   full_name: z.string().min(1).max(255),
 });
 export type RegisterTenantRequest = z.infer<typeof RegisterTenantRequestSchema>;
+
+export const ForgotPasswordRequestSchema = z.object({
+  email: z.email(),
+});
+export type ForgotPasswordRequest = z.infer<typeof ForgotPasswordRequestSchema>;
+
+export const ResetPasswordRequestSchema = z.object({
+  token: z.string().min(16),
+  new_password: z.string().min(10),
+});
+export type ResetPasswordRequest = z.infer<typeof ResetPasswordRequestSchema>;
+
+export const TwoFaVerifyRequestSchema = z.object({
+  totp_code: z.string().length(6).regex(/^\d{6}$/),
+});
+export type TwoFaVerifyRequest = z.infer<typeof TwoFaVerifyRequestSchema>;
+
+/** Response của login/refresh — access token in-memory, refresh nằm trong cookie HTTP-only. */
+export const AuthTokensResponseSchema = z.object({
+  access_token: z.string(),
+  token_type: z.literal('Bearer'),
+  /** giây — access token sống 15' cố định (docs/04 §2) */
+  expires_in: z.number().int(),
+  /** CSRF double-submit: gửi lại qua header X-CSRF-Token ở refresh/logout */
+  csrf_token: z.string(),
+  user: z.object({
+    id: z.uuid(),
+    email: z.email(),
+    full_name: z.string(),
+    role: UserRoleSchema,
+  }),
+});
+export type AuthTokensResponse = z.infer<typeof AuthTokensResponseSchema>;
+
+export const SessionInfoSchema = z.object({
+  id: z.uuid(),
+  ip_address: z.string().nullable(),
+  user_agent: z.string().nullable(),
+  created_at: z.iso.datetime(),
+  expires_at: z.iso.datetime(),
+  current: z.boolean(),
+});
+export type SessionInfo = z.infer<typeof SessionInfoSchema>;

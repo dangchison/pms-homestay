@@ -1,7 +1,21 @@
 import { type Prisma, type PrismaClient } from '@prisma/client';
+import { softDeleteExtension } from '@core/prisma/soft-delete.extension';
 import { tenantContextStorage } from './tenant-cls';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Client đã gắn soft-delete extension — cache theo client gốc (task 1.6). */
+const extendedCache = new WeakMap<PrismaClient, PrismaClient>();
+
+function withSoftDelete(prisma: PrismaClient): PrismaClient {
+  let extended = extendedCache.get(prisma);
+  if (!extended) {
+    // $extends trả type mở rộng — về mặt API vẫn là PrismaClient (không thêm method)
+    extended = prisma.$extends(softDeleteExtension) as unknown as PrismaClient;
+    extendedCache.set(prisma, extended);
+  }
+  return extended;
+}
 
 export interface WithTenantOptions {
   /** GET/read path: ép transaction READ ONLY ở DB */
@@ -34,7 +48,7 @@ export async function withTenant<T>(
     throw new Error(`withTenant: tenantId không phải UUID hợp lệ: "${tenantId}"`);
   }
 
-  return prisma.$transaction(
+  return withSoftDelete(prisma).$transaction(
     async (tx) => {
       await tx.$executeRawUnsafe(
         `SELECT set_config('app.current_tenant_id', $1, true)`,

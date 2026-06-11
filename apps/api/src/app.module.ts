@@ -1,12 +1,17 @@
 import { Module, RequestMethod, type DynamicModule, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { AuthCoreModule } from '@core/auth/auth-core.module';
+import { JwtAuthGuard } from '@core/auth/jwt-auth.guard';
+import { PermissionsGuard } from '@core/auth/permissions.guard';
 import { AppConfigModule } from '@core/config/config.module';
 import { type Env } from '@core/config/env.schema';
+import { CryptoModule } from '@core/crypto/crypto.module';
 import { AppLoggerModule } from '@core/logger/logger.module';
 import { PrismaModule } from '@core/prisma/prisma.module';
 import { RedisModule } from '@core/redis/redis.module';
 import { TenantGuard } from '@core/tenancy/tenant.guard';
 import { TenantResolverMiddleware } from '@core/tenancy/tenant-resolver.middleware';
+import { AuthPublicModule } from '@modules/auth-public/auth-public.module';
 import { HealthModule } from '@modules/health/health.module';
 
 /**
@@ -23,12 +28,18 @@ export class AppModule implements NestModule {
         AppLoggerModule,
         PrismaModule,
         RedisModule,
+        CryptoModule,
+        AuthCoreModule,
+        AuthPublicModule,
         HealthModule,
       ],
       providers: [
         TenantResolverMiddleware,
-        // Mọi route đều yêu cầu tenant context, trừ @Public/@SkipTenantScope
+        // Thứ tự chạy guard: verify JWT (gắn user + tenant đã verify)
+        // → yêu cầu tenant context → RBAC pha 1 (docs/04 §4)
+        { provide: APP_GUARD, useClass: JwtAuthGuard },
         { provide: APP_GUARD, useClass: TenantGuard },
+        { provide: APP_GUARD, useClass: PermissionsGuard },
       ],
     };
   }

@@ -1,4 +1,5 @@
 import { type INestApplication } from '@nestjs/common';
+import cookieParser from 'cookie-parser';
 import { type Express } from 'express';
 import { Logger } from 'nestjs-pino';
 import { HttpExceptionFilter } from '@core/http/filters/http-exception.filter';
@@ -16,6 +17,9 @@ export function configureApp(app: INestApplication): void {
   // Sau Cloudflare/LB — req.ip lấy từ X-Forwarded-For hop đầu (docs/01 §infra)
   express.set('trust proxy', 1);
   express.disable('x-powered-by');
+
+  // Cookie refresh token (docs/04 §2)
+  app.use(cookieParser());
 
   // docs/05 §versioning: URL prefix /api/v1; health nằm ngoài prefix (docs/11 §5)
   app.setGlobalPrefix('api/v1', {

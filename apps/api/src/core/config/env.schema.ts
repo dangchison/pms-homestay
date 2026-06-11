@@ -22,6 +22,11 @@ export const envSchema = z.object({
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
 
+  /** Domain cookie refresh (prod: .pmsapp.vn) — dev để trống (host-only) */
+  COOKIE_DOMAIN: z.string().optional(),
+  /** Base URL web-admin — dựng link reset password */
+  APP_WEB_URL: z.url().default('http://localhost:3000'),
+
   /** ADR-0007: "<key_id>:<base64 32 bytes>" — hỗ trợ key rotation */
   PII_ENC_KEY_CURRENT: z
     .string()

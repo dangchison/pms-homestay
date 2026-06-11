@@ -5,10 +5,21 @@ Kiến trúc đầy đủ ở [`docs/`](docs/00-overview.md) — **đọc `00 �
 
 ## Trạng thái
 
-Source base hoàn thành **Sprint 1 task 1.1–1.5** ([docs/14](docs/14-roadmap-tasks.md)):
-monorepo, API skeleton (env zod, pino redact, RFC 7807, health, OTel), SQL-first migrations +
-Prisma introspected client, `tenants`/`subscription_plans` + seed, **`withTenant` + RLS đã chứng minh
-bằng test isolation interleaved**. Tiếp theo: task 1.6 (users/auth tables) → 1.7 (auth) → 1.8 (RBAC).
+**Sprint 1 hoàn chỉnh — task 1.1–1.8** ([docs/14](docs/14-roadmap-tasks.md)):
+- Nền tảng: monorepo, API skeleton (env zod, pino redact, RFC 7807, health, OTel), SQL-first
+  migrations + Prisma introspected client, **`withTenant` + RLS chứng minh bằng test interleaved**.
+- IAM (1.6): `users`/`user_property_roles`/`refresh_tokens`/`platform_users` + composite FK +
+  partial unique email + soft-delete Prisma Client Extension. (FK `user_property_roles→properties`
+  bổ sung ở migration task 2.1.)
+- Auth (1.7): register (tenant TRIAL 14 ngày + OWNER) · login Argon2id + lockout account-first
+  (5 fail/15' → khoá 30') · **refresh rotation + grace 60s** (double-refresh không logout-storm,
+  reuse → revoke chain) · CSRF double-submit · 2FA TOTP + backup codes (secret AES-256-GCM,
+  ADR-0007) · forgot/reset qua Mailpit · sessions.
+- RBAC (1.8): permission matrix (docs/04), `@RequirePermissions` + PermissionsGuard (tenant + pv
+  + role), `authorizeOnProperty` pha 2 (property từ entity — chống bypass), cache Redis 60s +
+  bump `pv` thu hồi quyền tức thì.
+
+Tiếp theo: **Sprint 2** — task 2.1 (property/room/bookable_resources/room_occupancy + OccupancyService).
 
 ## Quickstart
 

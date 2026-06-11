@@ -1,13 +1,6 @@
 import { Injectable, type ArgumentMetadata, type PipeTransform } from '@nestjs/common';
-import { type ZodType } from 'zod';
+import { ZodType, type output } from 'zod';
 import { ValidationException } from '../exceptions/app.exception';
-
-const ZOD_SCHEMA = Symbol('ZOD_SCHEMA');
-
-interface ZodDtoClass {
-  [ZOD_SCHEMA]: ZodType;
-  new (): unknown;
-}
 
 /**
  * Tạo DTO class từ Zod schema (docs/01: MỘT stack validation duy nhất — Zod,
@@ -15,21 +8,22 @@ interface ZodDtoClass {
  * Zod 4 ổn định — API tương đương:
  *
  *   class CreateBookingDto extends createZodDto(CreateBookingSchema) {}
+ *
+ * Instance type = z.output<T> nên handler đọc dto.field có type đầy đủ.
  */
 export function createZodDto<T extends ZodType>(schema: T) {
   class ZodDto {
-    static readonly [ZOD_SCHEMA] = schema;
+    static readonly zodSchema = schema;
   }
-  return ZodDto as unknown as ZodDtoClass & { new (): ReturnType<T['parse']> };
+  return ZodDto as { new (): output<T>; zodSchema: T };
 }
 
 /** Global pipe: DTO nào tạo từ createZodDto thì parse bằng schema của nó. */
 @Injectable()
 export class ZodValidationPipe implements PipeTransform {
   transform(value: unknown, metadata: ArgumentMetadata): unknown {
-    const metatype = metadata.metatype as Partial<ZodDtoClass> | undefined;
-    const schema = metatype?.[ZOD_SCHEMA];
-    if (!schema) return value;
+    const schema = (metadata.metatype as { zodSchema?: unknown } | undefined)?.zodSchema;
+    if (!(schema instanceof ZodType)) return value;
 
     const result = schema.safeParse(value);
     if (!result.success) {
