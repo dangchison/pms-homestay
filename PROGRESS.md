@@ -11,11 +11,11 @@
 
 | Chỉ số | Trạng thái |
 |---|---|
-| **Sprint hoàn thành** | **1 / 6** · Sprint 2 🟡 đang làm (task 2.1–2.4 ✅) |
-| **Task backend xong** | **12 / 50** (EPIC 1 + task 2.1–2.4) · ~24% |
+| **Sprint hoàn thành** | **1 / 6** · Sprint 2 🟡 **backend xong** (2.1–2.5 ✅, còn 6.1 FE) |
+| **Task backend xong** | **13 / 50** (EPIC 1 + task 2.1–2.5) · ~26% |
 | **Nền tảng FE** | 🟡 scaffold + design system xong; chưa nối API |
-| **Chạy được gì** | API (health, auth, **property/room/resource/block + rate-plan/rule CRUD + `POST /pricing/quote`**), **pricing-engine (HOURLY/DAILY/MONTHLY)**, 2 web app (UI), DB + migrations + seed (gồm `vietnam_holidays`), CI |
-| **Chất lượng** | 70/70 test API + **21 pricing-engine** xanh · lint/typecheck/build xanh · 3 theme ổn định |
+| **Chạy được gì** | API (health, auth, **property/room/resource/block + rate-plan/rule + guests CRUD + `POST /pricing/quote`**), **pricing-engine (HOURLY/DAILY/MONTHLY)**, 2 web app (UI), DB + migrations + seed (gồm `vietnam_holidays`), CI |
+| **Chất lượng** | 76/76 test API + **21 pricing-engine** xanh · lint/typecheck/build xanh · 3 theme ổn định |
 
 ### Demo được gì hôm nay
 - **Backend auth thật chạy:** đăng ký tenant + OWNER (trial 14 ngày), đăng nhập Argon2id + khoá tài khoản, refresh rotation + grace, 2FA TOTP, quên/đặt lại mật khẩu, RBAC theo role + property — qua `http://localhost:3001/api/v1/auth/*`.
@@ -24,6 +24,7 @@
 - **Gói giá (task 2.2) chạy thật:** CRUD `rate_plans` (HOURLY/DAILY/MONTHLY, cọc, gán theo resource) + luật giá `rate_plan_rules` (mùa/cuối tuần/lễ) với **validate cấm 2 rule cùng priority chồng ngày**; bắt buộc 1 gói mặc định mỗi (cơ sở, chế độ); sửa giá tự **bump version** (phục vụ re-calc quote 2.4). `vietnam_holidays` đã seed 2026–2027 (nguồn lễ cho pricing).
 - **Pricing engine (task 2.3) chạy thật:** `quote(input, plan, holidays)` cho 3 chế độ — **tính ngày theo timezone property** (test 18:30 UTC = 01:30 VN hôm sau ăn đúng ngày VN), áp rule lễ/cuối tuần theo priority, làm tròn `roundVnd` duy nhất. Pure-function, dùng chung BE/FE.
 - **Báo giá persist (task 2.4) chạy thật:** `POST /pricing/quote` lấy gói giá + luật + ngày lễ từ DB, gọi engine, **lưu vào bảng `quotes`** (snapshot version + breakdown, hết hạn 15') trả `quote_id` — để khi tạo booking (2.6) re-calc so khớp, lệch → `409 PRICE_CHANGED`. Đêm lễ/cuối tuần áp đúng; thiếu gói → 422.
+- **Khách + PII (task 2.5) chạy thật:** CRUD khách, **số giấy tờ mã hoá field** (AES-256-GCM + HMAC blind index — DB không lưu plaintext, đã verify); tìm khách theo tên (trgm)/số giấy tờ (exact qua hash, chuẩn hoá khoảng trắng); xem số đầy đủ qua endpoint riêng (decrypt + log READ_PII); blacklist.
 - **Giao diện:** `web-admin` (http://localhost:3000) — Dashboard (Modern Hospitality, KPI + sparkline), login/register/forgot/reset, sidebar/topbar, các trang placeholder; `web-staff` PWA (http://localhost:3002) — today/rooms/cleaning/profile/login. Hệ **design token 2 tầng + 3 theme** (light/dark/warm) đổi ổn định.
 - **Hạ tầng dev:** Docker (PG16 + Redis7 + Mailpit), migration SQL-first + Prisma introspect, seed; CI GitHub Actions.
 
@@ -36,7 +37,7 @@
 | Sprint | Tuần | Chủ đề | Trạng thái |
 |:--:|:--:|---|:--:|
 | **1** | 1–2 | Nền tảng + multi-tenant isolation | ✅ **Xong** |
-| **2** | 3–4 | Property / Room / Resource + Pricing | 🟡 **Đang làm** (2.1–2.4 ✅) |
+| **2** | 3–4 | Property / Room / Resource + Pricing | 🟡 **BE xong** (2.1–2.5 ✅; 6.1 FE còn lại) |
 | 3 | 5–6 | Booking core + Calendar | ⬜ |
 | 4 | 7–8 | Finance + Realtime + Audit | ⬜ |
 | 5 | 9–10 | Operations + Channel sync + Staff PWA + SaaS billing | ⬜ |
@@ -56,13 +57,13 @@
 - ✅ **1.7** Auth module (register/login/refresh+grace/logout/forgot-reset/2FA/sessions + throttle)
 - ✅ **1.8** RBAC guard + permission cache (pv) + `authorizeOnProperty`
 
-### EPIC 2 — Core Domain 🟡 (4/8)
+### EPIC 2 — Core Domain 🟡 (5/8)
 - ✅ **2.1** Property, Room, Bookable Unit (`bookable_resources`/`resource_members`) + `room_occupancy` (EXCLUDE presence-based) + **OccupancyService** (choke-point) + `room_blocks` CRUD. Đã bổ sung FK `user_property_roles(tenant_id, property_id) → properties` (hoãn từ 1.6). Migration `0004`; FK `room_occupancy → bookings` vẫn hoãn tới 2.6 (bookings chưa tồn tại).
 - ✅ **2.2** Rate Plans (deposit_type/value, version, gán theo **resource**) + `rate_plan_rules` (validate **cấm 2 rule cùng priority chồng ngày**) + `rate_plan_resources` + `vietnam_holidays` (seed 2026–2027). Migration `0005`; bắt buộc **1 default per (property, mode)** (partial unique + service); sửa giá → **bump version**; effective_from < effective_to.
 - ✅ **2.3** `packages/pricing-engine` — `quote()` HOURLY/DAILY/MONTHLY (docs/07): timezone-aware (bucket ngày theo property TZ, `Intl`), rules theo priority + tie-break created_at, holidays **qua input** (không hardcode), `roundVnd` duy nhất, cọc FIXED/PERCENT. Pure (không NestJS/DB). 21 unit test phủ bảng docs/07 §8.
 - ✅ **2.4** `modules/pricing` + bảng `quotes` (migration `0006`): `POST /pricing/quote` → load plan/rules/holidays từ DB → engine tính → **INSERT quotes** (snapshot `rate_plan_version`, line_items, expires 15') → trả `quote_id`. Resolve gói theo resource (ưu tiên default) → fallback property default. `purgeExpired` cho night-audit 4.6. **Không Redis.**
-- ⬜ **2.5** Guests + PII encryption *(EncryptionService đã có sẵn từ 1.7)* — **kế tiếp**
-- ⬜ **2.6** Booking core (`createBookingTx`) · ⬜ **2.7** HOLD + expiry cron · ⬜ **2.8** Check-in/out / switch resource
+- ✅ **2.5** Guests + **PII mã hoá field** (`id_document_number_enc` AES-256-GCM + `_hash` HMAC blind index + `_last4`, KHÔNG plaintext — ADR-0007). Migration `0007`; CRUD + search trgm tên/phone + exact qua hash; endpoint xem số đầy đủ (decrypt + log READ_PII, audit_logs nối ở 4.5); blacklist.
+- ⬜ **2.6** Booking core (`createBookingTx` + ALTER `room_occupancy` FK → bookings) — **kế tiếp (Sprint 3)** · ⬜ **2.7** HOLD + expiry cron · ⬜ **2.8** Check-in/out / switch resource
 
 ### EPIC 3 — Finance ⬜ (0/8)
 - ⬜ 3.1 Document counters · 3.2 Invoices (kind/deposit/state machine) · 3.3 Payments + VietQR · 3.4 Đối soát Casso/SePay
@@ -91,9 +92,9 @@
 
 ## 4. Việc kế tiếp (đề xuất thứ tự)
 
-1. ✅ ~~Task 2.1, 2.2, 2.3, 2.4~~ — **đã xong** (xem EPIC 2).
-2. **Task 2.5** — Guests + PII (mã hoá `id_document` qua `EncryptionService` đã có + blind index HMAC; search trgm theo tên/phone).
-3. **Task 2.6 → 2.7 → 2.8** — Booking core (`createBookingTx`, verify quote) → HOLD + expiry cron → check-in/out + switch resource. *(2.6 ALTER `room_occupancy` thêm FK → bookings.)*
+1. ✅ ~~Task 2.1–2.5~~ — **đã xong** (backend Sprint 2 hoàn tất; xem EPIC 2).
+2. **Task 2.6 → 2.7 → 2.8** (Sprint 3) — Booking core `createBookingTx` (advisory lock + occupancy + **verify quote_id** → 409 PRICE_CHANGED + Idempotency-Key) → HOLD + expiry cron → check-in/out + switch resource. *(2.6 ALTER `room_occupancy` thêm FK `(tenant_id, booking_id) → bookings`.)*
+3. **Task 3.1** — Document counters (booking_code/invoice_number atomic) — cần cho 2.6.
 4. Song song: **Task 6.1** nối API thật cho `web-admin` (auth client + SSE hook) để Dashboard hiển thị số liệu sống.
 
 ---

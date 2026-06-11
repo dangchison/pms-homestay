@@ -9,6 +9,7 @@ export const SOFT_DELETABLE_MODELS = new Set<string>([
   'properties', // task 2.1
   'rooms', // task 2.1
   'bookable_resources', // task 2.1
+  'guests', // task 2.5
 ]);
 
 function mentionsDeletedAt(where: unknown): boolean {

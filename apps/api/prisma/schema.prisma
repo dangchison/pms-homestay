@@ -42,6 +42,7 @@ model tenants {
   created_at           DateTime              @default(now()) @db.Timestamptz(6)
   updated_at           DateTime              @default(now()) @db.Timestamptz(6)
   bookable_resources   bookable_resources[]
+  guests               guests[]
   properties           properties[]
   quotes               quotes[]
   rate_plan_resources  rate_plan_resources[]
@@ -382,6 +383,38 @@ model quotes {
   tenants            tenants            @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   rate_plans         rate_plans         @relation(fields: [tenant_id, rate_plan_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
   bookable_resources bookable_resources @relation(fields: [tenant_id, resource_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model guests {
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id               String    @db.Uuid
+  full_name               String    @db.VarChar(255)
+  phone                   String?   @db.VarChar(20)
+  email                   String?   @db.Citext
+  nationality             String?   @default("VN") @db.VarChar(2)
+  id_document_type        String?   @db.VarChar(20)
+  id_document_number_enc  Bytes?
+  id_document_number_hash Bytes?
+  id_document_last4       String?   @db.VarChar(4)
+  id_document_issue_date  DateTime? @db.Date
+  id_document_issue_place String?   @db.VarChar(255)
+  id_document_scan_url    String?
+  date_of_birth           DateTime? @db.Date
+  gender                  String?   @db.VarChar(10)
+  address                 String?
+  notes                   String?
+  is_blacklisted          Boolean   @default(false)
+  blacklist_reason        String?
+  created_at              DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime  @default(now()) @db.Timestamptz(6)
+  deleted_at              DateTime? @db.Timestamptz(6)
+  tenants                 tenants   @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([tenant_id, id])
+  @@index([tenant_id, id_document_number_hash], map: "idx_guests_doc_hash")
+  @@index([full_name(ops: raw("gin_trgm_ops"))], map: "idx_guests_name_trgm", type: Gin)
+  @@index([tenant_id, phone], map: "idx_guests_phone")
 }
 
 enum user_role {

@@ -12,6 +12,7 @@ import { RedisModule } from '@core/redis/redis.module';
 import { TenantGuard } from '@core/tenancy/tenant.guard';
 import { TenantResolverMiddleware } from '@core/tenancy/tenant-resolver.middleware';
 import { AuthPublicModule } from '@modules/auth-public/auth-public.module';
+import { GuestsModule } from '@modules/guests/guests.module';
 import { HealthModule } from '@modules/health/health.module';
 import { PricingModule } from '@modules/pricing/pricing.module';
 import { PropertiesModule } from '@modules/properties/properties.module';
@@ -42,6 +43,7 @@ export class AppModule implements NestModule {
         RoomsModule,
         RatePlansModule,
         PricingModule,
+        GuestsModule,
       ],
       providers: [
         TenantResolverMiddleware,

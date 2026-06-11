@@ -6,4 +6,5 @@ export * from './room';
 export * from './resource';
 export * from './rate-plan';
 export * from './quote';
+export * from './guest';
 export * from './events';
