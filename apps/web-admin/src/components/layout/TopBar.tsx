@@ -9,11 +9,11 @@ import { Bell, Building2, ChevronsUpDown, Plus } from 'lucide-react';
  */
 export function TopBar() {
   return (
-    <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-3 border-b bg-card/95 px-4 backdrop-blur md:px-6">
+    <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-3 border-b border-border bg-surface/95 px-4 shadow-xs backdrop-blur md:px-6">
       <button
         type="button"
         onClick={() => toast.info('PropertySwitcher nối dữ liệu thật ở task 6.1')}
-        className="flex items-center gap-2.5 rounded-lg border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent"
+        className="flex items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm transition-colors hover:bg-accent"
       >
         <Building2 className="size-4 text-primary" />
         <span className="font-medium">Demo Homestay Đà Nẵng</span>

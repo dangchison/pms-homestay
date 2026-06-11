@@ -21,23 +21,29 @@ Dialog/drawer (check-in, record payment, switch resource…) được liệt kê
 5. **Quyền quyết định UI:** menu/nút render theo permission matrix (`04` §4) — nhưng đây chỉ là UX; server vẫn là người quyết (403 phải được xử lý đẹp dù nút đã ẩn).
 6. **Không trang nào được phép thiếu 4 trạng thái:** loading (skeleton), empty (hướng dẫn hành động đầu tiên), error (retry + request_id), partial (dữ liệu cũ + banner reconnecting khi SSE đứt).
 
-## 3. Design tokens (Tailwind 4 preset trong `packages/ui`)
+## 3. Design tokens — kiến trúc 2 TẦNG (nguồn sự thật: `packages/ui/src/styles.css`)
 
-| Token | Giá trị | Dùng cho |
-|-------|---------|----------|
-| `--primary` | teal-600 `#0d9488` | CTA, link, active state |
-| `--booking-hold` | amber-400 | Block HOLD trên calendar |
-| `--booking-pending` | orange-500 | PENDING (chờ cọc) |
-| `--booking-confirmed` | teal-600 | CONFIRMED |
-| `--booking-checkedin` | blue-600 | CHECKED_IN |
-| `--booking-ota` | violet-500 | Booking nguồn OTA (viền/badge kèm logo kênh) |
-| `--block` | slate-400 sọc chéo | room_block (bảo trì…) |
-| `--hk-clean / dirty / cleaning / inspection` | green-500 / red-500 / amber-500 / sky-500 | Housekeeping status dot |
-| Danger | rose-600 | Hủy, refund, xoá |
-| Font | Inter (latin + vietnamese subset) | Toàn hệ thống |
-| Radius / spacing | `rounded-xl`, spacing 4px scale | shadcn default |
+Phong cách: **Modern Hospitality** (teal dẫn dắt, nền warm-neutral, surface phân tầng + shadow mềm). Token chia **2 tầng** để đổi theme luôn ổn định:
 
-Màu trạng thái booking/housekeeping là **ngôn ngữ chung** của mọi màn hình (calendar, list, board, PWA) — không màn nào tự chế bảng màu khác.
+- **Tầng 1 — Primitive** (`--p-*`, OKLCH): bảng màu gốc (teal 50–950, neutral ấm, accent, sand). Nơi DUY NHẤT chứa màu thô. **KHÔNG** map vào `@theme` → không có utility `bg-p-teal-50` → cấm gọi màu thô trong JSX.
+- **Tầng 2 — Semantic**: trỏ vào tầng 1, là thứ duy nhất vào `@theme inline`. Component/trang **chỉ** dùng các utility này.
+
+| Nhóm semantic | Token (utility) | Ghi chú |
+|---|---|---|
+| Nền/surface | `background`, `surface`, `surface-muted`, `card`, `popover` | 3 mức nền + elevation |
+| Brand | `primary` (teal-600 `#0d9488`), `primary-foreground/-hover/-muted` | CTA, link, active |
+| Text | `foreground`, `muted-foreground`, `subtle-foreground` | |
+| Trạng thái | `success`/`warning`/`destructive`(rose)/`info` + `-foreground`/`-muted` | |
+| Đường nét | `border`, `border-strong`, `input`, `ring` | |
+| Chip tonal | `chip-{brand,blue,violet,amber,emerald}` + `-soft` | StatCard / icon chip |
+| Booking | `booking-{hold,pending,confirmed,checkedin,ota}`, `block` | amber-400/orange-500/teal-600/blue-600/violet-500 |
+| Housekeeping | `hk-{clean,dirty,cleaning,inspection}` | green/red/amber/sky-500 |
+| Elevation | `shadow-{xs,sm,md,lg}` | shadow mềm, token hoá theo theme |
+| Radius / Font | `rounded-{sm…2xl}` (base `--radius` .75rem) · Inter (latin+vietnamese) | |
+
+**Theme:** đặt `data-theme` trên `<html>` — `light` (mặc định, Modern Hospitality) · `dark` · `warm` (Warm Boutique). Mỗi theme là một block `[data-theme="x"]` chỉ trỏ lại tầng 2; **đổi theme không đụng component**. No-flash script `themeInitScript` (export từ `@pms/ui`) nhúng đầu `<body>`; runtime đổi qua `document.documentElement.dataset.theme`. ThemeSwitcher UI ở Settings để task 6.7.
+
+**Quy tắc bất biến:** component/trang **không dùng màu thô** (`bg-teal-50`, `text-amber-700`, `from-teal-700`…) — chỉ token semantic ở trên. Màu trạng thái booking/housekeeping là **ngôn ngữ chung** mọi màn hình và **cố ý bất biến theo theme** (màu mang nghĩa).
 
 ## 4. Component nền (từ `@pms/ui` — app KHÔNG copy shadcn riêng)
 

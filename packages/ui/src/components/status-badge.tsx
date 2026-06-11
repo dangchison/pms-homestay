@@ -3,7 +3,9 @@ import { cn } from '../lib/cn';
 
 /**
  * StatusBadge + HousekeepingDot (docs/ui/00 §4): màu trạng thái là NGÔN NGỮ
- * CHUNG của mọi màn hình — map đúng token §3, không tự chế màu.
+ * CHUNG mọi màn hình (calendar, list, board, PWA) và CỐ Ý bất biến theo theme
+ * — màu mang nghĩa, không đổi. Chữ dùng foreground neutral (luôn đủ tương phản
+ * mọi theme); màu trạng thái thể hiện qua chấm + viền + nền tint. Chỉ dùng token.
  */
 
 export type BookingStatus =
@@ -15,44 +17,47 @@ export type BookingStatus =
   | 'CANCELLED'
   | 'NO_SHOW';
 
-const BOOKING_STYLE: Record<BookingStatus, { label: string; className: string }> = {
-  HOLD: { label: 'Giữ chỗ', className: 'bg-booking-hold/15 text-amber-700 border-booking-hold/40' },
+const BOOKING_STYLE: Record<BookingStatus, { label: string; dot: string; wrap: string }> = {
+  HOLD: { label: 'Giữ chỗ', dot: 'bg-booking-hold', wrap: 'border-booking-hold/40 bg-booking-hold/12' },
   PENDING: {
     label: 'Chờ cọc',
-    className: 'bg-booking-pending/15 text-orange-700 border-booking-pending/40',
+    dot: 'bg-booking-pending',
+    wrap: 'border-booking-pending/40 bg-booking-pending/12',
   },
   CONFIRMED: {
     label: 'Đã xác nhận',
-    className: 'bg-booking-confirmed/15 text-teal-700 border-booking-confirmed/40',
+    dot: 'bg-booking-confirmed',
+    wrap: 'border-booking-confirmed/40 bg-booking-confirmed/12',
   },
   CHECKED_IN: {
     label: 'Đang ở',
-    className: 'bg-booking-checkedin/15 text-blue-700 border-booking-checkedin/40',
+    dot: 'bg-booking-checkedin',
+    wrap: 'border-booking-checkedin/40 bg-booking-checkedin/12',
   },
-  CHECKED_OUT: { label: 'Đã trả phòng', className: 'bg-muted text-muted-foreground border-border' },
+  CHECKED_OUT: { label: 'Đã trả phòng', dot: 'bg-block', wrap: 'border-border bg-muted' },
   CANCELLED: {
     label: 'Đã hủy',
-    className: 'bg-destructive/10 text-destructive border-destructive/30',
+    dot: 'bg-destructive',
+    wrap: 'border-destructive/30 bg-destructive-muted',
   },
-  NO_SHOW: { label: 'No-show', className: 'bg-destructive/10 text-destructive border-destructive/30' },
+  NO_SHOW: {
+    label: 'No-show',
+    dot: 'bg-destructive',
+    wrap: 'border-destructive/30 bg-destructive-muted',
+  },
 };
 
-function BookingStatusBadge({
-  status,
-  className,
-}: {
-  status: BookingStatus;
-  className?: string;
-}) {
+function BookingStatusBadge({ status, className }: { status: BookingStatus; className?: string }) {
   const style = BOOKING_STYLE[status];
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap',
-        style.className,
+        'inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap text-foreground',
+        style.wrap,
         className,
       )}
     >
+      <span className={cn('size-1.5 shrink-0 rounded-full', style.dot)} />
       {style.label}
     </span>
   );

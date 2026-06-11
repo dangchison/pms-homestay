@@ -1,108 +1,374 @@
 /*
- * @pms/ui — NGUỒN DUY NHẤT của design tokens (docs/ui/00 §3).
- * App import file này trong globals.css (sau @import "tailwindcss") và thêm
- * @source trỏ tới packages/ui/src để Tailwind v4 scan class cross-package.
- * App KHÔNG tự định nghĩa token riêng.
+ * @pms/ui — NGUỒN DUY NHẤT của design token (docs/ui/00 §3).
+ * Kiến trúc 2 TẦNG để đổi theme luôn ổn định:
  *
- * Màu trạng thái booking/housekeeping là NGÔN NGỮ CHUNG mọi màn hình
- * (calendar, list, board, PWA) — không màn nào tự chế bảng màu khác.
+ *   TẦNG 1 — PRIMITIVE (--p-*): bảng màu gốc OKLCH. Nơi DUY NHẤT chứa giá trị
+ *            màu thô. KHÔNG map vào @theme → không sinh utility `bg-p-teal-50`
+ *            → component/trang KHÔNG gọi được màu thô (chống drift).
+ *   TẦNG 2 — SEMANTIC (--background, --primary, --chip-*…): trỏ vào tầng 1.
+ *            CHỈ tầng này map vào @theme inline → utility `bg-surface`,
+ *            `text-primary`, `bg-chip-amber-soft`, `shadow-md`…
+ *
+ *   ĐỔI THEME = mở block [data-theme="x"] và trỏ lại tầng 2. Không đụng component.
+ *   Theme set qua thuộc tính trên <html> (no-flash script trong app layout).
+ *
+ * Màu trạng thái booking/housekeeping là NGÔN NGỮ CHUNG mọi màn hình — không
+ * màn nào tự chế bảng màu khác (docs/ui/00 §3).
  */
 
+/* Cho phép biến thể `dark:` chạy theo [data-theme="dark"] (không chỉ media query) */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* ===========================================================================
+ * TẦNG 1 — PRIMITIVES (raw palette, OKLCH) — KHÔNG map vào @theme
+ * ======================================================================== */
 :root {
-  --background: #f8fafc; /* slate-50 — nền app, card trắng nổi lên */
-  --foreground: #0f172a; /* slate-900 */
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --popover: #ffffff;
-  --popover-foreground: #0f172a;
+  --p-white: oklch(1 0 0);
 
-  /* CTA, link, active state (docs/ui §3) */
-  --primary: #0d9488; /* teal-600 */
-  --primary-foreground: #f0fdfa; /* teal-50 */
+  /* Brand teal — teal-600 ≈ #0d9488 (giữ đúng docs/ui §3) */
+  --p-teal-50: oklch(0.972 0.017 184);
+  --p-teal-100: oklch(0.945 0.035 183);
+  --p-teal-200: oklch(0.905 0.056 183);
+  --p-teal-300: oklch(0.845 0.078 183);
+  --p-teal-400: oklch(0.758 0.094 184);
+  --p-teal-500: oklch(0.66 0.1 184);
+  --p-teal-600: oklch(0.58 0.094 184);
+  --p-teal-700: oklch(0.495 0.079 184);
+  --p-teal-800: oklch(0.42 0.065 185);
+  --p-teal-900: oklch(0.36 0.051 186);
+  --p-teal-950: oklch(0.255 0.039 187);
 
-  --secondary: #f1f5f9; /* slate-100 */
-  --secondary-foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b; /* slate-500 */
-  --accent: #f0fdfa; /* teal-50 — hover nhấn nhẹ theo brand */
-  --accent-foreground: #134e4a; /* teal-900 */
+  /* Neutral ẤM (hue ~95, chroma rất thấp) — nền warm-neutral của Modern Hospitality */
+  --p-neutral-0: oklch(1 0 0);
+  --p-neutral-50: oklch(0.985 0.002 95);
+  --p-neutral-100: oklch(0.968 0.003 95);
+  --p-neutral-200: oklch(0.928 0.004 95);
+  --p-neutral-300: oklch(0.874 0.005 95);
+  --p-neutral-400: oklch(0.715 0.006 95);
+  --p-neutral-500: oklch(0.585 0.007 95);
+  --p-neutral-600: oklch(0.49 0.007 95);
+  --p-neutral-700: oklch(0.405 0.006 95);
+  --p-neutral-800: oklch(0.305 0.005 95);
+  --p-neutral-900: oklch(0.225 0.004 95);
+  --p-neutral-950: oklch(0.165 0.004 95);
 
-  /* Danger: hủy, refund, xoá */
-  --destructive: #e11d48; /* rose-600 */
-  --destructive-foreground: #fff1f2;
+  /* Accent hues — stop cần dùng cho chip/status (soft tint sinh bằng color-mix) */
+  --p-emerald-300: oklch(0.83 0.12 162);
+  --p-emerald-500: oklch(0.7 0.15 162);
+  --p-emerald-700: oklch(0.52 0.12 163);
+  --p-amber-300: oklch(0.86 0.13 85);
+  --p-amber-400: oklch(0.83 0.155 85);
+  --p-amber-500: oklch(0.79 0.15 75);
+  --p-amber-700: oklch(0.55 0.12 60);
+  --p-rose-300: oklch(0.78 0.13 18);
+  --p-rose-500: oklch(0.64 0.2 18);
+  --p-rose-600: oklch(0.585 0.207 17);
+  --p-rose-700: oklch(0.505 0.19 18);
+  --p-blue-300: oklch(0.8 0.1 254);
+  --p-blue-500: oklch(0.62 0.16 254);
+  --p-blue-600: oklch(0.55 0.17 254);
+  --p-blue-700: oklch(0.48 0.16 254);
+  --p-violet-300: oklch(0.8 0.11 290);
+  --p-violet-500: oklch(0.62 0.18 290);
+  --p-violet-700: oklch(0.48 0.19 291);
+  --p-orange-500: oklch(0.7 0.18 47);
+  --p-sky-500: oklch(0.7 0.13 230);
+  --p-green-500: oklch(0.72 0.19 145);
+  --p-red-500: oklch(0.64 0.21 25);
 
-  --success: #22c55e;
-  --warning: #f59e0b;
-
-  --border: #e2e8f0; /* slate-200 */
-  --input: #cbd5e1; /* slate-300 */
-  --ring: #0d9488;
-
-  --radius: 0.75rem; /* rounded-xl — shadcn default theo docs/ui §3 */
-
-  /* Trạng thái booking trên calendar/list/badge */
-  --booking-hold: #fbbf24; /* amber-400 */
-  --booking-pending: #f97316; /* orange-500 */
-  --booking-confirmed: #0d9488; /* teal-600 */
-  --booking-checkedin: #2563eb; /* blue-600 */
-  --booking-ota: #8b5cf6; /* violet-500 */
-  --block: #94a3b8; /* slate-400 (sọc chéo render ở component) */
-
-  /* Housekeeping status dot */
-  --hk-clean: #22c55e; /* green-500 */
-  --hk-dirty: #ef4444; /* red-500 */
-  --hk-cleaning: #f59e0b; /* amber-500 */
-  --hk-inspection: #0ea5e9; /* sky-500 */
+  /* Warm Boutique extras — chỉ theme warm dùng */
+  --p-sand-50: oklch(0.975 0.012 75);
+  --p-sand-100: oklch(0.955 0.018 73);
+  --p-sand-200: oklch(0.915 0.022 72);
+  --p-sand-300: oklch(0.86 0.026 70);
+  --p-terracotta-500: oklch(0.62 0.12 40);
+  --p-terracotta-700: oklch(0.48 0.1 40);
 }
 
-.dark {
-  --background: #0f172a;
-  --foreground: #f8fafc;
-  --card: #1e293b;
-  --card-foreground: #f8fafc;
-  --popover: #1e293b;
-  --popover-foreground: #f8fafc;
-  --primary: #2dd4bf; /* teal-400 trên nền tối */
-  --primary-foreground: #042f2e;
-  --secondary: #1e293b;
-  --secondary-foreground: #f8fafc;
-  --muted: #1e293b;
-  --muted-foreground: #94a3b8;
-  --accent: #134e4a;
-  --accent-foreground: #ccfbf1;
-  --destructive: #fb7185;
-  --destructive-foreground: #4c0519;
-  --border: rgb(255 255 255 / 10%);
-  --input: rgb(255 255 255 / 15%);
-  --ring: #2dd4bf;
+/* ===========================================================================
+ * TẦNG 2 — SEMANTIC · LIGHT (Modern Hospitality — mặc định)
+ * ======================================================================== */
+:root,
+[data-theme='light'] {
+  --background: var(--p-neutral-50);
+  --foreground: var(--p-neutral-900);
+  --surface: var(--p-neutral-0);
+  --surface-muted: var(--p-neutral-100);
+  --surface-foreground: var(--p-neutral-900);
+  --popover: var(--p-neutral-0);
+  --popover-foreground: var(--p-neutral-900);
+  --card: var(--surface);
+  --card-foreground: var(--surface-foreground);
+
+  --muted: var(--p-neutral-100);
+  --muted-foreground: var(--p-neutral-500);
+  --subtle-foreground: var(--p-neutral-400);
+
+  --primary: var(--p-teal-600);
+  --primary-foreground: var(--p-neutral-0);
+  --primary-hover: var(--p-teal-700);
+  --primary-muted: var(--p-teal-50);
+
+  --secondary: var(--p-neutral-100);
+  --secondary-foreground: var(--p-neutral-900);
+  --accent: var(--p-teal-50);
+  --accent-foreground: var(--p-teal-800);
+
+  --success: var(--p-emerald-700);
+  --success-foreground: var(--p-neutral-0);
+  --success-muted: color-mix(in oklch, var(--p-emerald-500) 14%, transparent);
+  --warning: var(--p-amber-700);
+  --warning-foreground: var(--p-neutral-0);
+  --warning-muted: color-mix(in oklch, var(--p-amber-500) 16%, transparent);
+  --destructive: var(--p-rose-600);
+  --destructive-foreground: var(--p-neutral-0);
+  --destructive-muted: color-mix(in oklch, var(--p-rose-500) 12%, transparent);
+  --info: var(--p-blue-600);
+  --info-foreground: var(--p-neutral-0);
+  --info-muted: color-mix(in oklch, var(--p-blue-500) 12%, transparent);
+
+  --border: var(--p-neutral-200);
+  --border-strong: var(--p-neutral-300);
+  --input: var(--p-neutral-300);
+  --ring: var(--p-teal-600);
+
+  /* Tonal chips (StatCard / icon chip) — base = text, soft = nền tint */
+  --chip-brand: var(--p-teal-700);
+  --chip-brand-soft: color-mix(in oklch, var(--p-teal-500) 14%, transparent);
+  --chip-blue: var(--p-blue-700);
+  --chip-blue-soft: color-mix(in oklch, var(--p-blue-500) 13%, transparent);
+  --chip-violet: var(--p-violet-700);
+  --chip-violet-soft: color-mix(in oklch, var(--p-violet-500) 13%, transparent);
+  --chip-amber: var(--p-amber-700);
+  --chip-amber-soft: color-mix(in oklch, var(--p-amber-500) 18%, transparent);
+  --chip-emerald: var(--p-emerald-700);
+  --chip-emerald-soft: color-mix(in oklch, var(--p-emerald-500) 14%, transparent);
+
+  /* Booking / housekeeping — ngôn ngữ màu chung (docs/ui §3) */
+  --booking-hold: var(--p-amber-400);
+  --booking-pending: var(--p-orange-500);
+  --booking-confirmed: var(--p-teal-600);
+  --booking-checkedin: var(--p-blue-600);
+  --booking-ota: var(--p-violet-500);
+  --block: var(--p-neutral-400);
+  --hk-clean: var(--p-green-500);
+  --hk-dirty: var(--p-red-500);
+  --hk-cleaning: var(--p-amber-500);
+  --hk-inspection: var(--p-sky-500);
+
+  /* Elevation — shadow mềm, tint neutral ấm, opacity thấp (3 tầng) */
+  --elevation-xs: 0 1px 2px 0 oklch(0.3 0.02 95 / 0.05);
+  --elevation-sm: 0 1px 3px 0 oklch(0.3 0.02 95 / 0.07), 0 1px 2px -1px oklch(0.3 0.02 95 / 0.05);
+  --elevation-md: 0 4px 10px -2px oklch(0.3 0.02 95 / 0.08), 0 2px 6px -2px oklch(0.3 0.02 95 / 0.05);
+  --elevation-lg: 0 12px 24px -6px oklch(0.3 0.02 95 / 0.1), 0 6px 12px -6px oklch(0.3 0.02 95 / 0.06);
 }
 
+/* ===========================================================================
+ * TẦNG 2 — SEMANTIC · DARK
+ * ======================================================================== */
+[data-theme='dark'] {
+  --background: var(--p-neutral-950);
+  --foreground: var(--p-neutral-50);
+  --surface: var(--p-neutral-900);
+  --surface-muted: var(--p-neutral-800);
+  --surface-foreground: var(--p-neutral-50);
+  --popover: var(--p-neutral-900);
+  --popover-foreground: var(--p-neutral-50);
+  --card: var(--surface);
+  --card-foreground: var(--surface-foreground);
+
+  --muted: var(--p-neutral-800);
+  --muted-foreground: var(--p-neutral-400);
+  --subtle-foreground: var(--p-neutral-500);
+
+  --primary: var(--p-teal-400);
+  --primary-foreground: var(--p-neutral-950);
+  --primary-hover: var(--p-teal-300);
+  --primary-muted: color-mix(in oklch, var(--p-teal-500) 18%, transparent);
+
+  --secondary: var(--p-neutral-800);
+  --secondary-foreground: var(--p-neutral-50);
+  --accent: color-mix(in oklch, var(--p-teal-500) 18%, transparent);
+  --accent-foreground: var(--p-teal-100);
+
+  --success: var(--p-emerald-500);
+  --success-foreground: var(--p-neutral-950);
+  --success-muted: color-mix(in oklch, var(--p-emerald-500) 22%, transparent);
+  --warning: var(--p-amber-400);
+  --warning-foreground: var(--p-neutral-950);
+  --warning-muted: color-mix(in oklch, var(--p-amber-500) 22%, transparent);
+  --destructive: var(--p-rose-500);
+  --destructive-foreground: var(--p-neutral-950);
+  --destructive-muted: color-mix(in oklch, var(--p-rose-500) 22%, transparent);
+  --info: var(--p-blue-500);
+  --info-foreground: var(--p-neutral-950);
+  --info-muted: color-mix(in oklch, var(--p-blue-500) 22%, transparent);
+
+  --border: oklch(1 0 0 / 0.1);
+  --border-strong: oklch(1 0 0 / 0.18);
+  --input: oklch(1 0 0 / 0.18);
+  --ring: var(--p-teal-400);
+
+  --chip-brand: var(--p-teal-300);
+  --chip-brand-soft: color-mix(in oklch, var(--p-teal-500) 22%, transparent);
+  --chip-blue: var(--p-blue-300);
+  --chip-blue-soft: color-mix(in oklch, var(--p-blue-500) 22%, transparent);
+  --chip-violet: var(--p-violet-300);
+  --chip-violet-soft: color-mix(in oklch, var(--p-violet-500) 22%, transparent);
+  --chip-amber: var(--p-amber-300);
+  --chip-amber-soft: color-mix(in oklch, var(--p-amber-500) 24%, transparent);
+  --chip-emerald: var(--p-emerald-300);
+  --chip-emerald-soft: color-mix(in oklch, var(--p-emerald-500) 22%, transparent);
+
+  --booking-hold: var(--p-amber-400);
+  --booking-pending: var(--p-orange-500);
+  --booking-confirmed: var(--p-teal-400);
+  --booking-checkedin: var(--p-blue-500);
+  --booking-ota: var(--p-violet-500);
+  --block: var(--p-neutral-500);
+  --hk-clean: var(--p-green-500);
+  --hk-dirty: var(--p-red-500);
+  --hk-cleaning: var(--p-amber-500);
+  --hk-inspection: var(--p-sky-500);
+
+  --elevation-xs: 0 1px 2px 0 oklch(0 0 0 / 0.4);
+  --elevation-sm: 0 1px 3px 0 oklch(0 0 0 / 0.5), 0 1px 2px -1px oklch(0 0 0 / 0.4);
+  --elevation-md: 0 4px 10px -2px oklch(0 0 0 / 0.5), 0 2px 6px -2px oklch(0 0 0 / 0.4);
+  --elevation-lg: 0 12px 24px -6px oklch(0 0 0 / 0.55), 0 6px 12px -6px oklch(0 0 0 / 0.4);
+}
+
+/* ===========================================================================
+ * TẦNG 2 — SEMANTIC · WARM (Warm Boutique — chứng minh đổi theme ổn định)
+ * ======================================================================== */
+[data-theme='warm'] {
+  --background: var(--p-sand-50);
+  --foreground: var(--p-neutral-900);
+  --surface: var(--p-neutral-0);
+  --surface-muted: var(--p-sand-100);
+  --surface-foreground: var(--p-neutral-900);
+  --popover: var(--p-neutral-0);
+  --popover-foreground: var(--p-neutral-900);
+  --card: var(--surface);
+  --card-foreground: var(--surface-foreground);
+
+  --muted: var(--p-sand-100);
+  --muted-foreground: var(--p-neutral-600);
+  --subtle-foreground: var(--p-neutral-500);
+
+  --primary: var(--p-teal-600);
+  --primary-foreground: var(--p-neutral-0);
+  --primary-hover: var(--p-teal-700);
+  --primary-muted: color-mix(in oklch, var(--p-teal-500) 12%, transparent);
+
+  --secondary: var(--p-sand-100);
+  --secondary-foreground: var(--p-neutral-900);
+  --accent: var(--p-sand-200);
+  --accent-foreground: var(--p-terracotta-700);
+
+  --success: var(--p-emerald-700);
+  --success-foreground: var(--p-neutral-0);
+  --success-muted: color-mix(in oklch, var(--p-emerald-500) 15%, transparent);
+  --warning: var(--p-amber-700);
+  --warning-foreground: var(--p-neutral-0);
+  --warning-muted: color-mix(in oklch, var(--p-amber-500) 18%, transparent);
+  --destructive: var(--p-terracotta-500);
+  --destructive-foreground: var(--p-neutral-0);
+  --destructive-muted: color-mix(in oklch, var(--p-terracotta-500) 14%, transparent);
+  --info: var(--p-blue-600);
+  --info-foreground: var(--p-neutral-0);
+  --info-muted: color-mix(in oklch, var(--p-blue-500) 12%, transparent);
+
+  --border: var(--p-sand-200);
+  --border-strong: var(--p-sand-300);
+  --input: var(--p-sand-300);
+  --ring: var(--p-teal-600);
+
+  --chip-brand: var(--p-teal-700);
+  --chip-brand-soft: color-mix(in oklch, var(--p-teal-500) 13%, transparent);
+  --chip-blue: var(--p-blue-700);
+  --chip-blue-soft: color-mix(in oklch, var(--p-blue-500) 12%, transparent);
+  --chip-violet: var(--p-violet-700);
+  --chip-violet-soft: color-mix(in oklch, var(--p-violet-500) 12%, transparent);
+  --chip-amber: var(--p-amber-700);
+  --chip-amber-soft: color-mix(in oklch, var(--p-amber-500) 20%, transparent);
+  --chip-emerald: var(--p-emerald-700);
+  --chip-emerald-soft: color-mix(in oklch, var(--p-emerald-500) 15%, transparent);
+
+  --booking-hold: var(--p-amber-400);
+  --booking-pending: var(--p-orange-500);
+  --booking-confirmed: var(--p-teal-600);
+  --booking-checkedin: var(--p-blue-600);
+  --booking-ota: var(--p-violet-500);
+  --block: var(--p-neutral-400);
+  --hk-clean: var(--p-green-500);
+  --hk-dirty: var(--p-red-500);
+  --hk-cleaning: var(--p-amber-500);
+  --hk-inspection: var(--p-sky-500);
+
+  --elevation-xs: 0 1px 2px 0 oklch(0.42 0.06 60 / 0.06);
+  --elevation-sm: 0 1px 3px 0 oklch(0.42 0.06 60 / 0.08), 0 1px 2px -1px oklch(0.42 0.06 60 / 0.05);
+  --elevation-md: 0 4px 10px -2px oklch(0.42 0.06 60 / 0.1), 0 2px 6px -2px oklch(0.42 0.06 60 / 0.06);
+  --elevation-lg: 0 12px 24px -6px oklch(0.42 0.06 60 / 0.12), 0 6px 12px -6px oklch(0.42 0.06 60 / 0.07);
+}
+
+/* ===========================================================================
+ * @theme inline — CHỈ tầng 2 vào Tailwind (sinh utility theme-reactive)
+ * ======================================================================== */
 @theme inline {
-  /* Font: Inter (latin + vietnamese) — app set --font-inter qua next/font */
   --font-sans:
     var(--font-inter), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-foreground: var(--surface-foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
+
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-muted: var(--primary-muted);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-muted: var(--success-muted);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-muted: var(--warning-muted);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
-  --color-success: var(--success);
-  --color-warning: var(--warning);
+  --color-destructive-muted: var(--destructive-muted);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-muted: var(--info-muted);
+
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --color-chip-brand: var(--chip-brand);
+  --color-chip-brand-soft: var(--chip-brand-soft);
+  --color-chip-blue: var(--chip-blue);
+  --color-chip-blue-soft: var(--chip-blue-soft);
+  --color-chip-violet: var(--chip-violet);
+  --color-chip-violet-soft: var(--chip-violet-soft);
+  --color-chip-amber: var(--chip-amber);
+  --color-chip-amber-soft: var(--chip-amber-soft);
+  --color-chip-emerald: var(--chip-emerald);
+  --color-chip-emerald-soft: var(--chip-emerald-soft);
 
   --color-booking-hold: var(--booking-hold);
   --color-booking-pending: var(--booking-pending);
@@ -115,9 +381,19 @@
   --color-hk-cleaning: var(--hk-cleaning);
   --color-hk-inspection: var(--hk-inspection);
 
+  --shadow-xs: var(--elevation-xs);
+  --shadow-sm: var(--elevation-sm);
+  --shadow-md: var(--elevation-md);
+  --shadow-lg: var(--elevation-lg);
+
   --radius-sm: calc(var(--radius) - 6px);
   --radius-md: calc(var(--radius) - 4px);
   --radius-lg: calc(var(--radius) - 2px);
   --radius-xl: var(--radius);
   --radius-2xl: calc(var(--radius) + 4px);
+}
+
+/* radius gốc (không đổi theo theme) */
+:root {
+  --radius: 0.75rem;
 }

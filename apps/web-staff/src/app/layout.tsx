@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
-import { Toaster } from '@pms/ui';
+import { Toaster, themeInitScript } from '@pms/ui';
 import './globals.css';
 
 // Font hệ thống: Inter latin + vietnamese (docs/ui/00 §3); ≥16px tránh zoom iOS
@@ -24,8 +24,9 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="vi" suppressHydrationWarning>
+    <html lang="vi" data-theme="light" suppressHydrationWarning>
       <body className={`${inter.variable} min-h-screen font-sans antialiased`}>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         {children}
         <Toaster position="top-center" />
       </body>
