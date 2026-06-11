@@ -1,58 +1,87 @@
 /*
- * @pms/ui — NGUỒN DUY NHẤT của design tokens (docs/13 §7, ui/00 §design-system).
+ * @pms/ui — NGUỒN DUY NHẤT của design tokens (docs/ui/00 §3).
  * App import file này trong globals.css (sau @import "tailwindcss") và thêm
  * @source trỏ tới packages/ui/src để Tailwind v4 scan class cross-package.
  * App KHÔNG tự định nghĩa token riêng.
+ *
+ * Màu trạng thái booking/housekeeping là NGÔN NGỮ CHUNG mọi màn hình
+ * (calendar, list, board, PWA) — không màn nào tự chế bảng màu khác.
  */
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.55 0.18 255);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --success: oklch(0.627 0.17 149);
-  --warning: oklch(0.769 0.16 70);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.55 0.18 255);
-  --radius: 0.625rem;
+  --background: #f8fafc; /* slate-50 — nền app, card trắng nổi lên */
+  --foreground: #0f172a; /* slate-900 */
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+
+  /* CTA, link, active state (docs/ui §3) */
+  --primary: #0d9488; /* teal-600 */
+  --primary-foreground: #f0fdfa; /* teal-50 */
+
+  --secondary: #f1f5f9; /* slate-100 */
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b; /* slate-500 */
+  --accent: #f0fdfa; /* teal-50 — hover nhấn nhẹ theo brand */
+  --accent-foreground: #134e4a; /* teal-900 */
+
+  /* Danger: hủy, refund, xoá */
+  --destructive: #e11d48; /* rose-600 */
+  --destructive-foreground: #fff1f2;
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+
+  --border: #e2e8f0; /* slate-200 */
+  --input: #cbd5e1; /* slate-300 */
+  --ring: #0d9488;
+
+  --radius: 0.75rem; /* rounded-xl — shadcn default theo docs/ui §3 */
+
+  /* Trạng thái booking trên calendar/list/badge */
+  --booking-hold: #fbbf24; /* amber-400 */
+  --booking-pending: #f97316; /* orange-500 */
+  --booking-confirmed: #0d9488; /* teal-600 */
+  --booking-checkedin: #2563eb; /* blue-600 */
+  --booking-ota: #8b5cf6; /* violet-500 */
+  --block: #94a3b8; /* slate-400 (sọc chéo render ở component) */
+
+  /* Housekeeping status dot */
+  --hk-clean: #22c55e; /* green-500 */
+  --hk-dirty: #ef4444; /* red-500 */
+  --hk-cleaning: #f59e0b; /* amber-500 */
+  --hk-inspection: #0ea5e9; /* sky-500 */
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.65 0.16 255);
-  --primary-foreground: oklch(0.145 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.65 0.16 255);
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --card: #1e293b;
+  --card-foreground: #f8fafc;
+  --popover: #1e293b;
+  --popover-foreground: #f8fafc;
+  --primary: #2dd4bf; /* teal-400 trên nền tối */
+  --primary-foreground: #042f2e;
+  --secondary: #1e293b;
+  --secondary-foreground: #f8fafc;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #134e4a;
+  --accent-foreground: #ccfbf1;
+  --destructive: #fb7185;
+  --destructive-foreground: #4c0519;
+  --border: rgb(255 255 255 / 10%);
+  --input: rgb(255 255 255 / 15%);
+  --ring: #2dd4bf;
 }
 
 @theme inline {
+  /* Font: Inter (latin + vietnamese) — app set --font-inter qua next/font */
+  --font-sans:
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -74,8 +103,21 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-booking-hold: var(--booking-hold);
+  --color-booking-pending: var(--booking-pending);
+  --color-booking-confirmed: var(--booking-confirmed);
+  --color-booking-checkedin: var(--booking-checkedin);
+  --color-booking-ota: var(--booking-ota);
+  --color-block: var(--block);
+  --color-hk-clean: var(--hk-clean);
+  --color-hk-dirty: var(--hk-dirty);
+  --color-hk-cleaning: var(--hk-cleaning);
+  --color-hk-inspection: var(--hk-inspection);
+
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: calc(var(--radius) - 2px);
+  --radius-xl: var(--radius);
+  --radius-2xl: calc(var(--radius) + 4px);
 }

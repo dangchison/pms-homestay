@@ -1,6 +1,14 @@
 import type { Metadata, Viewport } from 'next';
+import { Inter } from 'next/font/google';
 import { Toaster } from '@pms/ui';
 import './globals.css';
+
+// Font hệ thống: Inter latin + vietnamese (docs/ui/00 §3); ≥16px tránh zoom iOS
+const inter = Inter({
+  subsets: ['latin', 'vietnamese'],
+  variable: '--font-inter',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: { default: 'PMS Staff', template: '%s · PMS Staff' },
@@ -9,7 +17,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#1e40af',
+  themeColor: '#0d9488',
   width: 'device-width',
   initialScale: 1,
 };
@@ -17,9 +25,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" suppressHydrationWarning>
-      <body className="min-h-screen antialiased">
+      <body className={`${inter.variable} min-h-screen font-sans antialiased`}>
         {children}
-        <Toaster />
+        <Toaster position="top-center" />
       </body>
     </html>
   );

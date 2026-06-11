@@ -5,5 +5,6 @@ export default defineConfig({
   format: ['esm', 'cjs'],
   dts: true,
   sourcemap: true,
-  clean: true,
+  // KHÔNG clean ở watch mode (xem ghi chú ở shared-types/tsup.config.ts)
+  clean: false,
 });
