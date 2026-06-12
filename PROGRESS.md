@@ -1,6 +1,6 @@
 # 📊 Tiến độ triển khai — PMS Homestay
 
-> **Cập nhật:** 2026-06-11 · **Nguồn sự thật phạm vi:** [`docs/14-roadmap-tasks.md`](docs/14-roadmap-tasks.md) (task + acceptance) · [`docs/15-sprint-plan.md`](docs/15-sprint-plan.md) (kế hoạch 6 sprint).
+> **Cập nhật:** 2026-06-12 · **Nguồn sự thật phạm vi:** [`docs/14-roadmap-tasks.md`](docs/14-roadmap-tasks.md) (task + acceptance) · [`docs/15-sprint-plan.md`](docs/15-sprint-plan.md) (kế hoạch 6 sprint).
 > File này là **bản theo dõi sống** — cập nhật sau mỗi task hoàn thành. Trạng thái lấy theo **commit thật**, không tính việc đang dở.
 
 **Chú thích:** ✅ xong (đã verify) · 🟡 đang làm / một phần · ⬜ chưa bắt đầu
@@ -106,6 +106,9 @@
 
 | Commit | Nội dung |
 |---|---|
+| `50b23db` | Task 3.1 + 2.6 — document counters + booking core (`createBookingTx`) |
+| `ba40a3f` | Task 2.5 — guests CRUD + PII field encryption (ADR-0007) |
+| `4b61ae7` | EPIC 2 task 2.1–2.4 — property/room/resource + occupancy + pricing + quote |
 | `d1158d1` | Hệ design token 2 tầng theme-stable + redesign Dashboard (Modern Hospitality) |
 | `abdf7e9` | Tạo 3 trang auth còn thiếu (register/forgot/reset) — hết link 404 |
 | `9864673` | Fix lỗi pnpm dev (tsup watch) + nâng UI theo design system |
