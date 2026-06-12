@@ -6,6 +6,8 @@ import {
   type RefundPaymentRequest,
 } from '@pms/shared-types';
 import { Prisma, type invoices, type payments } from '@prisma/client';
+
+type Tx = Prisma.TransactionClient;
 import { PermissionService } from '@core/auth/permission.service';
 import { AppException } from '@core/http/exceptions/app.exception';
 import { PrismaService } from '@core/prisma/prisma.service';
@@ -74,33 +76,17 @@ export class PaymentsService {
     }
 
     try {
-      const payment = await withTenant(this.prisma, user.tnt, async (tx) => {
-        const p = await tx.payments.create({
-          data: {
-            tenant_id: user.tnt,
-            invoice_id: dto.invoice_id,
-            amount_vnd: dto.amount_vnd,
-            method: dto.method,
-            status: 'SUCCEEDED', // tiền mặt/chuyển khoản thủ công: SUCCEEDED ngay
-            reference_code: dto.reference_code,
-            received_by: user.sub,
-            received_at: new Date(),
-            idempotency_key: idempotencyKey,
-          },
-        });
-        await tx.payment_attempts.create({
-          data: { tenant_id: user.tnt, payment_id: p.id, attempt_number: 1, status: 'SUCCEEDED' },
-        });
-        // trigger đã cập nhật invoice.paid_vnd + status. Cọc trả đủ → booking CONFIRMED.
-        const inv = await tx.invoices.findFirstOrThrow({
-          where: { id: dto.invoice_id },
-          select: { status: true, kind: true, booking_id: true },
-        });
-        if (inv.status === 'PAID' && inv.kind === 'DEPOSIT' && inv.booking_id) {
-          await this.bookings.confirmFromDepositPaid(tx, inv.booking_id, user.tnt, user.sub);
-        }
-        return p;
-      });
+      const payment = await withTenant(this.prisma, user.tnt, (tx) =>
+        this.applyPaymentInTx(tx, {
+          tenantId: user.tnt,
+          invoiceId: dto.invoice_id,
+          amountVnd: dto.amount_vnd,
+          method: dto.method,
+          referenceCode: dto.reference_code,
+          receivedBy: user.sub,
+          idempotencyKey,
+        }),
+      );
       return toPaymentResponse(payment);
     } catch (e) {
       if (isUniqueViolation(e) && idempotencyKey) {
@@ -160,6 +146,53 @@ export class PaymentsService {
     });
     // TODO(task 4.5): audit log refund (reason, actor)
     return toPaymentResponse(updated);
+  }
+
+  /**
+   * Ghi 1 payment SUCCEEDED TRONG tx có sẵn (đường ghi chung của record + đối
+   * soát 3.4). Trigger DB cập nhật invoice.paid_vnd/status; cọc trả đủ → booking
+   * CONFIRMED. `receivedBy=null` cho payment hệ thống (webhook). KHÔNG phân quyền
+   * ở đây — caller chịu trách nhiệm authz/validate trước.
+   */
+  async applyPaymentInTx(
+    tx: Tx,
+    p: {
+      tenantId: string;
+      invoiceId: string;
+      amountVnd: number;
+      method: string;
+      provider?: string;
+      referenceCode?: string;
+      receivedBy: string | null;
+      idempotencyKey?: string;
+    },
+  ): Promise<payments> {
+    const payment = await tx.payments.create({
+      data: {
+        tenant_id: p.tenantId,
+        invoice_id: p.invoiceId,
+        amount_vnd: p.amountVnd,
+        method: p.method,
+        status: 'SUCCEEDED',
+        provider: p.provider,
+        reference_code: p.referenceCode,
+        received_by: p.receivedBy,
+        received_at: new Date(),
+        idempotency_key: p.idempotencyKey,
+      },
+    });
+    await tx.payment_attempts.create({
+      data: { tenant_id: p.tenantId, payment_id: payment.id, attempt_number: 1, status: 'SUCCEEDED' },
+    });
+    // trigger payments_recompute_invoice đã chạy → đọc lại invoice cho deposit→confirm
+    const inv = await tx.invoices.findFirstOrThrow({
+      where: { id: p.invoiceId },
+      select: { status: true, kind: true, booking_id: true },
+    });
+    if (inv.status === 'PAID' && inv.kind === 'DEPOSIT' && inv.booking_id) {
+      await this.bookings.confirmFromDepositPaid(tx, inv.booking_id, p.tenantId, p.receivedBy);
+    }
+    return payment;
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

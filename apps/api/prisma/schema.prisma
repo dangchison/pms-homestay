@@ -62,6 +62,7 @@ model tenants {
   room_occupancy         room_occupancy[]
   rooms                  rooms[]
   subscription_plans     subscription_plans?      @relation(fields: [subscription_plan_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unmatched_payments     unmatched_payments[]
   user_property_roles    user_property_roles[]
   users                  users[]
 
@@ -626,6 +627,37 @@ model payments {
 
   @@unique([tenant_id, id])
   @@index([invoice_id], map: "idx_payments_invoice")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model unmatched_payments {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id           String    @db.Uuid
+  provider            String    @db.VarChar(50)
+  transaction_ref     String    @db.VarChar(255)
+  amount_vnd          BigInt
+  content             String?
+  bank_account        String?   @db.VarChar(64)
+  received_at         DateTime? @db.Timestamptz(6)
+  status              String    @default("PENDING") @db.VarChar(16)
+  resolved_payment_id String?   @db.Uuid
+  resolved_by         String?   @db.Uuid
+  raw                 Json?
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+  tenants             tenants   @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([tenant_id, provider, transaction_ref])
+}
+
+model webhook_events_received {
+  source       String    @db.VarChar(32)
+  event_id     String    @db.VarChar(255)
+  tenant_id    String?   @db.Uuid
+  received_at  DateTime  @default(now()) @db.Timestamptz(6)
+  processed_at DateTime? @db.Timestamptz(6)
+
+  @@id([source, event_id])
 }
 
 enum user_role {

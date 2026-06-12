@@ -12,7 +12,8 @@ async function bootstrap(): Promise<void> {
   const { AppModule } = await import('./app.module');
   const { configureApp } = await import('./app.setup');
 
-  const app = await NestFactory.create(AppModule.forRoot(env), { bufferLogs: true });
+  // rawBody: true → giữ Buffer thân request gốc cho HMAC webhook (task 3.4)
+  const app = await NestFactory.create(AppModule.forRoot(env), { bufferLogs: true, rawBody: true });
   configureApp(app);
 
   // 3) Swagger — CHỈ dev (docs/11: không lộ schema ở prod)

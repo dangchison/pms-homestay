@@ -26,6 +26,9 @@ export const envSchema = z.object({
    */
   ENABLE_SCHEDULERS: z.stringbool().default(true),
 
+  /** HMAC secret xác thực webhook thanh toán (Casso/SePay) — task 3.4. Thiếu → từ chối webhook. */
+  PAYMENT_WEBHOOK_SECRET: z.string().min(16).optional(),
+
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
 

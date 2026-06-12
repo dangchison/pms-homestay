@@ -41,6 +41,42 @@ export const RefundPaymentRequestSchema = z.object({
 });
 export type RefundPaymentRequest = z.infer<typeof RefundPaymentRequestSchema>;
 
+/**
+ * Payload webhook thanh toán đã chuẩn hoá (Casso/SePay) — docs/09 §5. `event_id`
+ * dedup; `content` chứa mã BK-/INV-; `bank_account` để resolve tenant.
+ */
+export const PaymentWebhookSchema = z.object({
+  event_id: z.string().min(1).max(255),
+  amount_vnd: z.number().int().positive(),
+  content: z.string().max(2000).default(''),
+  bank_account: z.string().min(1).max(64),
+  received_at: z.iso.datetime().optional(),
+});
+export type PaymentWebhook = z.infer<typeof PaymentWebhookSchema>;
+
+export const UnmatchedPaymentStatusSchema = z.enum(['PENDING', 'RESOLVED', 'IGNORED']);
+export type UnmatchedPaymentStatus = z.infer<typeof UnmatchedPaymentStatusSchema>;
+
+export const UnmatchedPaymentResponseSchema = z.object({
+  id: z.uuid(),
+  provider: z.string(),
+  transaction_ref: z.string(),
+  amount_vnd: z.number().int(),
+  content: z.string().nullable(),
+  bank_account: z.string().nullable(),
+  received_at: z.iso.datetime().nullable(),
+  status: UnmatchedPaymentStatusSchema,
+  resolved_payment_id: z.uuid().nullable(),
+  created_at: z.iso.datetime(),
+});
+export type UnmatchedPaymentResponse = z.infer<typeof UnmatchedPaymentResponseSchema>;
+
+/** POST /payments/unmatched/:id/resolve — gán giao dịch vào invoice → tạo payment. */
+export const ResolveUnmatchedRequestSchema = z.object({
+  invoice_id: z.uuid(),
+});
+export type ResolveUnmatchedRequest = z.infer<typeof ResolveUnmatchedRequestSchema>;
+
 export const PaymentResponseSchema = z.object({
   id: z.uuid(),
   invoice_id: z.uuid(),

@@ -6,3 +6,4 @@
  * (docs/11 §metrics: queue depth + fail count theo queue).
  */
 export const QUEUE_HOLD_EXPIRY = 'hold-expiry';
+export const QUEUE_PAYMENT_RECONCILE = 'payment-reconcile';

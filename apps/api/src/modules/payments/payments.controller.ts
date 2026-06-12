@@ -1,14 +1,44 @@
-import { Body, Controller, Headers, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { type JwtClaims } from '@pms/shared-types';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
-import { CreatePaymentDto, RefundPaymentDto } from './dto';
+import { CreatePaymentDto, RefundPaymentDto, ResolveUnmatchedDto } from './dto';
 import { PaymentsService } from './payments.service';
+import { ReconciliationService } from './reconciliation.service';
 
-/** /api/v1/payments (docs/09 §5). Ghi nhận thủ công (cash/transfer) — SUCCEEDED ngay. */
+/** /api/v1/payments (docs/09 §5). Ghi nhận thủ công (cash/transfer) + đối soát (3.4). */
 @Controller('payments')
 export class PaymentsController {
-  constructor(private readonly payments: PaymentsService) {}
+  constructor(
+    private readonly payments: PaymentsService,
+    private readonly reconciliation: ReconciliationService,
+  ) {}
+
+  // ── Đối soát thủ công (unmatched) — khai báo TRƯỚC route :id để không bị nuốt ──
+
+  @Get('unmatched')
+  @RequirePermissions('payment.reconcile')
+  async listUnmatched(@CurrentUser() user: JwtClaims) {
+    return { data: await this.reconciliation.listUnmatched(user) };
+  }
+
+  @Post('unmatched/:id/resolve')
+  @RequirePermissions('payment.reconcile')
+  @HttpCode(200)
+  async resolveUnmatched(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ResolveUnmatchedDto,
+    @CurrentUser() user: JwtClaims,
+  ) {
+    return { data: await this.reconciliation.resolve(id, dto.invoice_id, user) };
+  }
+
+  @Post('unmatched/:id/ignore')
+  @RequirePermissions('payment.reconcile')
+  @HttpCode(200)
+  async ignoreUnmatched(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtClaims) {
+    return { data: await this.reconciliation.ignore(id, user) };
+  }
 
   @Post()
   @RequirePermissions('payment.record')
