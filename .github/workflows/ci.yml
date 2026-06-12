@@ -46,6 +46,14 @@ jobs:
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 3s --health-timeout 3s --health-retries 15
+      # Mailpit: auth reset-password e2e gửi SMTP :1025 rồi đọc lại qua API :8025
+      # (khớp docker-compose.dev.yml; app SMTP_HOST/PORT mặc định localhost:1025).
+      mailpit:
+        image: axllent/mailpit:latest
+        ports: ['1025:1025', '8025:8025']
+        options: >-
+          --health-cmd "/mailpit readyz"
+          --health-interval 3s --health-timeout 3s --health-retries 15
 
     steps:
       - uses: actions/checkout@v4

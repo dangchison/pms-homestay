@@ -17,7 +17,14 @@ import { RequirePermissions } from '@core/http/decorators/require-permissions.de
 import { IdempotencyInterceptor } from '@core/http/interceptors/idempotency.interceptor';
 import { parseIfMatch } from '@/shared/if-match';
 import { BookingsService } from './bookings.service';
-import { BookingListQueryDto, CancelBookingDto, CreateBookingDto, UpdateBookingDto } from './dto';
+import {
+  BookingListQueryDto,
+  CancelBookingDto,
+  ConfirmBookingDto,
+  CreateBookingDto,
+  SwitchResourceDto,
+  UpdateBookingDto,
+} from './dto';
 
 /** /api/v1/bookings (docs/05, docs/06). Tạo qua createBookingTx — đường ghi duy nhất. */
 @Controller('bookings')
@@ -55,6 +62,17 @@ export class BookingsController {
     return { data: await this.bookings.update(id, parseIfMatch(ifMatch), dto, user) };
   }
 
+  @Post(':id/confirm')
+  @RequirePermissions('booking.update')
+  @HttpCode(200)
+  async confirm(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ConfirmBookingDto,
+    @CurrentUser() user: JwtClaims,
+  ) {
+    return { data: await this.bookings.confirm(id, dto, user) };
+  }
+
   @Post(':id/cancel')
   @RequirePermissions('booking.cancel')
   @HttpCode(200)
@@ -64,5 +82,30 @@ export class BookingsController {
     @CurrentUser() user: JwtClaims,
   ) {
     return { data: await this.bookings.cancel(id, dto, user) };
+  }
+
+  @Post(':id/check-in')
+  @RequirePermissions('booking.checkin_out')
+  @HttpCode(200)
+  async checkIn(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtClaims) {
+    return { data: await this.bookings.checkIn(id, user) };
+  }
+
+  @Post(':id/check-out')
+  @RequirePermissions('booking.checkin_out')
+  @HttpCode(200)
+  async checkOut(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtClaims) {
+    return { data: await this.bookings.checkOut(id, user) };
+  }
+
+  @Post(':id/switch-resource')
+  @RequirePermissions('booking.switch_resource')
+  @HttpCode(200)
+  async switchResource(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SwitchResourceDto,
+    @CurrentUser() user: JwtClaims,
+  ) {
+    return { data: await this.bookings.switchResource(id, dto, user) };
   }
 }

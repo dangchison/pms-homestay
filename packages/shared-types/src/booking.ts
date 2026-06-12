@@ -53,6 +53,26 @@ export const CancelBookingRequestSchema = z.object({
 });
 export type CancelBookingRequest = z.infer<typeof CancelBookingRequestSchema>;
 
+/**
+ * POST /bookings/:id/confirm (docs/06 §4, task 2.7). Mặc định HOLD → PENDING
+ * (đặt hạn cọc). `force` (CHỈ OWNER) → CONFIRMED luôn, bỏ qua bước cọc.
+ */
+export const ConfirmBookingRequestSchema = z.object({
+  force: z.boolean().optional(),
+});
+export type ConfirmBookingRequest = z.infer<typeof ConfirmBookingRequestSchema>;
+
+/**
+ * POST /bookings/:id/switch-resource (docs/06 §6, task 2.8) — đổi phòng/bookable
+ * resource: tx delete+reinsert occupancy ở resource mới (EXCLUDE chặn nếu bận).
+ * resource mới phải cùng property với booking.
+ */
+export const SwitchResourceRequestSchema = z.object({
+  new_resource_id: z.uuid(),
+  reason: z.string().min(1).max(500),
+});
+export type SwitchResourceRequest = z.infer<typeof SwitchResourceRequestSchema>;
+
 export const BookingResponseSchema = z.object({
   id: z.uuid(),
   property_id: z.uuid(),

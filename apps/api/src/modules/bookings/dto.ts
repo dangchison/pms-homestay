@@ -1,8 +1,10 @@
 import {
   BookingStatusSchema,
   CancelBookingRequestSchema,
+  ConfirmBookingRequestSchema,
   CreateBookingRequestSchema,
   OffsetPaginationQuerySchema,
+  SwitchResourceRequestSchema,
   UpdateBookingRequestSchema,
 } from '@pms/shared-types';
 import { z } from 'zod';
@@ -11,6 +13,8 @@ import { createZodDto } from '@core/http/pipes/zod-validation.pipe';
 export class CreateBookingDto extends createZodDto(CreateBookingRequestSchema) {}
 export class UpdateBookingDto extends createZodDto(UpdateBookingRequestSchema) {}
 export class CancelBookingDto extends createZodDto(CancelBookingRequestSchema) {}
+export class ConfirmBookingDto extends createZodDto(ConfirmBookingRequestSchema) {}
+export class SwitchResourceDto extends createZodDto(SwitchResourceRequestSchema) {}
 
 const BookingListQuerySchema = OffsetPaginationQuerySchema.extend({
   property_id: z.uuid().optional(),

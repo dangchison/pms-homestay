@@ -36,7 +36,13 @@ export class PermissionService {
   /** Gọi sau MỌI thay đổi role/permission/password của user. */
   async bumpPermissionVersion(userId: string): Promise<void> {
     await this.redis.incr(`auth:pv:${userId}`);
-    // cache permission theo property sẽ tự hết hạn ≤60s; token cũ chết ngay nhờ pv
+    // Vô hiệu hoá cache permission-theo-property NGAY (không đợi TTL 60s) — giữ
+    // đúng cam kết "thu hồi trong giây" của pv cho cả quyền theo property: quyền
+    // vừa bị deny không còn dùng được sau khi user refresh token.
+    const indexKey = `perm:idx:${userId}`;
+    const cacheKeys = await this.redis.smembers(indexKey);
+    if (cacheKeys.length > 0) await this.redis.del(...cacheKeys);
+    await this.redis.del(indexKey);
   }
 
   /** Guard pha 1: token pv phải khớp version hiện tại (revocation nhanh). */
@@ -83,6 +89,11 @@ export class PermissionService {
     }
 
     await this.redis.set(cacheKey, JSON.stringify([...effective]), 'EX', PERM_CACHE_TTL_SECONDS);
+    // Ghi key vào index theo user để bumpPermissionVersion vô hiệu hoá ngay được
+    // (không dùng SCAN/KEYS — chặn block Redis ở prod). Index sống lâu hơn cache.
+    const indexKey = `perm:idx:${user.sub}`;
+    await this.redis.sadd(indexKey, cacheKey);
+    await this.redis.expire(indexKey, PERM_CACHE_TTL_SECONDS + 10);
     return effective;
   }
 

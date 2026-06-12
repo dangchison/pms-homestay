@@ -19,6 +19,16 @@ export const envSchema = z.object({
 
   REDIS_URL: z.url(),
 
+  /**
+   * Bật cron/worker BullMQ in-process (HOLD expiry, night-audit…). Mặc định bật;
+   * test/CI set `false` để worker không poll Redis + không pick job scheduler tồn
+   * dư (docs/06 §4, ADR-0002 §5). Tắt KHÔNG ảnh hưởng API — chỉ dừng job nền.
+   */
+  ENABLE_SCHEDULERS: z.stringbool().default(true),
+
+  /** HMAC secret xác thực webhook thanh toán (Casso/SePay) — task 3.4. Thiếu → từ chối webhook. */
+  PAYMENT_WEBHOOK_SECRET: z.string().min(16).optional(),
+
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
 

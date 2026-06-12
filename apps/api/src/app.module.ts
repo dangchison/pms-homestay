@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { AuthCoreModule } from '@core/auth/auth-core.module';
 import { JwtAuthGuard } from '@core/auth/jwt-auth.guard';
 import { PermissionsGuard } from '@core/auth/permissions.guard';
+import { BullmqModule } from '@core/bullmq/bullmq.module';
 import { AppConfigModule } from '@core/config/config.module';
 import { type Env } from '@core/config/env.schema';
 import { CountersModule } from '@core/counters/counters.module';
@@ -12,13 +13,20 @@ import { PrismaModule } from '@core/prisma/prisma.module';
 import { RedisModule } from '@core/redis/redis.module';
 import { TenantGuard } from '@core/tenancy/tenant.guard';
 import { TenantResolverMiddleware } from '@core/tenancy/tenant-resolver.middleware';
+import { AssetsModule } from '@modules/assets/assets.module';
 import { AuthPublicModule } from '@modules/auth-public/auth-public.module';
+import { BillingModule } from '@modules/billing/billing.module';
 import { BookingsModule } from '@modules/bookings/bookings.module';
+import { ExpensesModule } from '@modules/expenses/expenses.module';
 import { GuestsModule } from '@modules/guests/guests.module';
 import { HealthModule } from '@modules/health/health.module';
+import { InvoicesModule } from '@modules/invoices/invoices.module';
+import { NightAuditModule } from '@modules/night-audit/night-audit.module';
+import { PaymentsModule } from '@modules/payments/payments.module';
 import { PricingModule } from '@modules/pricing/pricing.module';
 import { PropertiesModule } from '@modules/properties/properties.module';
 import { RatePlansModule } from '@modules/rate-plans/rate-plans.module';
+import { ReportsModule } from '@modules/reports/reports.module';
 import { ResourcesModule } from '@modules/resources/resources.module';
 import { RoomsModule } from '@modules/rooms/rooms.module';
 
@@ -38,6 +46,7 @@ export class AppModule implements NestModule {
         RedisModule,
         CryptoModule,
         CountersModule,
+        BullmqModule,
         AuthCoreModule,
         AuthPublicModule,
         HealthModule,
@@ -47,7 +56,14 @@ export class AppModule implements NestModule {
         RatePlansModule,
         PricingModule,
         GuestsModule,
+        InvoicesModule,
         BookingsModule,
+        PaymentsModule,
+        AssetsModule,
+        ExpensesModule,
+        BillingModule,
+        NightAuditModule,
+        ReportsModule,
       ],
       providers: [
         TenantResolverMiddleware,
