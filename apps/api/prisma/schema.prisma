@@ -51,6 +51,7 @@ model tenants {
   idempotency_keys       idempotency_keys[]
   invoice_items          invoice_items[]
   invoices               invoices[]
+  monthly_meter_readings monthly_meter_readings[]
   operational_expenses   operational_expenses[]
   payment_attempts       payment_attempts[]
   payments               payments[]
@@ -510,6 +511,7 @@ model bookings {
   rate_plans             rate_plans?              @relation(fields: [tenant_id, rate_plan_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
   bookable_resources     bookable_resources       @relation(fields: [tenant_id, resource_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
   invoices               invoices[]
+  monthly_meter_readings monthly_meter_readings[]
   operational_expenses   operational_expenses[]
   room_occupancy         room_occupancy[]
 
@@ -749,6 +751,27 @@ model operational_expenses {
 
   @@unique([tenant_id, id])
   @@index([tenant_id, property_id, expense_date], map: "idx_op_expenses_property_date")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model monthly_meter_readings {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id             String   @db.Uuid
+  booking_id            String   @db.Uuid
+  period_year           Int      @db.SmallInt
+  period_month          Int      @db.SmallInt
+  electricity_kwh_start Decimal? @db.Decimal(10, 1)
+  electricity_kwh_end   Decimal? @db.Decimal(10, 1)
+  water_m3_start        Decimal? @db.Decimal(10, 1)
+  water_m3_end          Decimal? @db.Decimal(10, 1)
+  recorded_by           String?  @db.Uuid
+  created_at            DateTime @default(now()) @db.Timestamptz(6)
+  bookings              bookings @relation(fields: [tenant_id, booking_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  tenants               tenants  @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([booking_id, period_year, period_month])
+  @@index([tenant_id, booking_id], map: "idx_meter_readings_booking")
 }
 
 enum user_role {
