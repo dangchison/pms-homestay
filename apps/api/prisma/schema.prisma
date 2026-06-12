@@ -51,6 +51,7 @@ model tenants {
   idempotency_keys       idempotency_keys[]
   invoice_items          invoice_items[]
   invoices               invoices[]
+  operational_expenses   operational_expenses[]
   payment_attempts       payment_attempts[]
   payments               payments[]
   properties             properties[]
@@ -175,35 +176,36 @@ model bookable_resources {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model properties {
-  id                          String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id                   String                @db.Uuid
-  name                        String                @db.VarChar(255)
+  id                          String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                   String                 @db.Uuid
+  name                        String                 @db.VarChar(255)
   property_type               property_type
-  address_line                String                @db.VarChar(500)
-  ward                        String?               @db.VarChar(100)
-  district                    String?               @db.VarChar(100)
-  province                    String                @db.VarChar(100)
-  latitude                    Decimal?              @db.Decimal(10, 7)
-  longitude                   Decimal?              @db.Decimal(10, 7)
-  timezone                    String                @default("Asia/Ho_Chi_Minh") @db.VarChar(64)
-  is_rent_to_rent             Boolean               @default(false)
-  landlord_name               String?               @db.VarChar(255)
-  landlord_phone              String?               @db.VarChar(20)
-  rent_to_rent_contract_start DateTime?             @db.Date
-  rent_to_rent_contract_end   DateTime?             @db.Date
+  address_line                String                 @db.VarChar(500)
+  ward                        String?                @db.VarChar(100)
+  district                    String?                @db.VarChar(100)
+  province                    String                 @db.VarChar(100)
+  latitude                    Decimal?               @db.Decimal(10, 7)
+  longitude                   Decimal?               @db.Decimal(10, 7)
+  timezone                    String                 @default("Asia/Ho_Chi_Minh") @db.VarChar(64)
+  is_rent_to_rent             Boolean                @default(false)
+  landlord_name               String?                @db.VarChar(255)
+  landlord_phone              String?                @db.VarChar(20)
+  rent_to_rent_contract_start DateTime?              @db.Date
+  rent_to_rent_contract_end   DateTime?              @db.Date
   monthly_landlord_rent_vnd   BigInt?
-  police_business_code        String?               @db.VarChar(50)
-  metadata                    Json                  @default("{}")
-  created_at                  DateTime              @default(now()) @db.Timestamptz(6)
-  updated_at                  DateTime              @default(now()) @db.Timestamptz(6)
-  deleted_at                  DateTime?             @db.Timestamptz(6)
-  bank_bin                    String?               @db.VarChar(8)
-  bank_account_number         String?               @db.VarChar(32)
-  bank_account_name           String?               @db.VarChar(255)
+  police_business_code        String?                @db.VarChar(50)
+  metadata                    Json                   @default("{}")
+  created_at                  DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime               @default(now()) @db.Timestamptz(6)
+  deleted_at                  DateTime?              @db.Timestamptz(6)
+  bank_bin                    String?                @db.VarChar(8)
+  bank_account_number         String?                @db.VarChar(32)
+  bank_account_name           String?                @db.VarChar(255)
   assets                      assets[]
   bookable_resources          bookable_resources[]
   bookings                    bookings[]
-  tenants                     tenants               @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  operational_expenses        operational_expenses[]
+  tenants                     tenants                @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   rate_plans                  rate_plans[]
   rooms                       rooms[]
   user_property_roles         user_property_roles[]
@@ -265,31 +267,32 @@ model room_occupancy {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model rooms {
-  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id           String              @db.Uuid
-  property_id         String              @db.Uuid
-  room_number         String              @db.VarChar(50)
-  display_name        String?             @db.VarChar(255)
-  description         String?
-  housekeeping_status housekeeping_status @default(CLEAN)
-  capacity_adults     Int                 @default(2)
-  capacity_children   Int                 @default(0)
-  size_sqm            Decimal?            @db.Decimal(6, 2)
-  amenities           Json                @default("[]")
-  photos              Json                @default("[]")
-  is_active           Boolean             @default(true)
-  buffer_minutes      Int                 @default(0)
-  notes               String?
-  version             Int                 @default(0)
-  created_at          DateTime            @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime            @default(now()) @db.Timestamptz(6)
-  deleted_at          DateTime?           @db.Timestamptz(6)
-  assets              assets[]
-  resource_members    resource_members[]
-  room_blocks         room_blocks[]
-  room_occupancy      room_occupancy[]
-  tenants             tenants             @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  properties          properties          @relation(fields: [tenant_id, property_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id            String                 @db.Uuid
+  property_id          String                 @db.Uuid
+  room_number          String                 @db.VarChar(50)
+  display_name         String?                @db.VarChar(255)
+  description          String?
+  housekeeping_status  housekeeping_status    @default(CLEAN)
+  capacity_adults      Int                    @default(2)
+  capacity_children    Int                    @default(0)
+  size_sqm             Decimal?               @db.Decimal(6, 2)
+  amenities            Json                   @default("[]")
+  photos               Json                   @default("[]")
+  is_active            Boolean                @default(true)
+  buffer_minutes       Int                    @default(0)
+  notes                String?
+  version              Int                    @default(0)
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime               @default(now()) @db.Timestamptz(6)
+  deleted_at           DateTime?              @db.Timestamptz(6)
+  assets               assets[]
+  operational_expenses operational_expenses[]
+  resource_members     resource_members[]
+  room_blocks          room_blocks[]
+  room_occupancy       room_occupancy[]
+  tenants              tenants                @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  properties           properties             @relation(fields: [tenant_id, property_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([tenant_id, id])
 }
@@ -507,6 +510,7 @@ model bookings {
   rate_plans             rate_plans?              @relation(fields: [tenant_id, rate_plan_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
   bookable_resources     bookable_resources       @relation(fields: [tenant_id, resource_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
   invoices               invoices[]
+  operational_expenses   operational_expenses[]
   room_occupancy         room_occupancy[]
 
   @@unique([tenant_id, booking_code])
@@ -712,6 +716,39 @@ model depreciation_entries {
 
   @@unique([asset_id, period_year, period_month])
   @@index([tenant_id, asset_id], map: "idx_depreciation_entries_asset")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model operational_expenses {
+  id                         String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                  String                 @db.Uuid
+  property_id                String                 @db.Uuid
+  room_id                    String?                @db.Uuid
+  expense_type               String                 @db.VarChar(32)
+  description                String?                @db.VarChar(500)
+  amount_vnd                 BigInt
+  expense_date               DateTime               @db.Date
+  due_date                   DateTime?              @db.Date
+  is_recurring               Boolean                @default(false)
+  recurrence_pattern         String?                @db.VarChar(32)
+  parent_expense_id          String?                @db.Uuid
+  source_booking_id          String?                @db.Uuid
+  is_paid                    Boolean                @default(false)
+  paid_at                    DateTime?              @db.Timestamptz(6)
+  receipt_url                String?
+  created_by                 String?                @db.Uuid
+  created_at                 DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime               @default(now()) @db.Timestamptz(6)
+  tenants                    tenants                @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  operational_expenses       operational_expenses?  @relation("operational_expensesTooperational_expenses", fields: [tenant_id, parent_expense_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  other_operational_expenses operational_expenses[] @relation("operational_expensesTooperational_expenses")
+  properties                 properties             @relation(fields: [tenant_id, property_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  rooms                      rooms?                 @relation(fields: [tenant_id, room_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  bookings                   bookings?              @relation(fields: [tenant_id, source_booking_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([tenant_id, id])
+  @@index([tenant_id, property_id, expense_date], map: "idx_op_expenses_property_date")
 }
 
 enum user_role {

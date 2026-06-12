@@ -16,6 +16,7 @@ import { TenantResolverMiddleware } from '@core/tenancy/tenant-resolver.middlewa
 import { AssetsModule } from '@modules/assets/assets.module';
 import { AuthPublicModule } from '@modules/auth-public/auth-public.module';
 import { BookingsModule } from '@modules/bookings/bookings.module';
+import { ExpensesModule } from '@modules/expenses/expenses.module';
 import { GuestsModule } from '@modules/guests/guests.module';
 import { HealthModule } from '@modules/health/health.module';
 import { InvoicesModule } from '@modules/invoices/invoices.module';
@@ -56,6 +57,7 @@ export class AppModule implements NestModule {
         BookingsModule,
         PaymentsModule,
         AssetsModule,
+        ExpensesModule,
       ],
       providers: [
         TenantResolverMiddleware,

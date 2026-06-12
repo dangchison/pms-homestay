@@ -17,6 +17,7 @@ import { AppException } from '@core/http/exceptions/app.exception';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { withTenant } from '@core/tenancy/with-tenant';
 import { OccupancyService } from '@modules/occupancy/occupancy.service';
+import { ExpensesService } from '@modules/expenses/expenses.service';
 import { InvoicesService } from '@modules/invoices/invoices.service';
 import { PricingService } from '@modules/pricing/pricing.service';
 import { offsetToSkipTake } from '@/shared/dto';
@@ -66,6 +67,7 @@ export class BookingsService {
     private readonly pricing: PricingService,
     private readonly counters: DocumentCounterService,
     private readonly invoices: InvoicesService,
+    private readonly expenses: ExpensesService,
   ) {}
 
   /**
@@ -459,7 +461,8 @@ export class BookingsService {
       });
       // Finalize STAY invoice (docs/09 §4.3): items từ quote + cấn cọc đã thu
       await this.invoices.issueStayForBooking(tx, booking);
-      // TODO(task 3.6): auto-sinh expense OTA_COMMISSION khi CHECKED_OUT (ADR-0003)
+      // Auto-sinh hoa hồng OTA (docs/09 §6, task 3.6) — idempotent qua partial unique
+      await this.expenses.createOtaCommissionForBooking(tx, booking);
       return tx.bookings.findFirstOrThrow({ where: { id } });
     });
     return toBookingResponse(updated);
