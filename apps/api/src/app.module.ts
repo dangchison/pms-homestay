@@ -13,6 +13,7 @@ import { PrismaModule } from '@core/prisma/prisma.module';
 import { RedisModule } from '@core/redis/redis.module';
 import { TenantGuard } from '@core/tenancy/tenant.guard';
 import { TenantResolverMiddleware } from '@core/tenancy/tenant-resolver.middleware';
+import { AssetsModule } from '@modules/assets/assets.module';
 import { AuthPublicModule } from '@modules/auth-public/auth-public.module';
 import { BookingsModule } from '@modules/bookings/bookings.module';
 import { GuestsModule } from '@modules/guests/guests.module';
@@ -54,6 +55,7 @@ export class AppModule implements NestModule {
         InvoicesModule,
         BookingsModule,
         PaymentsModule,
+        AssetsModule,
       ],
       providers: [
         TenantResolverMiddleware,

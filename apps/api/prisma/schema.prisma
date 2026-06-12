@@ -41,9 +41,11 @@ model tenants {
   currency               String                   @default("VND") @db.Char(3)
   created_at             DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  assets                 assets[]
   bookable_resources     bookable_resources[]
   booking_status_history booking_status_history[]
   bookings               bookings[]
+  depreciation_entries   depreciation_entries[]
   document_counters      document_counters[]
   guests                 guests[]
   idempotency_keys       idempotency_keys[]
@@ -198,6 +200,7 @@ model properties {
   bank_bin                    String?               @db.VarChar(8)
   bank_account_number         String?               @db.VarChar(32)
   bank_account_name           String?               @db.VarChar(255)
+  assets                      assets[]
   bookable_resources          bookable_resources[]
   bookings                    bookings[]
   tenants                     tenants               @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -281,6 +284,7 @@ model rooms {
   created_at          DateTime            @default(now()) @db.Timestamptz(6)
   updated_at          DateTime            @default(now()) @db.Timestamptz(6)
   deleted_at          DateTime?           @db.Timestamptz(6)
+  assets              assets[]
   resource_members    resource_members[]
   room_blocks         room_blocks[]
   room_occupancy      room_occupancy[]
@@ -658,6 +662,56 @@ model webhook_events_received {
   processed_at DateTime? @db.Timestamptz(6)
 
   @@id([source, event_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model assets {
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id            String                 @db.Uuid
+  property_id          String                 @db.Uuid
+  room_id              String?                @db.Uuid
+  name                 String                 @db.VarChar(255)
+  category             String?                @db.VarChar(64)
+  serial_number        String?                @db.VarChar(100)
+  purchase_value_vnd   BigInt
+  purchase_date        DateTime               @db.Date
+  depreciation_method  String                 @default("STRAIGHT_LINE") @db.VarChar(32)
+  depreciation_months  Int
+  residual_value_vnd   BigInt                 @default(0)
+  disposal_date        DateTime?              @db.Date
+  disposal_value_vnd   BigInt?
+  notes                String?
+  photo_url            String?
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime               @default(now()) @db.Timestamptz(6)
+  deleted_at           DateTime?              @db.Timestamptz(6)
+  tenants              tenants                @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  properties           properties             @relation(fields: [tenant_id, property_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  rooms                rooms?                 @relation(fields: [tenant_id, room_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  depreciation_entries depreciation_entries[]
+
+  @@unique([tenant_id, id])
+  @@index([tenant_id, property_id], map: "idx_assets_property")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model depreciation_entries {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id       String   @db.Uuid
+  asset_id        String   @db.Uuid
+  period_year     Int      @db.SmallInt
+  period_month    Int      @db.SmallInt
+  amount_vnd      BigInt
+  accumulated_vnd BigInt
+  book_value_vnd  BigInt
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  assets          assets   @relation(fields: [tenant_id, asset_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  tenants         tenants  @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([asset_id, period_year, period_month])
+  @@index([tenant_id, asset_id], map: "idx_depreciation_entries_asset")
 }
 
 enum user_role {
