@@ -54,6 +54,7 @@ model tenants {
   invoices               invoices[]
   monthly_meter_readings monthly_meter_readings[]
   operational_expenses   operational_expenses[]
+  outbox_events          outbox_events[]
   payment_attempts       payment_attempts[]
   payments               payments[]
   properties             properties[]
@@ -792,6 +793,23 @@ model daily_property_stats {
   properties            properties @relation(fields: [tenant_id, property_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
 
   @@id([tenant_id, property_id, stat_date])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model outbox_events {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id      String    @db.Uuid
+  event_type     String    @db.VarChar(64)
+  aggregate_type String    @db.VarChar(64)
+  aggregate_id   String    @db.Uuid
+  payload        Json
+  status         String    @default("PENDING") @db.VarChar(16)
+  claimed_at     DateTime? @db.Timestamptz(6)
+  processed_at   DateTime? @db.Timestamptz(6)
+  retry_count    Int       @default(0)
+  last_error     String?
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  tenants        tenants   @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 enum user_role {
