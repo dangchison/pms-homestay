@@ -77,7 +77,7 @@
 - ✅ **2.6** Booking core — `bookings`/`booking_status_history`/`idempotency_keys` (migration `0009`) + **ALTER `room_occupancy` FK → bookings** (hoàn tất nợ từ 2.1). **`createBookingTx`** đường ghi duy nhất: advisory lock sorted rooms → verify quote (re-calc → 409 PRICE_CHANGED) → pre-check overlaps → insert booking + occupancy (EXCLUDE) + status history, 1 tx. `POST` (Idempotency-Key) / `GET` (filter, property-scope) / `GET/:id` / `PATCH` (If-Match) / `cancel` (xoá occupancy). State machine `booking-status-machine.ts`. E2E concurrency: 2 cùng resource → 1+409; WHOLE↔ROOM → chỉ 1; cancel+rebook; version conflict; idempotency replay.
 - ✅ **2.7** HOLD + expiry cron — tạo HOLD (`expires_at=now+10'`); **hạ tầng BullMQ** `core/bullmq/` (connection riêng `maxRetriesPerRequest:null`) + `hold-expiry.cron.ts` (`@Processor` `autorun:false` → chỉ chạy khi `ENABLE_SCHEDULERS`; `upsertJobScheduler` pattern `* * * * *`). `sweepExpiredHolds()` lặp tenant ACTIVE/TRIAL qua `withTenant` (ADR-0002 §5) → `CANCELLED(HOLD_EXPIRED)` + xoá occupancy + history (`changed_by=NULL`) cùng tx. `POST /:id/confirm` → HOLD→PENDING (hạn cọc 24h) | OWNER `force`→CONFIRMED. E2E 4 ca + verify cron thật trên build prod. · ✅ **2.8** Check-in/out + switch-resource — `POST /:id/check-in` (CONFIRMED→CHECKED_IN + `actual_check_in`) · `check-out` (CHECKED_IN→CHECKED_OUT + `actual_check_out` + xoá occupancy) · `switch-resource` (occupancy delete+reinsert ở resource mới, EXCLUDE chặn bận→409, lock union, rollback an toàn, cùng-property; history + reason). State machine `booking-status-machine.ts` 422 cho transition sai. TODO stub: STAY invoice (3.2), cleaning task (4.1), audit (4.5).
 
-### EPIC 3 — Finance 🟡 (7/8)
+### EPIC 3 — Finance ✅ (8/8)
 - ✅ **3.1** Document counters (migration `0008`) — `DocumentCounterService.next/nextCode` atomic (UPSERT + row lock, không gap); booking_code dùng service này. Test 100 concurrent → 100 số liên tục.
 - ✅ **3.2** Invoices (kind/deposit/state machine) — migration `0010`: `invoices`/`invoice_items` (enum `invoice_kind`/`invoice_status`, `balance_vnd` generated, trigger `total_vnd=SUM(items)`). `InvoicesService` (một chiều, không phụ thuộc bookings): issue **DEPOSIT** lúc PENDING (theo `deposit_type/value`, NONE→skip); cọc thanh toán (qua 3.3) → booking auto-**CONFIRMED**; check-out sinh **STAY** (items copy quote snapshot + `DEPOSIT_APPLIED` âm cấn cọc); `POST /invoices` ad-hoc/ADJUSTMENT + `/issue` + `/void` (giữ số). State machine `invoice-status-machine.ts`. E2E 3 ca (cọc 30%→cấn đúng số dư; NONE; void). TODO: STAY phụ thu + OTA commission (3.6). _(Seam `markDepositPaid`/`pay-deposit` của bản đầu đã được 3.3 thay bằng trigger `paid_vnd` từ payments.)_
 - ✅ **3.3** Payments + VietQR — migration `0011`: `payments`/`payment_attempts` (partial unique `idempotency_key` qua CREATE UNIQUE INDEX) + **trigger `recompute_invoice_paid`** giữ `invoices.paid_vnd` theo công thức refund-aware ADR-0003 (SUCCEEDED+PARTIALLY_REFUNDED trừ refunded) + auto ISSUED→PARTIALLY_PAID/PAID/REFUNDED — **thay seam `markDepositPaid` của 3.2**. `POST /payments` (cash/transfer, SUCCEEDED ngay, Idempotency-Key) → cọc đủ → booking auto-CONFIRMED (PaymentsService gọi `BookingsService.confirmFromDepositPaid` trong tx); `POST /payments/:id/refund` (một phần/toàn bộ). **VietQR** NAPAS 247 (`VietqrService` EMVCo TLV + CRC16-CCITT, vector chuẩn 29B1) + `GET /invoices/:id/qr-image` PNG (TK nhận ở `properties.bank_*`). E2E 5 ca + unit QR. Module một chiều Payments→{Bookings,Invoices}.
@@ -113,7 +113,6 @@
 
 1. ✅ ~~EPIC 2 + EPIC 3 (task 2.1–3.8) + 4.6~~ — **đã xong** (booking vòng đời + hoá đơn + thanh toán/VietQR + đối soát + tài sản/khấu hao + chi phí/hoa hồng OTA + billing thuê tháng + night-audit + báo cáo P&L/break-even). **EPIC 3 hoàn tất 8/8.**
 2. Kế tiếp **EPIC 4** (vận hành/realtime): **4.2 Outbox v2 + SSE + 4.3 emit events** (nền realtime — nối TODO `payment.received`/`booking.*`, đẩy live cho UI/notification) · **4.1 Cleaning** (auto khi CHECKED_OUT/switch — đã có stub) · **4.5 Audit log** · **4.4 Notifications** · **4.7 Billing-lite SaaS**. Hoặc **EPIC 6 FE**: nối API thật cho web-admin (6.1) + calendar (6.2) + booking form (6.3) + invoice/payment UI (6.4) + **reports dashboard (6.5 — API 3.7 đã sẵn)**.
-3. Song song FE: **Task 6.1** nối API thật cho `web-admin`; **6.2** calendar timeline; **6.3** booking form + quote (+ panel VietQR realtime 6.4 — đã có QR + webhook).
 
 ---
 
@@ -121,6 +120,11 @@
 
 | Commit | Nội dung |
 |---|---|
+| `daacc54` | Task 3.7 — Reports P&L + break-even (đọc rollup + live hôm nay) → **đóng EPIC 3** |
+| `4fc2d2c` | Task 4.6 — Night-audit (deposit-timeout/no-show/OVERDUE/rollup `daily_property_stats` + chốt tháng ngày 1) |
+| `5bcc194` | Task 3.8 — Billing thuê tháng (`monthly_meter_readings` + MONTHLY_RENT pro-rate /30 + điện nước) |
+| `8e602dd` | Task 3.6 — Chi phí vận hành + auto hoa hồng OTA khi CHECKED_OUT |
+| `cdc7c06` | Task 3.5 — Tài sản & khấu hao đường thẳng (plug tháng cuối + pro-rate + thanh lý) |
 | `be52610` | Task 3.4 — Đối soát Casso/SePay (webhook HMAC + dedup + matching → auto-confirm / unmatched) |
 | `b158898` | test(e2e): maxForks=2 + bỏ retry (tránh hồi nhiễm occupancy) |
 | `6379146` | Task 3.3 — Payments + trigger paid_vnd (refund-aware) + VietQR NAPAS 247 (thay seam 3.2) |
