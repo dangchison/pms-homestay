@@ -111,6 +111,7 @@
 
 | Commit | Nội dung |
 |---|---|
+| `6379146` | Task 3.3 — Payments + trigger paid_vnd (refund-aware) + VietQR NAPAS 247 (thay seam 3.2) |
 | `0da8ed7` | Task 3.2 — Invoices DEPOSIT/STAY/ADJUSTMENT + luồng cọc→confirm + cấn cọc |
 | `16503e5` | test(e2e): cap maxForks + retry transient IO — ổn định suite |
 | `661301e` | fix(auth): permission-cache vô hiệu hoá khi bump pv + cách ly Redis test (hết flake RBAC) |
