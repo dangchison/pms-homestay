@@ -11,11 +11,11 @@
 
 | Chỉ số | Trạng thái |
 |---|---|
-| **Sprint hoàn thành** | **1 / 6** · **EPIC 2 BE xong 8/8** · S3 🟡 đang làm (2.6+2.7+2.8 + 3.1 ✅) |
-| **Task backend xong** | **17 / 50** (EPIC 1 + task 2.1–2.8 + 3.1) · ~34% |
+| **Sprint hoàn thành** | **1 / 6** · **EPIC 2 BE xong 8/8** · EPIC 3 🟡 (3.1+3.2 ✅) |
+| **Task backend xong** | **18 / 50** (EPIC 1 + task 2.1–2.8 + 3.1 + 3.2) · ~36% |
 | **Nền tảng FE** | 🟡 scaffold + design system xong; chưa nối API |
-| **Chạy được gì** | API (auth, property/room/resource/block + rate-plan/rule + guests + `POST /pricing/quote` + **booking đầy đủ vòng đời: tạo/huỷ/sửa, chống overbook, HOLD tự huỷ (cron BullMQ), xác nhận, check-in/out, đổi phòng**), pricing-engine, 2 web app (UI), DB + migrations + seed, CI |
-| **Chất lượng** | 94/94 test API + **21 pricing-engine** xanh · lint/typecheck/build xanh · 3 theme ổn định |
+| **Chạy được gì** | API (auth, property/room/resource/block + rate-plan/rule + guests + `POST /pricing/quote` + **booking đầy đủ vòng đời** + **hoá đơn: cọc tự sinh lúc PENDING → thanh toán → tự CONFIRMED → check-out sinh STAY cấn cọc; ad-hoc/ADJUSTMENT + VOID giữ số**), pricing-engine, 2 web app (UI), DB + migrations + seed, CI |
+| **Chất lượng** | 97/97 test API + **21 pricing-engine** xanh · lint/typecheck/build xanh · e2e ổn định (Redis db test riêng + cap fork + retry transient) · 3 theme |
 
 ### Demo được gì hôm nay
 - **Backend auth thật chạy:** đăng ký tenant + OWNER (trial 14 ngày), đăng nhập Argon2id + khoá tài khoản, refresh rotation + grace, 2FA TOTP, quên/đặt lại mật khẩu, RBAC theo role + property — qua `http://localhost:3001/api/v1/auth/*`.
@@ -28,6 +28,7 @@
 - **Đặt phòng end-to-end (task 2.6 + 3.1) chạy thật:** `POST /bookings` qua **`createBookingTx`** — báo giá → verify (đổi giá → 409 PRICE_CHANGED) → chống trùng (2 đồng thời cùng phòng → 1 thành công 1×409; **nguyên căn ↔ phòng lẻ đồng thời → chỉ 1**) → sinh `booking_code` atomic (document_counters). Huỷ → xoá occupancy (đặt lại OK). Sửa với If-Match (lệch version → 409). Idempotency-Key chống tạo trùng. Đã chứng minh bằng e2e concurrency.
 - **HOLD giữ chỗ + xác nhận (task 2.7) chạy thật:** tạo HOLD (`expires_at=now+10'`, occupancy sinh ngay → phòng bận ở DB); **cron BullMQ mỗi phút** quét HOLD quá hạn → `CANCELLED(HOLD_EXPIRED)` + xoá occupancy cùng tx (lặp per-tenant qua `withTenant` — RLS đúng, không cần BYPASSRLS) → đặt lại OK. `POST /bookings/:id/confirm`: HOLD→PENDING (đặt hạn cọc 24h) hoặc **OWNER `force`→CONFIRMED**. Hạ tầng BullMQ (`core/bullmq/`) lần đầu — nền cho night-audit/notifications/sync. Đã verify e2e + chạy thật bản build prod (job lên lịch → `delayed→active→completed` → tự lên tick kế).
 - **Check-in/out + đổi phòng (task 2.8) chạy thật — đóng EPIC 2:** `POST /:id/check-in` (chỉ CONFIRMED → CHECKED_IN, ghi `actual_check_in`); `POST /:id/check-out` (CHECKED_IN → CHECKED_OUT, ghi `actual_check_out`, **xoá occupancy** → phòng giải phóng, đặt lại OK); `POST /:id/switch-resource` (delete+reinsert occupancy ở resource mới CÙNG tx, EXCLUDE chặn nếu bận → 409, lock union phòng cũ∪mới chống deadlock, rollback giữ nguyên phòng cũ; resource mới phải cùng cơ sở). State machine tập trung — transition sai → 422. Đã verify e2e (5 ca gồm conflict + rollback).
+- **Hoá đơn + luồng cọc (task 3.2) chạy thật:** đặt phòng gói cọc 30% → **DEPOSIT invoice tự sinh** lúc PENDING (`INV-…`, 30% × tiền phòng); `POST /bookings/:id/pay-deposit` → cọc PAID → booking **tự CONFIRMED**; check-in → check-out → **STAY invoice** (items copy từ quote snapshot + dòng `DEPOSIT_APPLIED` âm) **cấn cọc đúng số dư còn lại**. Trigger DB giữ `total_vnd = SUM(items)`, `balance_vnd` generated. Hoá đơn ad-hoc/ADJUSTMENT + phát hành + **VOID giữ số** (luật kế toán). Cọc ≠ doanh thu (liability tới khi cấn — ADR-0003). Đã verify e2e (cấn cọc đúng số dư, gói NONE, void).
 - **Giao diện:** `web-admin` (http://localhost:3000) — Dashboard (Modern Hospitality, KPI + sparkline), login/register/forgot/reset, sidebar/topbar, các trang placeholder; `web-staff` PWA (http://localhost:3002) — today/rooms/cleaning/profile/login. Hệ **design token 2 tầng + 3 theme** (light/dark/warm) đổi ổn định.
 - **Hạ tầng dev:** Docker (PG16 + Redis7 + Mailpit), migration SQL-first + Prisma introspect, seed; CI GitHub Actions.
 
@@ -69,9 +70,10 @@
 - ✅ **2.6** Booking core — `bookings`/`booking_status_history`/`idempotency_keys` (migration `0009`) + **ALTER `room_occupancy` FK → bookings** (hoàn tất nợ từ 2.1). **`createBookingTx`** đường ghi duy nhất: advisory lock sorted rooms → verify quote (re-calc → 409 PRICE_CHANGED) → pre-check overlaps → insert booking + occupancy (EXCLUDE) + status history, 1 tx. `POST` (Idempotency-Key) / `GET` (filter, property-scope) / `GET/:id` / `PATCH` (If-Match) / `cancel` (xoá occupancy). State machine `booking-status-machine.ts`. E2E concurrency: 2 cùng resource → 1+409; WHOLE↔ROOM → chỉ 1; cancel+rebook; version conflict; idempotency replay.
 - ✅ **2.7** HOLD + expiry cron — tạo HOLD (`expires_at=now+10'`); **hạ tầng BullMQ** `core/bullmq/` (connection riêng `maxRetriesPerRequest:null`) + `hold-expiry.cron.ts` (`@Processor` `autorun:false` → chỉ chạy khi `ENABLE_SCHEDULERS`; `upsertJobScheduler` pattern `* * * * *`). `sweepExpiredHolds()` lặp tenant ACTIVE/TRIAL qua `withTenant` (ADR-0002 §5) → `CANCELLED(HOLD_EXPIRED)` + xoá occupancy + history (`changed_by=NULL`) cùng tx. `POST /:id/confirm` → HOLD→PENDING (hạn cọc 24h) | OWNER `force`→CONFIRMED. E2E 4 ca + verify cron thật trên build prod. · ✅ **2.8** Check-in/out + switch-resource — `POST /:id/check-in` (CONFIRMED→CHECKED_IN + `actual_check_in`) · `check-out` (CHECKED_IN→CHECKED_OUT + `actual_check_out` + xoá occupancy) · `switch-resource` (occupancy delete+reinsert ở resource mới, EXCLUDE chặn bận→409, lock union, rollback an toàn, cùng-property; history + reason). State machine `booking-status-machine.ts` 422 cho transition sai. TODO stub: STAY invoice (3.2), cleaning task (4.1), audit (4.5).
 
-### EPIC 3 — Finance 🟡 (1/8)
+### EPIC 3 — Finance 🟡 (2/8)
 - ✅ **3.1** Document counters (migration `0008`) — `DocumentCounterService.next/nextCode` atomic (UPSERT + row lock, không gap); booking_code dùng service này. Test 100 concurrent → 100 số liên tục.
-- ⬜ 3.2 Invoices (kind/deposit/state machine) · 3.3 Payments + VietQR · 3.4 Đối soát Casso/SePay
+- ✅ **3.2** Invoices (kind/deposit/state machine) — migration `0010`: `invoices`/`invoice_items` (enum `invoice_kind`/`invoice_status`, `balance_vnd` generated, trigger `total_vnd=SUM(items)`). `InvoicesService` (một chiều, không phụ thuộc bookings): issue **DEPOSIT** lúc PENDING (theo `deposit_type/value`, NONE→skip) → `pay-deposit` set PAID → booking auto-**CONFIRMED**; check-out sinh **STAY** (items copy quote snapshot + `DEPOSIT_APPLIED` âm cấn cọc); `POST /invoices` ad-hoc/ADJUSTMENT + `/issue` + `/void` (giữ số). State machine `invoice-status-machine.ts`. `paid_vnd` seam (markDepositPaid) chờ trigger payments 3.3. E2E 3 ca (cọc 30%→cấn đúng số dư; NONE; void). TODO: STAY phụ thu + OTA commission (3.6).
+- ⬜ 3.3 Payments + VietQR · 3.4 Đối soát Casso/SePay
 - ⬜ 3.5 Assets & Depreciation · 3.6 Expenses + OTA commission · 3.7 Reports P&L/break-even · 3.8 Billing tháng
 
 ### EPIC 4 — Operations ⬜ (0/7)
@@ -97,9 +99,9 @@
 
 ## 4. Việc kế tiếp (đề xuất thứ tự)
 
-1. ✅ ~~Task 2.1–2.8, 3.1~~ — **đã xong** (toàn bộ EPIC 2 + booking vòng đời đầy đủ + 3.1).
-2. **Task 3.2** — Invoices (kind/deposit/state machine): mở luồng tài chính — PENDING → DEPOSIT invoice; cọc PAID → auto-CONFIRMED; check-out → STAY invoice (nối các TODO stub ở 2.7/2.8).
-3. Song song FE: **Task 6.1** nối API thật cho `web-admin` (auth client + SSE hook); **6.2** calendar timeline đọc occupancy; **6.3** booking form + quote.
+1. ✅ ~~Task 2.1–2.8, 3.1, 3.2~~ — **đã xong** (toàn bộ EPIC 2 + booking vòng đời + hoá đơn cọc/STAY).
+2. **Task 3.3** — Payments + VietQR: bảng `payments`/`payment_attempts`; `POST /payments` (cash/transfer, Idempotency-Key) + refund; **trigger `paid_vnd`** theo ADR-0003 (thay seam `markDepositPaid` của 3.2) → invoice tự PARTIALLY_PAID/PAID; VietQR NAPAS 247 + `GET /invoices/:id/qr-image`.
+3. Song song FE: **Task 6.1** nối API thật cho `web-admin`; **6.2** calendar timeline; **6.3** booking form + quote.
 
 ---
 

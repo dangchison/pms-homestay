@@ -17,6 +17,7 @@ import { AuthPublicModule } from '@modules/auth-public/auth-public.module';
 import { BookingsModule } from '@modules/bookings/bookings.module';
 import { GuestsModule } from '@modules/guests/guests.module';
 import { HealthModule } from '@modules/health/health.module';
+import { InvoicesModule } from '@modules/invoices/invoices.module';
 import { PricingModule } from '@modules/pricing/pricing.module';
 import { PropertiesModule } from '@modules/properties/properties.module';
 import { RatePlansModule } from '@modules/rate-plans/rate-plans.module';
@@ -49,6 +50,7 @@ export class AppModule implements NestModule {
         RatePlansModule,
         PricingModule,
         GuestsModule,
+        InvoicesModule,
         BookingsModule,
       ],
       providers: [

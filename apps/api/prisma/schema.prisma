@@ -47,6 +47,8 @@ model tenants {
   document_counters      document_counters[]
   guests                 guests[]
   idempotency_keys       idempotency_keys[]
+  invoice_items          invoice_items[]
+  invoices               invoices[]
   properties             properties[]
   quotes                 quotes[]
   rate_plan_resources    rate_plan_resources[]
@@ -494,6 +496,7 @@ model bookings {
   properties             properties               @relation(fields: [tenant_id, property_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
   rate_plans             rate_plans?              @relation(fields: [tenant_id, rate_plan_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
   bookable_resources     bookable_resources       @relation(fields: [tenant_id, resource_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  invoices               invoices[]
   room_occupancy         room_occupancy[]
 
   @@unique([tenant_id, booking_code])
@@ -520,6 +523,59 @@ model idempotency_keys {
 
   @@id([key, tenant_id])
   @@index([expires_at], map: "idx_idempotency_expires")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model invoice_items {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id      String   @db.Uuid
+  invoice_id     String   @db.Uuid
+  item_type      String   @db.VarChar(32)
+  description    String   @db.VarChar(500)
+  quantity       Decimal  @default(1) @db.Decimal(10, 2)
+  unit_price_vnd BigInt
+  amount_vnd     BigInt
+  ref_invoice_id String?  @db.Uuid
+  display_order  Int      @default(0)
+  metadata       Json?    @default("{}")
+  tenants        tenants  @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoices       invoices @relation(fields: [tenant_id, invoice_id], references: [tenant_id, id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([invoice_id], map: "idx_invoice_items_invoice")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model invoices {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id      String          @db.Uuid
+  booking_id     String?         @db.Uuid
+  kind           invoice_kind    @default(STAY)
+  invoice_number String          @db.VarChar(30)
+  status         invoice_status  @default(DRAFT)
+  billing_period String?         @db.VarChar(7)
+  subtotal_vnd   BigInt          @default(0)
+  discount_vnd   BigInt          @default(0)
+  tax_vnd        BigInt          @default(0)
+  total_vnd      BigInt          @default(0)
+  paid_vnd       BigInt          @default(0)
+  balance_vnd    BigInt?         @default(dbgenerated("(total_vnd - paid_vnd)"))
+  due_date       DateTime?       @db.Date
+  issued_at      DateTime?       @db.Timestamptz(6)
+  paid_at        DateTime?       @db.Timestamptz(6)
+  void_reason    String?
+  voided_at      DateTime?       @db.Timestamptz(6)
+  voided_by      String?         @db.Uuid
+  pdf_url        String?
+  version        Int             @default(0)
+  created_at     DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime        @default(now()) @db.Timestamptz(6)
+  invoice_items  invoice_items[]
+  bookings       bookings?       @relation(fields: [tenant_id, booking_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  tenants        tenants         @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([tenant_id, id])
+  @@unique([tenant_id, invoice_number])
+  @@index([booking_id], map: "idx_invoices_booking")
 }
 
 enum user_role {
@@ -563,4 +619,21 @@ enum booking_status {
   CHECKED_OUT
   CANCELLED
   NO_SHOW
+}
+
+enum invoice_kind {
+  DEPOSIT
+  STAY
+  MONTHLY_RENT
+  ADJUSTMENT
+}
+
+enum invoice_status {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  VOID
+  REFUNDED
 }

@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { QUEUE_HOLD_EXPIRY } from '@core/bullmq/queues';
 import { IdempotencyInterceptor } from '@core/http/interceptors/idempotency.interceptor';
+import { InvoicesModule } from '@modules/invoices/invoices.module';
 import { OccupancyModule } from '@modules/occupancy/occupancy.module';
 import { PricingModule } from '@modules/pricing/pricing.module';
 import { BookingsController } from './bookings.controller';
@@ -14,7 +15,12 @@ import { HoldExpiryProcessor } from './hold-expiry.cron';
  * Queue `hold-expiry` (task 2.7): cron mỗi phút huỷ HOLD quá hạn.
  */
 @Module({
-  imports: [OccupancyModule, PricingModule, BullModule.registerQueue({ name: QUEUE_HOLD_EXPIRY })],
+  imports: [
+    OccupancyModule,
+    PricingModule,
+    InvoicesModule,
+    BullModule.registerQueue({ name: QUEUE_HOLD_EXPIRY }),
+  ],
   controllers: [BookingsController],
   providers: [BookingsService, IdempotencyInterceptor, HoldExpiryProcessor],
   exports: [BookingsService],

@@ -1,0 +1,403 @@
+import { Injectable } from '@nestjs/common';
+import { computeDeposit, roundVnd } from '@pms/pricing-engine';
+import {
+  type CreateInvoiceRequest,
+  type InvoiceResponse,
+  type JwtClaims,
+  type QuoteLineItem,
+  type VoidInvoiceRequest,
+} from '@pms/shared-types';
+import { type DepositType } from '@pms/pricing-engine';
+import { Prisma, type invoice_items, type invoices } from '@prisma/client';
+import { PermissionService } from '@core/auth/permission.service';
+import { DocumentCounterService, periodOf } from '@core/counters/document-counter.service';
+import { AppException } from '@core/http/exceptions/app.exception';
+import { PrismaService } from '@core/prisma/prisma.service';
+import { withTenant } from '@core/tenancy/with-tenant';
+import { assertInvoiceTransition } from './invoice-status-machine';
+
+type Tx = Prisma.TransactionClient;
+
+/** Snapshot tối thiểu của booking mà luồng invoice cần (truyền từ BookingsService). */
+export interface BookingForInvoice {
+  id: string;
+  tenant_id: string;
+  booking_code: string;
+  rate_plan_id: string | null;
+  quote_id: string | null;
+  total_amount_vnd: bigint;
+}
+
+function toInvoiceResponse(inv: invoices, items: invoice_items[]): InvoiceResponse {
+  return {
+    id: inv.id,
+    booking_id: inv.booking_id,
+    kind: inv.kind,
+    invoice_number: inv.invoice_number,
+    status: inv.status,
+    billing_period: inv.billing_period,
+    subtotal_vnd: Number(inv.subtotal_vnd),
+    discount_vnd: Number(inv.discount_vnd),
+    tax_vnd: Number(inv.tax_vnd),
+    total_vnd: Number(inv.total_vnd),
+    paid_vnd: Number(inv.paid_vnd),
+    balance_vnd: Number(inv.balance_vnd ?? inv.total_vnd - inv.paid_vnd),
+    due_date: inv.due_date ? inv.due_date.toISOString().slice(0, 10) : null,
+    issued_at: inv.issued_at ? inv.issued_at.toISOString() : null,
+    paid_at: inv.paid_at ? inv.paid_at.toISOString() : null,
+    void_reason: inv.void_reason,
+    version: inv.version,
+    created_at: inv.created_at.toISOString(),
+    updated_at: inv.updated_at.toISOString(),
+    items: items
+      .sort((a, b) => a.display_order - b.display_order)
+      .map((it) => ({
+        id: it.id,
+        item_type: it.item_type as InvoiceResponse['items'][number]['item_type'],
+        description: it.description,
+        quantity: Number(it.quantity),
+        unit_price_vnd: Number(it.unit_price_vnd),
+        amount_vnd: Number(it.amount_vnd),
+        ref_invoice_id: it.ref_invoice_id,
+        display_order: it.display_order,
+      })),
+  };
+}
+
+/**
+ * ★ InvoicesService (docs/09 §4, ADR-0003) — sở hữu invoices/invoice_items.
+ * KHÔNG phụ thuộc BookingsService (một chiều): luồng deposit→confirm do
+ * BookingsService điều phối, gọi markDepositPaid trong cùng tx. paid_vnd ở 3.2
+ * do markDepositPaid set tạm (seam); task 3.3 thay bằng trigger từ payments.
+ */
+@Injectable()
+export class InvoicesService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissionService: PermissionService,
+    private readonly counters: DocumentCounterService,
+  ) {}
+
+  // ── Nội bộ: gọi TRONG tx có sẵn của BookingsService (không tự mở withTenant) ──
+
+  /**
+   * Issue DEPOSIT invoice tại PENDING (docs/09 §4.2). Cọc theo deposit_type/value
+   * của rate plan áp lên total booking; NONE/0 → null (skip). Idempotent: đã có
+   * DEPOSIT non-VOID → trả lại cái cũ. Tạo DRAFT → 1 item ROOM_CHARGE → ISSUED.
+   */
+  async issueDepositForBooking(
+    tx: Tx,
+    booking: BookingForInvoice,
+  ): Promise<{ id: string; total_vnd: number } | null> {
+    if (!booking.rate_plan_id) return null;
+    const plan = await tx.rate_plans.findFirst({
+      where: { id: booking.rate_plan_id },
+      select: { deposit_type: true, deposit_value: true },
+    });
+    if (!plan) return null;
+    const depositVnd = computeDeposit(
+      Number(booking.total_amount_vnd),
+      plan.deposit_type as DepositType,
+      Number(plan.deposit_value),
+    );
+    if (depositVnd <= 0) return null;
+
+    const existing = await tx.invoices.findFirst({
+      where: { booking_id: booking.id, kind: 'DEPOSIT', status: { not: 'VOID' } },
+      select: { id: true, total_vnd: true },
+    });
+    if (existing) return { id: existing.id, total_vnd: Number(existing.total_vnd) };
+
+    const number = await this.counters.nextCode(tx, booking.tenant_id, 'INV', periodOf(new Date()));
+    const inv = await tx.invoices.create({
+      data: {
+        tenant_id: booking.tenant_id,
+        booking_id: booking.id,
+        kind: 'DEPOSIT',
+        invoice_number: number,
+        status: 'DRAFT',
+      },
+      select: { id: true },
+    });
+    await tx.invoice_items.create({
+      data: {
+        tenant_id: booking.tenant_id,
+        invoice_id: inv.id,
+        item_type: 'ROOM_CHARGE',
+        description: `Đặt cọc booking ${booking.booking_code}`,
+        quantity: 1,
+        unit_price_vnd: depositVnd,
+        amount_vnd: depositVnd,
+      },
+    });
+    await tx.invoices.update({
+      where: { id: inv.id },
+      data: { status: 'ISSUED', issued_at: new Date(), version: { increment: 1 } },
+    });
+    return { id: inv.id, total_vnd: depositVnd };
+  }
+
+  /**
+   * Issue STAY invoice lúc check-out (docs/09 §4.3): items copy từ quote snapshot
+   * + DEPOSIT_APPLIED âm (cấn cọc đã thu, ref → DEPOSIT invoice). Idempotent.
+   */
+  async issueStayForBooking(tx: Tx, booking: BookingForInvoice): Promise<void> {
+    const existing = await tx.invoices.findFirst({
+      where: { booking_id: booking.id, kind: 'STAY', status: { not: 'VOID' } },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    const number = await this.counters.nextCode(tx, booking.tenant_id, 'INV', periodOf(new Date()));
+    const inv = await tx.invoices.create({
+      data: {
+        tenant_id: booking.tenant_id,
+        booking_id: booking.id,
+        kind: 'STAY',
+        invoice_number: number,
+        status: 'DRAFT',
+      },
+      select: { id: true },
+    });
+
+    let order = 0;
+    const lineItems = booking.quote_id
+      ? (((await tx.quotes.findFirst({
+          where: { id: booking.quote_id },
+          select: { line_items: true },
+        }))?.line_items ?? []) as unknown as QuoteLineItem[])
+      : [];
+    for (const li of lineItems) {
+      await tx.invoice_items.create({
+        data: {
+          tenant_id: booking.tenant_id,
+          invoice_id: inv.id,
+          item_type: li.type,
+          description: li.description,
+          quantity: li.quantity,
+          unit_price_vnd: li.unit_price_vnd,
+          amount_vnd: li.amount_vnd,
+          display_order: order++,
+        },
+      });
+    }
+    // Phòng vệ: thiếu quote snapshot → 1 dòng ROOM_CHARGE = giá đã chốt
+    if (lineItems.length === 0) {
+      await tx.invoice_items.create({
+        data: {
+          tenant_id: booking.tenant_id,
+          invoice_id: inv.id,
+          item_type: 'ROOM_CHARGE',
+          description: `Tiền phòng booking ${booking.booking_code}`,
+          quantity: 1,
+          unit_price_vnd: booking.total_amount_vnd,
+          amount_vnd: booking.total_amount_vnd,
+          display_order: order++,
+        },
+      });
+    }
+
+    // Cấn cọc đã thu (theo paid_vnd của DEPOSIT invoice — phần thực thu)
+    const deposit = await tx.invoices.findFirst({
+      where: { booking_id: booking.id, kind: 'DEPOSIT', status: { not: 'VOID' } },
+      select: { id: true, paid_vnd: true },
+    });
+    const appliedVnd = deposit ? Number(deposit.paid_vnd) : 0;
+    if (deposit && appliedVnd > 0) {
+      await tx.invoice_items.create({
+        data: {
+          tenant_id: booking.tenant_id,
+          invoice_id: inv.id,
+          item_type: 'DEPOSIT_APPLIED',
+          description: 'Cấn trừ tiền cọc đã thu',
+          quantity: 1,
+          unit_price_vnd: -appliedVnd,
+          amount_vnd: -appliedVnd,
+          ref_invoice_id: deposit.id,
+          display_order: order++,
+        },
+      });
+    }
+    await tx.invoices.update({
+      where: { id: inv.id },
+      data: { status: 'ISSUED', issued_at: new Date(), version: { increment: 1 } },
+    });
+  }
+
+  /**
+   * Seam thanh toán cọc (task 3.2): set DEPOSIT invoice → PAID (full). Task 3.3
+   * thay bằng trigger paid_vnd từ payments + recompute status. Trả booking_id để
+   * BookingsService auto-confirm trong cùng tx.
+   */
+  async markDepositPaid(tx: Tx, invoiceId: string): Promise<{ booking_id: string | null }> {
+    const inv = await tx.invoices.findFirst({
+      where: { id: invoiceId },
+      select: { id: true, booking_id: true, status: true, total_vnd: true },
+    });
+    if (!inv) {
+      throw new AppException({ code: 'INVOICE_NOT_FOUND', title: 'Hoá đơn không tồn tại', status: 404 });
+    }
+    if (inv.status === 'PAID') return { booking_id: inv.booking_id }; // idempotent
+    assertInvoiceTransition(inv.status, 'PAID');
+    await tx.invoices.update({
+      where: { id: invoiceId },
+      data: { paid_vnd: inv.total_vnd, status: 'PAID', paid_at: new Date(), version: { increment: 1 } },
+    });
+    return { booking_id: inv.booking_id };
+  }
+
+  // ── Public REST ─────────────────────────────────────────────────────────
+
+  /** POST /invoices — ad-hoc/ADJUSTMENT (docs/09 §4.4). issue=true → phát hành ngay. */
+  async createAdHoc(dto: CreateInvoiceRequest, user: JwtClaims): Promise<InvoiceResponse> {
+    let bookingId: string | null = null;
+    if (dto.booking_id) {
+      const booking = await this.loadBooking(dto.booking_id, user);
+      await this.permissionService.authorizeOnProperty(user, booking.property_id, 'invoice.create_adhoc');
+      bookingId = booking.id;
+    }
+    const created = await withTenant(this.prisma, user.tnt, async (tx) => {
+      const number = await this.counters.nextCode(tx, user.tnt, 'INV', periodOf(new Date()));
+      const inv = await tx.invoices.create({
+        data: {
+          tenant_id: user.tnt,
+          booking_id: bookingId,
+          kind: dto.kind,
+          invoice_number: number,
+          status: 'DRAFT',
+          due_date: dto.due_date ? new Date(dto.due_date) : null,
+        },
+        select: { id: true },
+      });
+      let order = 0;
+      for (const item of dto.items) {
+        const amount = roundVnd(item.quantity * item.unit_price_vnd);
+        await tx.invoice_items.create({
+          data: {
+            tenant_id: user.tnt,
+            invoice_id: inv.id,
+            item_type: item.item_type,
+            description: item.description,
+            quantity: item.quantity,
+            unit_price_vnd: item.unit_price_vnd,
+            amount_vnd: amount,
+            display_order: order++,
+          },
+        });
+      }
+      if (dto.issue) {
+        await tx.invoices.update({
+          where: { id: inv.id },
+          data: { status: 'ISSUED', issued_at: new Date(), version: { increment: 1 } },
+        });
+      }
+      return this.loadFull(tx, inv.id);
+    });
+    return toInvoiceResponse(created.invoice, created.items);
+  }
+
+  /** POST /invoices/:id/issue — DRAFT → ISSUED. */
+  async issue(id: string, user: JwtClaims): Promise<InvoiceResponse> {
+    return this.transition(id, user, 'invoice.create_adhoc', 'ISSUED', (data) => {
+      data.issued_at = new Date();
+    });
+  }
+
+  /** POST /invoices/:id/void — giữ số (docs/09 §2.4), ghi lý do. */
+  async void(id: string, dto: VoidInvoiceRequest, user: JwtClaims): Promise<InvoiceResponse> {
+    return this.transition(id, user, 'invoice.void', 'VOID', (data) => {
+      data.void_reason = dto.reason;
+      data.voided_at = new Date();
+      data.voided_by = user.sub;
+    });
+  }
+
+  async getById(id: string, user: JwtClaims): Promise<InvoiceResponse> {
+    const { invoice, items, propertyId } = await this.loadWithProperty(id, user);
+    if (propertyId) await this.permissionService.authorizeOnProperty(user, propertyId, 'invoice.read');
+    return toInvoiceResponse(invoice, items);
+  }
+
+  /** GET /invoices?booking_id= — danh sách hoá đơn của 1 booking. */
+  async listByBooking(bookingId: string, user: JwtClaims): Promise<InvoiceResponse[]> {
+    const booking = await this.loadBooking(bookingId, user);
+    await this.permissionService.authorizeOnProperty(user, booking.property_id, 'invoice.read');
+    const rows = await withTenant(
+      this.prisma,
+      user.tnt,
+      (tx) =>
+        tx.invoices.findMany({
+          where: { booking_id: bookingId },
+          orderBy: { created_at: 'asc' },
+          include: { invoice_items: true },
+        }),
+      { readOnly: true },
+    );
+    return rows.map((r) => toInvoiceResponse(r, r.invoice_items));
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  private async transition(
+    id: string,
+    user: JwtClaims,
+    permission: 'invoice.create_adhoc' | 'invoice.void',
+    to: 'ISSUED' | 'VOID',
+    mutate: (data: Prisma.invoicesUpdateInput) => void,
+  ): Promise<InvoiceResponse> {
+    const { invoice, propertyId } = await this.loadWithProperty(id, user);
+    if (propertyId) await this.permissionService.authorizeOnProperty(user, propertyId, permission);
+    assertInvoiceTransition(invoice.status, to);
+    const updated = await withTenant(this.prisma, user.tnt, async (tx) => {
+      const data: Prisma.invoicesUpdateInput = { status: to, version: { increment: 1 } };
+      mutate(data);
+      await tx.invoices.update({ where: { id }, data });
+      return this.loadFull(tx, id);
+    });
+    return toInvoiceResponse(updated.invoice, updated.items);
+  }
+
+  private async loadFull(tx: Tx, id: string): Promise<{ invoice: invoices; items: invoice_items[] }> {
+    const invoice = await tx.invoices.findFirstOrThrow({
+      where: { id },
+      include: { invoice_items: true },
+    });
+    return { invoice, items: invoice.invoice_items };
+  }
+
+  private async loadWithProperty(
+    id: string,
+    user: JwtClaims,
+  ): Promise<{ invoice: invoices; items: invoice_items[]; propertyId: string | null }> {
+    const result = await withTenant(
+      this.prisma,
+      user.tnt,
+      (tx) =>
+        tx.invoices.findFirst({
+          where: { id },
+          include: { invoice_items: true, bookings: { select: { property_id: true } } },
+        }),
+      { readOnly: true },
+    );
+    if (!result) {
+      throw new AppException({ code: 'INVOICE_NOT_FOUND', title: 'Hoá đơn không tồn tại', status: 404 });
+    }
+    return { invoice: result, items: result.invoice_items, propertyId: result.bookings?.property_id ?? null };
+  }
+
+  private async loadBooking(
+    bookingId: string,
+    user: JwtClaims,
+  ): Promise<{ id: string; property_id: string }> {
+    const booking = await withTenant(
+      this.prisma,
+      user.tnt,
+      (tx) => tx.bookings.findFirst({ where: { id: bookingId }, select: { id: true, property_id: true } }),
+      { readOnly: true },
+    );
+    if (!booking) {
+      throw new AppException({ code: 'BOOKING_NOT_FOUND', title: 'Booking không tồn tại', status: 404 });
+    }
+    return booking;
+  }
+}

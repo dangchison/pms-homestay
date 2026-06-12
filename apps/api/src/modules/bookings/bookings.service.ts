@@ -17,6 +17,7 @@ import { AppException } from '@core/http/exceptions/app.exception';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { withTenant } from '@core/tenancy/with-tenant';
 import { OccupancyService } from '@modules/occupancy/occupancy.service';
+import { InvoicesService } from '@modules/invoices/invoices.service';
 import { PricingService } from '@modules/pricing/pricing.service';
 import { offsetToSkipTake } from '@/shared/dto';
 import { assertTransition, isTerminal } from './booking-status-machine';
@@ -64,6 +65,7 @@ export class BookingsService {
     private readonly occupancy: OccupancyService,
     private readonly pricing: PricingService,
     private readonly counters: DocumentCounterService,
+    private readonly invoices: InvoicesService,
   ) {}
 
   /**
@@ -155,6 +157,9 @@ export class BookingsService {
         data: { tenant_id: user.tnt, booking_id: booking.id, to_status: status, changed_by: user.sub },
       });
       await tx.quotes.update({ where: { id: quote.id }, data: { used_by_booking_id: booking.id } });
+
+      // Vào thẳng PENDING (không HOLD) → issue DEPOSIT invoice ngay (docs/09 §3)
+      if (status === 'PENDING') await this.invoices.issueDepositForBooking(tx, booking);
       // TODO(task 4.3): outbox.publish(tx, 'booking.created', booking)
       return booking;
     });
@@ -349,7 +354,54 @@ export class BookingsService {
           changed_by: user.sub,
         },
       });
+      // HOLD → PENDING: issue DEPOSIT invoice (docs/09 §3) — khách thanh toán để CONFIRMED
+      if (target === 'PENDING') await this.invoices.issueDepositForBooking(tx, booking);
       // TODO(task 4.3): outbox.publish(tx, 'booking.confirmed', booking)
+      return tx.bookings.findFirstOrThrow({ where: { id } });
+    });
+    return toBookingResponse(updated);
+  }
+
+  /**
+   * Thanh toán cọc (task 3.2) — đánh dấu DEPOSIT invoice PAID → booking PENDING
+   * tự CONFIRMED CÙNG tx (docs/09 §3). Đây là seam: task 3.3 sẽ gọi luồng này từ
+   * POST /payments (ghi nhận tiền mặt/VietQR) thay cho việc set paid_vnd trực tiếp.
+   */
+  async payDeposit(id: string, user: JwtClaims): Promise<BookingResponse> {
+    const booking = await this.loadOrThrow(id, user);
+    await this.permissionService.authorizeOnProperty(user, booking.property_id, 'payment.record');
+
+    const updated = await withTenant(this.prisma, user.tnt, async (tx) => {
+      const deposit = await tx.invoices.findFirst({
+        where: { booking_id: id, kind: 'DEPOSIT', status: { not: 'VOID' } },
+        select: { id: true },
+      });
+      if (!deposit) {
+        throw new AppException({
+          code: 'DEPOSIT_INVOICE_NOT_FOUND',
+          title: 'Booking chưa có hoá đơn cọc (gói giá có thể đặt cọc NONE)',
+          status: 422,
+        });
+      }
+      await this.invoices.markDepositPaid(tx, deposit.id);
+      if (booking.status === 'PENDING') {
+        const result = await tx.bookings.updateMany({
+          where: { id, status: 'PENDING' },
+          data: { status: 'CONFIRMED', expires_at: null, version: { increment: 1 } },
+        });
+        if (result.count > 0) {
+          await tx.booking_status_history.create({
+            data: {
+              tenant_id: user.tnt,
+              booking_id: id,
+              from_status: 'PENDING',
+              to_status: 'CONFIRMED',
+              changed_by: user.sub,
+              reason: 'Cọc đã thanh toán',
+            },
+          });
+        }
+      }
       return tx.bookings.findFirstOrThrow({ where: { id } });
     });
     return toBookingResponse(updated);
@@ -421,7 +473,9 @@ export class BookingsService {
           changed_by: user.sub,
         },
       });
-      // TODO(task 3.2): outbox.publish(tx, 'booking.checked_out', booking) → finalize STAY invoice
+      // Finalize STAY invoice (docs/09 §4.3): items từ quote + cấn cọc đã thu
+      await this.invoices.issueStayForBooking(tx, booking);
+      // TODO(task 3.6): auto-sinh expense OTA_COMMISSION khi CHECKED_OUT (ADR-0003)
       return tx.bookings.findFirstOrThrow({ where: { id } });
     });
     return toBookingResponse(updated);

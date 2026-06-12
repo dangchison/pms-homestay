@@ -8,4 +8,5 @@ export * from './rate-plan';
 export * from './quote';
 export * from './guest';
 export * from './booking';
+export * from './invoice';
 export * from './events';
