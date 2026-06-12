@@ -73,13 +73,6 @@ export class BookingsController {
     return { data: await this.bookings.confirm(id, dto, user) };
   }
 
-  @Post(':id/pay-deposit')
-  @RequirePermissions('payment.record')
-  @HttpCode(200)
-  async payDeposit(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtClaims) {
-    return { data: await this.bookings.payDeposit(id, user) };
-  }
-
   @Post(':id/cancel')
   @RequirePermissions('booking.cancel')
   @HttpCode(200)

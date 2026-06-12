@@ -363,48 +363,32 @@ export class BookingsService {
   }
 
   /**
-   * Thanh toán cọc (task 3.2) — đánh dấu DEPOSIT invoice PAID → booking PENDING
-   * tự CONFIRMED CÙNG tx (docs/09 §3). Đây là seam: task 3.3 sẽ gọi luồng này từ
-   * POST /payments (ghi nhận tiền mặt/VietQR) thay cho việc set paid_vnd trực tiếp.
+   * Cọc PAID → booking PENDING tự CONFIRMED (docs/09 §3). Gọi bởi PaymentsService
+   * (task 3.3) TRONG tx ghi payment, sau khi trigger đẩy DEPOSIT invoice → PAID.
+   * Idempotent (chỉ đổi khi đang PENDING) — chạy lại / OWNER đã force → no-op.
    */
-  async payDeposit(id: string, user: JwtClaims): Promise<BookingResponse> {
-    const booking = await this.loadOrThrow(id, user);
-    await this.permissionService.authorizeOnProperty(user, booking.property_id, 'payment.record');
-
-    const updated = await withTenant(this.prisma, user.tnt, async (tx) => {
-      const deposit = await tx.invoices.findFirst({
-        where: { booking_id: id, kind: 'DEPOSIT', status: { not: 'VOID' } },
-        select: { id: true },
-      });
-      if (!deposit) {
-        throw new AppException({
-          code: 'DEPOSIT_INVOICE_NOT_FOUND',
-          title: 'Booking chưa có hoá đơn cọc (gói giá có thể đặt cọc NONE)',
-          status: 422,
-        });
-      }
-      await this.invoices.markDepositPaid(tx, deposit.id);
-      if (booking.status === 'PENDING') {
-        const result = await tx.bookings.updateMany({
-          where: { id, status: 'PENDING' },
-          data: { status: 'CONFIRMED', expires_at: null, version: { increment: 1 } },
-        });
-        if (result.count > 0) {
-          await tx.booking_status_history.create({
-            data: {
-              tenant_id: user.tnt,
-              booking_id: id,
-              from_status: 'PENDING',
-              to_status: 'CONFIRMED',
-              changed_by: user.sub,
-              reason: 'Cọc đã thanh toán',
-            },
-          });
-        }
-      }
-      return tx.bookings.findFirstOrThrow({ where: { id } });
+  async confirmFromDepositPaid(
+    tx: Prisma.TransactionClient,
+    bookingId: string,
+    tenantId: string,
+    actorUserId: string | null,
+  ): Promise<void> {
+    const result = await tx.bookings.updateMany({
+      where: { id: bookingId, status: 'PENDING' },
+      data: { status: 'CONFIRMED', expires_at: null, version: { increment: 1 } },
     });
-    return toBookingResponse(updated);
+    if (result.count > 0) {
+      await tx.booking_status_history.create({
+        data: {
+          tenant_id: tenantId,
+          booking_id: bookingId,
+          from_status: 'PENDING',
+          to_status: 'CONFIRMED',
+          changed_by: actorUserId,
+          reason: 'Cọc đã thanh toán',
+        },
+      });
+    }
   }
 
   /** Check-in (docs/06, task 2.8) — chỉ CONFIRMED → CHECKED_IN, ghi actual_check_in. */

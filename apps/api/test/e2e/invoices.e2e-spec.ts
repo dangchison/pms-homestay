@@ -146,6 +146,8 @@ describe('Invoices — deposit/stay/adjustment (task 3.2)', () => {
   afterAll(async () => {
     if (admin) {
       const tid = `(SELECT id FROM tenants WHERE slug = '${tenantSlug}')`;
+      await admin.query(`DELETE FROM payment_attempts WHERE tenant_id IN ${tid}`);
+      await admin.query(`DELETE FROM payments WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM invoice_items WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM invoices WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM room_occupancy WHERE tenant_id IN ${tid}`);
@@ -187,9 +189,15 @@ describe('Invoices — deposit/stay/adjustment (task 3.2)', () => {
       'PENDING',
     );
 
-    // Thanh toán cọc → booking CONFIRMED, DEPOSIT invoice PAID
-    const paid = await request(http).post(`/api/v1/bookings/${bookingId}/pay-deposit`).set(auth()).expect(200);
-    expect(paid.body.data.status).toBe('CONFIRMED');
+    // Thanh toán cọc qua POST /payments → trigger đẩy invoice PAID → booking auto-CONFIRMED
+    await request(http)
+      .post('/api/v1/payments')
+      .set({ ...auth(), 'Idempotency-Key': randomUUID() })
+      .send({ invoice_id: deposit.id, amount_vnd: 300_000, method: 'CASH' })
+      .expect(201);
+    expect((await request(http).get(`/api/v1/bookings/${bookingId}`).set(auth()).expect(200)).body.data.status).toBe(
+      'CONFIRMED',
+    );
     invs = await invoicesOf(bookingId);
     expect(invs[0]!.status).toBe('PAID');
     expect(invs[0]!.paid_vnd).toBe(300_000);
@@ -212,12 +220,15 @@ describe('Invoices — deposit/stay/adjustment (task 3.2)', () => {
     expect(stay.total_vnd).toBe(stay.items.reduce((s, it) => s + it.amount_vnd, 0));
   });
 
-  it('gói cọc NONE → không sinh DEPOSIT invoice; pay-deposit → 422', async () => {
+  it('gói cọc NONE → không sinh DEPOSIT invoice; OWNER force confirm trực tiếp', async () => {
     const bookingId = await book(resNone, '2027-03-01T07:00:00.000Z', '2027-03-02T05:00:00.000Z');
     expect(await invoicesOf(bookingId)).toHaveLength(0);
-    const res = await request(http).post(`/api/v1/bookings/${bookingId}/pay-deposit`).set(auth());
-    expect(res.status).toBe(422);
-    expect(res.body.error.code).toBe('DEPOSIT_INVOICE_NOT_FOUND');
+    const res = await request(http)
+      .post(`/api/v1/bookings/${bookingId}/confirm`)
+      .set(auth())
+      .send({ force: true })
+      .expect(200);
+    expect(res.body.data.status).toBe('CONFIRMED');
   });
 
   it('ad-hoc ADJUSTMENT invoice (issue) → VOID giữ số + 422 khi void lần 2', async () => {

@@ -49,6 +49,8 @@ model tenants {
   idempotency_keys       idempotency_keys[]
   invoice_items          invoice_items[]
   invoices               invoices[]
+  payment_attempts       payment_attempts[]
+  payments               payments[]
   properties             properties[]
   quotes                 quotes[]
   rate_plan_resources    rate_plan_resources[]
@@ -192,6 +194,9 @@ model properties {
   created_at                  DateTime              @default(now()) @db.Timestamptz(6)
   updated_at                  DateTime              @default(now()) @db.Timestamptz(6)
   deleted_at                  DateTime?             @db.Timestamptz(6)
+  bank_bin                    String?               @db.VarChar(8)
+  bank_account_number         String?               @db.VarChar(32)
+  bank_account_name           String?               @db.VarChar(255)
   bookable_resources          bookable_resources[]
   bookings                    bookings[]
   tenants                     tenants               @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -572,10 +577,55 @@ model invoices {
   invoice_items  invoice_items[]
   bookings       bookings?       @relation(fields: [tenant_id, booking_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
   tenants        tenants         @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payments       payments[]
 
   @@unique([tenant_id, id])
   @@unique([tenant_id, invoice_number])
   @@index([booking_id], map: "idx_invoices_booking")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model payment_attempts {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id      String         @db.Uuid
+  payment_id     String         @db.Uuid
+  attempt_number Int
+  status         payment_status
+  raw_response   Json?
+  error_message  String?
+  created_at     DateTime       @default(now()) @db.Timestamptz(6)
+  tenants        tenants        @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payments       payments       @relation(fields: [tenant_id, payment_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([payment_id], map: "idx_payment_attempts_payment")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model payments {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id           String             @db.Uuid
+  invoice_id          String             @db.Uuid
+  amount_vnd          BigInt
+  method              String             @db.VarChar(32)
+  status              payment_status     @default(PENDING)
+  reference_code      String?            @db.VarChar(255)
+  provider            String?            @db.VarChar(50)
+  provider_metadata   Json?
+  received_by         String?            @db.Uuid
+  received_at         DateTime?          @db.Timestamptz(6)
+  refunded_amount_vnd BigInt             @default(0)
+  refunded_at         DateTime?          @db.Timestamptz(6)
+  refund_reason       String?
+  idempotency_key     String?            @db.VarChar(255)
+  created_at          DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime           @default(now()) @db.Timestamptz(6)
+  payment_attempts    payment_attempts[]
+  tenants             tenants            @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoices            invoices           @relation(fields: [tenant_id, invoice_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([tenant_id, id])
+  @@index([invoice_id], map: "idx_payments_invoice")
 }
 
 enum user_role {
@@ -636,4 +686,12 @@ enum invoice_status {
   OVERDUE
   VOID
   REFUNDED
+}
+
+enum payment_status {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
 }

@@ -18,6 +18,7 @@ import { BookingsModule } from '@modules/bookings/bookings.module';
 import { GuestsModule } from '@modules/guests/guests.module';
 import { HealthModule } from '@modules/health/health.module';
 import { InvoicesModule } from '@modules/invoices/invoices.module';
+import { PaymentsModule } from '@modules/payments/payments.module';
 import { PricingModule } from '@modules/pricing/pricing.module';
 import { PropertiesModule } from '@modules/properties/properties.module';
 import { RatePlansModule } from '@modules/rate-plans/rate-plans.module';
@@ -52,6 +53,7 @@ export class AppModule implements NestModule {
         GuestsModule,
         InvoicesModule,
         BookingsModule,
+        PaymentsModule,
       ],
       providers: [
         TenantResolverMiddleware,

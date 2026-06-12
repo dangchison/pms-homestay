@@ -224,28 +224,6 @@ export class InvoicesService {
     });
   }
 
-  /**
-   * Seam thanh toán cọc (task 3.2): set DEPOSIT invoice → PAID (full). Task 3.3
-   * thay bằng trigger paid_vnd từ payments + recompute status. Trả booking_id để
-   * BookingsService auto-confirm trong cùng tx.
-   */
-  async markDepositPaid(tx: Tx, invoiceId: string): Promise<{ booking_id: string | null }> {
-    const inv = await tx.invoices.findFirst({
-      where: { id: invoiceId },
-      select: { id: true, booking_id: true, status: true, total_vnd: true },
-    });
-    if (!inv) {
-      throw new AppException({ code: 'INVOICE_NOT_FOUND', title: 'Hoá đơn không tồn tại', status: 404 });
-    }
-    if (inv.status === 'PAID') return { booking_id: inv.booking_id }; // idempotent
-    assertInvoiceTransition(inv.status, 'PAID');
-    await tx.invoices.update({
-      where: { id: invoiceId },
-      data: { paid_vnd: inv.total_vnd, status: 'PAID', paid_at: new Date(), version: { increment: 1 } },
-    });
-    return { booking_id: inv.booking_id };
-  }
-
   // ── Public REST ─────────────────────────────────────────────────────────
 
   /** POST /invoices — ad-hoc/ADJUSTMENT (docs/09 §4.4). issue=true → phát hành ngay. */
@@ -334,6 +312,99 @@ export class InvoicesService {
       { readOnly: true },
     );
     return rows.map((r) => toInvoiceResponse(r, r.invoice_items));
+  }
+
+  /** Bối cảnh invoice để PaymentsService (3.3) phân quyền + validate trước khi ghi payment. */
+  async loadForPayment(
+    invoiceId: string,
+    user: JwtClaims,
+  ): Promise<{
+    id: string;
+    status: invoices['status'];
+    kind: invoices['kind'];
+    booking_id: string | null;
+    property_id: string | null;
+  }> {
+    const inv = await withTenant(
+      this.prisma,
+      user.tnt,
+      (tx) =>
+        tx.invoices.findFirst({
+          where: { id: invoiceId },
+          select: {
+            id: true,
+            status: true,
+            kind: true,
+            booking_id: true,
+            bookings: { select: { property_id: true } },
+          },
+        }),
+      { readOnly: true },
+    );
+    if (!inv) {
+      throw new AppException({ code: 'INVOICE_NOT_FOUND', title: 'Hoá đơn không tồn tại', status: 404 });
+    }
+    return {
+      id: inv.id,
+      status: inv.status,
+      kind: inv.kind,
+      booking_id: inv.booking_id,
+      property_id: inv.bookings?.property_id ?? null,
+    };
+  }
+
+  /** Input dựng VietQR động (docs/12 §5): số dư còn nợ + addInfo + TK nhận của cơ sở. */
+  async getQrTarget(
+    invoiceId: string,
+    user: JwtClaims,
+  ): Promise<{ amount: number; addInfo: string; bankBin: string; accountNumber: string; accountName: string | null }> {
+    const data = await withTenant(
+      this.prisma,
+      user.tnt,
+      async (tx) => {
+        const inv = await tx.invoices.findFirst({
+          where: { id: invoiceId },
+          select: {
+            invoice_number: true,
+            total_vnd: true,
+            paid_vnd: true,
+            bookings: { select: { booking_code: true, property_id: true } },
+          },
+        });
+        if (!inv) return null;
+        const prop = inv.bookings
+          ? await tx.properties.findFirst({
+              where: { id: inv.bookings.property_id },
+              select: { bank_bin: true, bank_account_number: true, bank_account_name: true },
+            })
+          : null;
+        return { inv, prop, propertyId: inv.bookings?.property_id ?? null };
+      },
+      { readOnly: true },
+    );
+    if (!data) {
+      throw new AppException({ code: 'INVOICE_NOT_FOUND', title: 'Hoá đơn không tồn tại', status: 404 });
+    }
+    if (data.propertyId) await this.permissionService.authorizeOnProperty(user, data.propertyId, 'invoice.read');
+
+    const balance = Number(data.inv.total_vnd) - Number(data.inv.paid_vnd);
+    if (balance <= 0) {
+      throw new AppException({ code: 'INVOICE_NO_BALANCE', title: 'Hoá đơn không còn số dư phải trả', status: 422 });
+    }
+    if (!data.prop?.bank_bin || !data.prop.bank_account_number) {
+      throw new AppException({
+        code: 'BANK_ACCOUNT_NOT_CONFIGURED',
+        title: 'Cơ sở chưa cấu hình tài khoản nhận tiền (VietQR)',
+        status: 422,
+      });
+    }
+    return {
+      amount: balance,
+      addInfo: data.inv.bookings?.booking_code ?? data.inv.invoice_number,
+      bankBin: data.prop.bank_bin,
+      accountNumber: data.prop.bank_account_number,
+      accountName: data.prop.bank_account_name,
+    };
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
