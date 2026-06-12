@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { type BookingEventPayload, type InvoiceEventPayload } from '@pms/shared-types';
 import { Prisma } from '@prisma/client';
+import { OutboxService } from '@core/outbox/outbox.service';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { withTenant } from '@core/tenancy/with-tenant';
 import { AssetsService } from '@modules/assets/assets.service';
@@ -54,6 +56,7 @@ export class NightAuditService {
     private readonly assets: AssetsService,
     private readonly expenses: ExpensesService,
     private readonly billing: BillingService,
+    private readonly outbox: OutboxService,
   ) {}
 
   /** Quét toàn bộ tenant ACTIVE/TRIAL (cross-tenant platform job — ADR-0002 §5). */
@@ -111,7 +114,7 @@ export class NightAuditService {
   private async cancelDepositTimeouts(tx: Tx, tenantId: string, now: Date): Promise<number> {
     const expired = await tx.bookings.findMany({
       where: { status: 'PENDING', expires_at: { lt: now } },
-      select: { id: true },
+      select: { id: true, property_id: true },
     });
     for (const b of expired) {
       await tx.bookings.update({
@@ -134,6 +137,16 @@ export class NightAuditService {
           reason: 'DEPOSIT_TIMEOUT',
         },
       });
+      await this.outbox.publish(tx, {
+        event_type: 'booking.cancelled',
+        aggregate_type: 'booking',
+        aggregate_id: b.id,
+        payload: {
+          booking_id: b.id,
+          property_id: b.property_id,
+          reason: 'DEPOSIT_TIMEOUT',
+        } satisfies BookingEventPayload,
+      });
     }
     return expired.length;
   }
@@ -143,7 +156,7 @@ export class NightAuditService {
     // check_in trước 00:00 hôm nay (ngày nhận phòng đã trôi qua) mà vẫn CONFIRMED
     const noShows = await tx.bookings.findMany({
       where: { status: 'CONFIRMED', check_in: { lt: today } },
-      select: { id: true },
+      select: { id: true, property_id: true },
     });
     for (const b of noShows) {
       await tx.bookings.update({
@@ -161,21 +174,43 @@ export class NightAuditService {
           reason: 'NO_SHOW',
         },
       });
+      await this.outbox.publish(tx, {
+        event_type: 'booking.no_show',
+        aggregate_type: 'booking',
+        aggregate_id: b.id,
+        payload: { booking_id: b.id, property_id: b.property_id } satisfies BookingEventPayload,
+      });
     }
     return noShows.length;
   }
 
   // ── ③ Invoice ISSUED/PARTIALLY_PAID quá due_date còn nợ → OVERDUE ──────────
   private async markOverdueInvoices(tx: Tx, today: Date): Promise<number> {
-    const res = await tx.invoices.updateMany({
+    const overdue = await tx.invoices.findMany({
       where: {
         status: { in: ['ISSUED', 'PARTIALLY_PAID'] },
         due_date: { lt: today },
         balance_vnd: { gt: 0 },
       },
+      select: { id: true, booking_id: true, bookings: { select: { property_id: true } } },
+    });
+    if (overdue.length === 0) return 0;
+    await tx.invoices.updateMany({
+      where: { id: { in: overdue.map((i) => i.id) } },
       data: { status: 'OVERDUE' },
     });
-    return res.count;
+    for (const inv of overdue) {
+      const payload: InvoiceEventPayload = { invoice_id: inv.id };
+      if (inv.bookings?.property_id) payload.property_id = inv.bookings.property_id;
+      if (inv.booking_id) payload.booking_id = inv.booking_id;
+      await this.outbox.publish(tx, {
+        event_type: 'invoice.overdue',
+        aggregate_type: 'invoice',
+        aggregate_id: inv.id,
+        payload,
+      });
+    }
+    return overdue.length;
   }
 
   // ── ④ Rollup daily_property_stats cho NGÀY VỪA QUA (idempotent upsert) ──────

@@ -109,7 +109,8 @@ export class ReconciliationService {
       return false;
     });
     await this.markProcessed(provider, payload.event_id, tenantId);
-    // TODO(task 4.3): nếu matched → outbox.publish('payment.received') (SSE + notification)
+    // payment.received (task 4.3) emit TRONG applyPaymentInTx (đường ghi chung) → cả
+    // đối soát tự động lẫn manual record đều phát event; không emit lại ở đây.
     return { matched };
   }
 

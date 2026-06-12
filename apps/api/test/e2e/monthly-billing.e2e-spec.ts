@@ -139,6 +139,7 @@ describe('Monthly billing — thuê tháng (task 3.8)', () => {
   afterAll(async () => {
     if (admin) {
       const tid = `(SELECT id FROM tenants WHERE slug = '${tenantSlug}')`;
+      await admin.query(`DELETE FROM outbox_events WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM monthly_meter_readings WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM invoice_items WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM invoices WHERE tenant_id IN ${tid}`);

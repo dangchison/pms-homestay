@@ -2,11 +2,13 @@ import { Injectable } from '@nestjs/common';
 import {
   type CreateRoomBlockRequest,
   type JwtClaims,
+  type RoomBlockEventPayload,
   type RoomBlockResponse,
 } from '@pms/shared-types';
 import { type room_blocks } from '@prisma/client';
 import { PermissionService } from '@core/auth/permission.service';
 import { AppException } from '@core/http/exceptions/app.exception';
+import { OutboxService } from '@core/outbox/outbox.service';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { withTenant } from '@core/tenancy/with-tenant';
 import { OccupancyService } from '@modules/occupancy/occupancy.service';
@@ -33,6 +35,7 @@ export class RoomBlocksService {
     private readonly prisma: PrismaService,
     private readonly permissionService: PermissionService,
     private readonly occupancy: OccupancyService,
+    private readonly outbox: OutboxService,
   ) {}
 
   async create(dto: CreateRoomBlockRequest, user: JwtClaims): Promise<RoomBlockResponse> {
@@ -71,6 +74,16 @@ export class RoomBlocksService {
         startAt,
         endAt,
       });
+      await this.outbox.publish(tx, {
+        event_type: 'room.blocked',
+        aggregate_type: 'room',
+        aggregate_id: created.id,
+        payload: {
+          property_id: room.property_id,
+          room_id: dto.room_id,
+          block_id: created.id,
+        } satisfies RoomBlockEventPayload,
+      });
       return created;
     });
     return toBlockResponse(block);
@@ -105,6 +118,16 @@ export class RoomBlocksService {
       // Choke-point: xoá occupancy trước (FK cascade là backstop), rồi xoá block
       await this.occupancy.deleteForBlock(tx, id);
       await tx.room_blocks.delete({ where: { id } });
+      await this.outbox.publish(tx, {
+        event_type: 'room.unblocked',
+        aggregate_type: 'room',
+        aggregate_id: id,
+        payload: {
+          property_id: room.property_id,
+          room_id: block.room_id,
+          block_id: id,
+        } satisfies RoomBlockEventPayload,
+      });
     });
   }
 

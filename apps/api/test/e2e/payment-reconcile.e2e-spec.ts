@@ -135,6 +135,7 @@ describe('Payment reconciliation — Casso/SePay webhook (task 3.4)', () => {
   afterAll(async () => {
     if (admin) {
       const tid = `(SELECT id FROM tenants WHERE slug = '${tenantSlug}')`;
+      await admin.query(`DELETE FROM outbox_events WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM webhook_events_received WHERE event_id LIKE 'evt-${RUN}%'`);
       await admin.query(`DELETE FROM unmatched_payments WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM payment_attempts WHERE tenant_id IN ${tid}`);

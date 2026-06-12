@@ -71,3 +71,32 @@ export const RealtimeEventSchema = z.object({
   ts: z.iso.datetime(),
 });
 export type RealtimeEvent = z.infer<typeof RealtimeEventSchema>;
+
+/**
+ * Payload tối thiểu theo nhóm aggregate (docs/10 §2 — chỉ id để route/invalidate,
+ * KHÔNG nhét cả entity). `property_id` cần để filter SSE theo property (docs/10 §5)
+ * — optional cho payment/invoice ad-hoc (không gắn booking → chỉ OWNER thấy).
+ * Task 4.3 emit theo các shape này; FE map event_type → queryKey cần invalidate.
+ */
+// type (KHÔNG interface) → gán được vào Record<string, unknown> của OutboxPublishInput.payload.
+export type BookingEventPayload = {
+  booking_id: string;
+  property_id: string;
+  reason?: string;
+};
+export type PaymentEventPayload = {
+  payment_id: string;
+  invoice_id: string;
+  property_id?: string;
+  booking_id?: string;
+};
+export type InvoiceEventPayload = {
+  invoice_id: string;
+  property_id?: string;
+  booking_id?: string;
+};
+export type RoomBlockEventPayload = {
+  property_id: string;
+  room_id: string;
+  block_id: string;
+};

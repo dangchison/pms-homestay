@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { computeDeposit, roundVnd } from '@pms/pricing-engine';
 import {
   type CreateInvoiceRequest,
+  type InvoiceEventPayload,
   type InvoiceResponse,
   type JwtClaims,
   type QuoteLineItem,
@@ -12,6 +13,7 @@ import { Prisma, type invoice_items, type invoices } from '@prisma/client';
 import { PermissionService } from '@core/auth/permission.service';
 import { DocumentCounterService, periodOf } from '@core/counters/document-counter.service';
 import { AppException } from '@core/http/exceptions/app.exception';
+import { OutboxService } from '@core/outbox/outbox.service';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { withTenant } from '@core/tenancy/with-tenant';
 import { assertInvoiceTransition } from './invoice-status-machine';
@@ -76,7 +78,31 @@ export class InvoicesService {
     private readonly prisma: PrismaService,
     private readonly permissionService: PermissionService,
     private readonly counters: DocumentCounterService,
+    private readonly outbox: OutboxService,
   ) {}
+
+  /**
+   * Emit invoice.issued qua outbox CÙNG tx (task 4.3). Chỉ cho hành động phát hành
+   * TƯỜNG MINH (ad-hoc/issue endpoint); DEPOSIT/STAY auto-issue trong luồng booking
+   * đã được booking.created/checked_out cover (tránh emit trùng). property_id null
+   * (ad-hoc không gắn booking) → chỉ OWNER thấy qua SSE.
+   */
+  private emitInvoiceIssued(
+    tx: Tx,
+    invoiceId: string,
+    propertyId: string | null,
+    bookingId: string | null,
+  ): Promise<void> {
+    const payload: InvoiceEventPayload = { invoice_id: invoiceId };
+    if (propertyId) payload.property_id = propertyId;
+    if (bookingId) payload.booking_id = bookingId;
+    return this.outbox.publish(tx, {
+      event_type: 'invoice.issued',
+      aggregate_type: 'invoice',
+      aggregate_id: invoiceId,
+      payload,
+    });
+  }
 
   // ── Nội bộ: gọi TRONG tx có sẵn của BookingsService (không tự mở withTenant) ──
 
@@ -229,10 +255,12 @@ export class InvoicesService {
   /** POST /invoices — ad-hoc/ADJUSTMENT (docs/09 §4.4). issue=true → phát hành ngay. */
   async createAdHoc(dto: CreateInvoiceRequest, user: JwtClaims): Promise<InvoiceResponse> {
     let bookingId: string | null = null;
+    let propertyId: string | null = null;
     if (dto.booking_id) {
       const booking = await this.loadBooking(dto.booking_id, user);
       await this.permissionService.authorizeOnProperty(user, booking.property_id, 'invoice.create_adhoc');
       bookingId = booking.id;
+      propertyId = booking.property_id;
     }
     const created = await withTenant(this.prisma, user.tnt, async (tx) => {
       const number = await this.counters.nextCode(tx, user.tnt, 'INV', periodOf(new Date()));
@@ -268,6 +296,7 @@ export class InvoicesService {
           where: { id: inv.id },
           data: { status: 'ISSUED', issued_at: new Date(), version: { increment: 1 } },
         });
+        await this.emitInvoiceIssued(tx, inv.id, propertyId, bookingId);
       }
       return this.loadFull(tx, inv.id);
     });
@@ -423,6 +452,7 @@ export class InvoicesService {
       const data: Prisma.invoicesUpdateInput = { status: to, version: { increment: 1 } };
       mutate(data);
       await tx.invoices.update({ where: { id }, data });
+      if (to === 'ISSUED') await this.emitInvoiceIssued(tx, id, propertyId, invoice.booking_id);
       return this.loadFull(tx, id);
     });
     return toInvoiceResponse(updated.invoice, updated.items);

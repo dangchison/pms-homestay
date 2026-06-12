@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   type CreatePaymentRequest,
   type JwtClaims,
+  type PaymentEventPayload,
   type PaymentResponse,
   type RefundPaymentRequest,
 } from '@pms/shared-types';
@@ -10,6 +11,7 @@ import { Prisma, type invoices, type payments } from '@prisma/client';
 type Tx = Prisma.TransactionClient;
 import { PermissionService } from '@core/auth/permission.service';
 import { AppException } from '@core/http/exceptions/app.exception';
+import { OutboxService } from '@core/outbox/outbox.service';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { withTenant } from '@core/tenancy/with-tenant';
 import { BookingsService } from '@modules/bookings/bookings.service';
@@ -49,6 +51,7 @@ export class PaymentsService {
     private readonly permissionService: PermissionService,
     private readonly invoices: InvoicesService,
     private readonly bookings: BookingsService,
+    private readonly outbox: OutboxService,
   ) {}
 
   async record(
@@ -142,6 +145,14 @@ export class PaymentsService {
         data: { tenant_id: user.tnt, payment_id: paymentId, attempt_number: 0, status },
       });
       // trigger payments_recompute_invoice tự tính lại invoice.paid_vnd
+      const payload: PaymentEventPayload = { payment_id: paymentId, invoice_id: p.invoice_id };
+      if (propertyId) payload.property_id = propertyId;
+      await this.outbox.publish(tx, {
+        event_type: 'payment.refunded',
+        aggregate_type: 'payment',
+        aggregate_id: paymentId,
+        payload,
+      });
       return tx.payments.findFirstOrThrow({ where: { id: paymentId } });
     });
     // TODO(task 4.5): audit log refund (reason, actor)
@@ -187,11 +198,26 @@ export class PaymentsService {
     // trigger payments_recompute_invoice đã chạy → đọc lại invoice cho deposit→confirm
     const inv = await tx.invoices.findFirstOrThrow({
       where: { id: p.invoiceId },
-      select: { status: true, kind: true, booking_id: true },
+      select: {
+        status: true,
+        kind: true,
+        booking_id: true,
+        bookings: { select: { property_id: true } },
+      },
     });
     if (inv.status === 'PAID' && inv.kind === 'DEPOSIT' && inv.booking_id) {
       await this.bookings.confirmFromDepositPaid(tx, inv.booking_id, p.tenantId, p.receivedBy);
     }
+    // payment.received (docs/10 §2) — đường ghi chung cho manual record + đối soát 3.4
+    const payload: PaymentEventPayload = { payment_id: payment.id, invoice_id: p.invoiceId };
+    if (inv.bookings?.property_id) payload.property_id = inv.bookings.property_id;
+    if (inv.booking_id) payload.booking_id = inv.booking_id;
+    await this.outbox.publish(tx, {
+      event_type: 'payment.received',
+      aggregate_type: 'payment',
+      aggregate_id: payment.id,
+      payload,
+    });
     return payment;
   }
 

@@ -126,6 +126,7 @@ describe('Operational expenses + OTA commission (task 3.6)', () => {
   afterAll(async () => {
     if (admin) {
       const tid = `(SELECT id FROM tenants WHERE slug = '${tenantSlug}')`;
+      await admin.query(`DELETE FROM outbox_events WHERE tenant_id IN ${tid}`);
       // child trước (self-FK parent_expense_id), rồi toàn bộ chi phí
       await admin.query(`DELETE FROM operational_expenses WHERE tenant_id IN ${tid} AND parent_expense_id IS NOT NULL`);
       await admin.query(`DELETE FROM operational_expenses WHERE tenant_id IN ${tid}`);
