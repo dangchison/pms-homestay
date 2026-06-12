@@ -107,6 +107,7 @@
 
 | Commit | Nội dung |
 |---|---|
+| `3e17656` | Task 2.7 + 2.8 — HOLD expiry cron (hạ tầng BullMQ) + check-in/out/switch-resource (đóng EPIC 2) |
 | `50b23db` | Task 3.1 + 2.6 — document counters + booking core (`createBookingTx`) |
 | `ba40a3f` | Task 2.5 — guests CRUD + PII field encryption (ADR-0007) |
 | `4b61ae7` | EPIC 2 task 2.1–2.4 — property/room/resource + occupancy + pricing + quote |
