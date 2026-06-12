@@ -26,13 +26,11 @@ export default defineConfig({
     // cache/scheduler giữa các lần chạy (xem test/global-setup.ts).
     globalSetup: ['./test/global-setup.ts'],
     pool: 'forks',
-    // Cap fork = nửa số core: chạy N app NestJS + Postgres/Redis/Mailpit (Docker)
-    // trên cùng máy mà bão hoà CPU gây transient IO (SMTP ECONNRESET, tx chậm) —
-    // flake e2e không do logic. Giảm oversubscribe → ổn định; wall-time tăng nhẹ.
-    poolOptions: { forks: { maxForks: 4, minForks: 1 } },
-    // Retry transient IO dưới tải (ECONNRESET/timeout). Bug LOGIC fail tất định
-    // mọi lần retry nên KHÔNG bị che; chỉ lỗi môi trường thoáng qua được hấp thụ.
-    retry: 2,
+    // Cap fork thấp: chạy N app NestJS + Postgres/Redis/Mailpit (Docker) trên cùng
+    // máy → bão hoà CPU gây transient IO (SMTP ECONNRESET, tx chậm). maxForks=2 giữ
+    // contention thấp → transient hiếm. KHÔNG dùng `retry`: nhiều e2e tạo occupancy,
+    // retry sẽ đặt lại CÙNG ngày → 409 đụng chính booking lần trước (hồi nhiễm state).
+    poolOptions: { forks: { maxForks: 2, minForks: 1 } },
     testTimeout: 30_000,
     hookTimeout: 30_000,
   },
