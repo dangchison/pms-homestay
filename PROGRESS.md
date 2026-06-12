@@ -44,8 +44,8 @@
 |:--:|:--:|---|:--:|
 | **1** | 1–2 | Nền tảng + multi-tenant isolation | ✅ **Xong** |
 | **2** | 3–4 | Property / Room / Resource + Pricing | 🟡 **BE xong** (2.1–2.5 ✅; 6.1 FE còn lại) |
-| **3** | 5–6 | Booking core + Calendar | 🟡 **Đang làm** (BE 2.6+2.7+2.8 + 3.1 ✅ — EPIC 2 đóng; còn FE 6.2/6.3) |
-| 4 | 7–8 | Finance + Realtime + Audit | ⬜ |
+| **3** | 5–6 | Booking core + Calendar | 🟡 **BE xong** (2.6–2.8 + 3.1 ✅ — EPIC 2 đóng); còn FE calendar 6.2/6.3 |
+| **4** | 7–8 | Finance + Realtime + Audit | 🟡 **Đang làm** (Finance 3.2–3.4 ✅; còn 3.5–3.8 + Realtime 4.2/4.3 + Audit 4.5) |
 | 5 | 9–10 | Operations + Channel sync + Staff PWA + SaaS billing | ⬜ |
 | 6 | 11–12 | Compliance VN + Production-ready | ⬜ |
 
@@ -139,3 +139,5 @@ pnpm db:migrate && pnpm db:seed:required && pnpm db:seed:dev
 pnpm dev                                # api :3001 · web-admin :3000 · web-staff :3002
 ```
 Truy cập: **Dashboard** http://localhost:3000 · **Staff** http://localhost:3002 · **API** http://localhost:3001/health/liveness · **Mail** http://localhost:8025
+
+> **Env mới (xem `.env.example`):** `ENABLE_SCHEDULERS=true` bật cron/worker BullMQ (HOLD expiry, đối soát payment) — test ép `false`; `PAYMENT_WEBHOOK_SECRET` (≥16 ký tự) để nhận webhook Casso/SePay (thiếu → webhook trả 503). Migration mới nhất: `0012`.
