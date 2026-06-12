@@ -1,10 +1,11 @@
-import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
 import { type RealtimeEvent } from '@pms/shared-types';
 import type Redis from 'ioredis';
 import { Client as PgClient } from 'pg';
 import { ENV, type Env } from '@core/config/env.schema';
 import { REDIS } from '@core/redis/redis.module';
 import { mapWithConcurrency } from './concurrency';
+import { NOTIFICATION_SINK, type NotificationSink } from './notification-sink';
 import { type ClaimedOutboxEvent, OutboxService } from './outbox.service';
 
 const BATCH = 100;
@@ -41,6 +42,7 @@ export class OutboxDispatcher implements OnApplicationBootstrap, OnModuleDestroy
     private readonly outbox: OutboxService,
     @Inject(REDIS) private readonly redisPub: Redis,
     @Inject(ENV) private readonly env: Env,
+    @Optional() @Inject(NOTIFICATION_SINK) private readonly notificationSink?: NotificationSink,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -112,8 +114,9 @@ export class OutboxDispatcher implements OnApplicationBootstrap, OnModuleDestroy
       };
       // 1. Fan-out SSE qua Redis pub (kèm event_id → client dedup at-least-once).
       await this.redisPub.publish(tenantEventChannel(event.tenant_id), JSON.stringify(message));
-      // 2. TODO task 4.4: enqueue BullMQ queue `notifications` (email/sms/zns) Ở ĐÂY —
-      //    dispatcher KHÔNG gửi trực tiếp (docs/10 §7). Task 4.2 chỉ fan-out SSE.
+      // 2. Enqueue notification nặng (email/sms/zns/in_app) — dispatcher KHÔNG gửi
+      //    trực tiếp (docs/10 §7); NotificationsModule (task 4.4) provide sink, vắng → bỏ qua.
+      await this.notificationSink?.enqueue(event);
       await this.outbox.markProcessed(event.id);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
