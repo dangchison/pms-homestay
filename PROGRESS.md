@@ -109,6 +109,9 @@
 
 | Commit | Nội dung |
 |---|---|
+| `0da8ed7` | Task 3.2 — Invoices DEPOSIT/STAY/ADJUSTMENT + luồng cọc→confirm + cấn cọc |
+| `16503e5` | test(e2e): cap maxForks + retry transient IO — ổn định suite |
+| `661301e` | fix(auth): permission-cache vô hiệu hoá khi bump pv + cách ly Redis test (hết flake RBAC) |
 | `3e17656` | Task 2.7 + 2.8 — HOLD expiry cron (hạ tầng BullMQ) + check-in/out/switch-resource (đóng EPIC 2) |
 | `50b23db` | Task 3.1 + 2.6 — document counters + booking core (`createBookingTx`) |
 | `ba40a3f` | Task 2.5 — guests CRUD + PII field encryption (ADR-0007) |
