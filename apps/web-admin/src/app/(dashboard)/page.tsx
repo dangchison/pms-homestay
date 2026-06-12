@@ -103,7 +103,7 @@ const PERIODS = ['Hôm nay', 'Tuần', 'Tháng'];
 
 export default function DashboardPage() {
   return (
-    <div className="mx-auto grid max-w-6xl gap-6">
+    <div className="grid gap-6">
       <SectionHeader
         title={<span className="text-2xl">Tổng quan</span>}
         description={<span className="capitalize">{todayLabel()}</span>}
