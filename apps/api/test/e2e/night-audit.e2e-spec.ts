@@ -109,6 +109,7 @@ describe('Night-audit (task 4.6)', () => {
   afterAll(async () => {
     if (admin) {
       const tid = `(SELECT id FROM tenants WHERE slug = '${tenantSlug}')`;
+      await admin.query(`DELETE FROM outbox_events WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM daily_property_stats WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM invoice_items WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM invoices WHERE tenant_id IN ${tid}`);
@@ -194,6 +195,16 @@ describe('Night-audit (task 4.6)', () => {
 
     // ⑤ bước tháng (ngày 1 → chốt 2027-06): orchestrator đã gọi 3.5/3.6/3.8
     expect(summary.monthly?.period).toBe('2027-06');
+
+    // task 4.3: night-audit phát domain events TRONG cùng tx (cancelled/no_show/overdue)
+    const evRows = (
+      await admin.query(`SELECT event_type, payload FROM outbox_events WHERE tenant_id = $1`, [tenantId])
+    ).rows as { event_type: string; payload: Record<string, unknown> }[];
+    expect(
+      evRows.some((e) => e.event_type === 'booking.cancelled' && e.payload.booking_id === depositId && e.payload.reason === 'DEPOSIT_TIMEOUT'),
+    ).toBe(true);
+    expect(evRows.some((e) => e.event_type === 'booking.no_show' && e.payload.booking_id === noShowId)).toBe(true);
+    expect(evRows.some((e) => e.event_type === 'invoice.overdue' && e.payload.invoice_id === invoiceId)).toBe(true);
   });
 
   it('idempotent: chạy lại không double (timeout/no_show = 0, trạng thái giữ nguyên)', async () => {

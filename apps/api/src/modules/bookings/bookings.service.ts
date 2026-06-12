@@ -1,10 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import {
+  type BookingEventPayload,
   type BookingResponse,
   type BookingStatus,
   type CancelBookingRequest,
   type ConfirmBookingRequest,
   type CreateBookingRequest,
+  type EventType,
   type JwtClaims,
   type OffsetPageInfo,
   type SwitchResourceRequest,
@@ -14,6 +16,7 @@ import { Prisma, type bookings } from '@prisma/client';
 import { PermissionService } from '@core/auth/permission.service';
 import { DocumentCounterService, periodOf } from '@core/counters/document-counter.service';
 import { AppException } from '@core/http/exceptions/app.exception';
+import { OutboxService } from '@core/outbox/outbox.service';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { withTenant } from '@core/tenancy/with-tenant';
 import { OccupancyService } from '@modules/occupancy/occupancy.service';
@@ -68,7 +71,26 @@ export class BookingsService {
     private readonly counters: DocumentCounterService,
     private readonly invoices: InvoicesService,
     private readonly expenses: ExpensesService,
+    private readonly outbox: OutboxService,
   ) {}
+
+  /** Emit booking.* qua outbox CÙNG tx (docs/10 §3, task 4.3). property_id để filter SSE. */
+  private emitBooking(
+    tx: Prisma.TransactionClient,
+    eventType: Extract<EventType, `booking.${string}`>,
+    bookingId: string,
+    propertyId: string,
+    reason?: string,
+  ): Promise<void> {
+    const payload: BookingEventPayload = { booking_id: bookingId, property_id: propertyId };
+    if (reason) payload.reason = reason;
+    return this.outbox.publish(tx, {
+      event_type: eventType,
+      aggregate_type: 'booking',
+      aggregate_id: bookingId,
+      payload,
+    });
+  }
 
   /**
    * ★ createBookingTx — ĐƯỜNG GHI DUY NHẤT (docs/06 §3): advisory lock sorted
@@ -162,7 +184,7 @@ export class BookingsService {
 
       // Vào thẳng PENDING (không HOLD) → issue DEPOSIT invoice ngay (docs/09 §3)
       if (status === 'PENDING') await this.invoices.issueDepositForBooking(tx, booking);
-      // TODO(task 4.3): outbox.publish(tx, 'booking.created', booking)
+      await this.emitBooking(tx, 'booking.created', booking.id, booking.property_id);
       return booking;
     });
 
@@ -304,6 +326,7 @@ export class BookingsService {
           reason: dto.reason,
         },
       });
+      await this.emitBooking(tx, 'booking.cancelled', id, booking.property_id, dto.reason);
       return row;
     });
     return toBookingResponse(updated);
@@ -358,7 +381,10 @@ export class BookingsService {
       });
       // HOLD → PENDING: issue DEPOSIT invoice (docs/09 §3) — khách thanh toán để CONFIRMED
       if (target === 'PENDING') await this.invoices.issueDepositForBooking(tx, booking);
-      // TODO(task 4.3): outbox.publish(tx, 'booking.confirmed', booking)
+      // Chỉ emit khi thực sự CONFIRMED (force); HOLD→PENDING chưa phải confirmed
+      if (target === 'CONFIRMED') {
+        await this.emitBooking(tx, 'booking.confirmed', id, booking.property_id);
+      }
       return tx.bookings.findFirstOrThrow({ where: { id } });
     });
     return toBookingResponse(updated);
@@ -390,6 +416,11 @@ export class BookingsService {
           reason: 'Cọc đã thanh toán',
         },
       });
+      const b = await tx.bookings.findFirstOrThrow({
+        where: { id: bookingId },
+        select: { property_id: true },
+      });
+      await this.emitBooking(tx, 'booking.confirmed', bookingId, b.property_id);
     }
   }
 
@@ -420,6 +451,7 @@ export class BookingsService {
           changed_by: user.sub,
         },
       });
+      await this.emitBooking(tx, 'booking.checked_in', id, booking.property_id);
       return tx.bookings.findFirstOrThrow({ where: { id } });
     });
     return toBookingResponse(updated);
@@ -463,6 +495,7 @@ export class BookingsService {
       await this.invoices.issueStayForBooking(tx, booking);
       // Auto-sinh hoa hồng OTA (docs/09 §6, task 3.6) — idempotent qua partial unique
       await this.expenses.createOtaCommissionForBooking(tx, booking);
+      await this.emitBooking(tx, 'booking.checked_out', id, booking.property_id);
       return tx.bookings.findFirstOrThrow({ where: { id } });
     });
     return toBookingResponse(updated);
@@ -562,6 +595,7 @@ export class BookingsService {
           reason: `Đổi resource ${booking.resource_id} → ${newResource.id}: ${dto.reason}`,
         },
       });
+      await this.emitBooking(tx, 'booking.resource_switched', id, booking.property_id);
       // TODO(task 4.1): tạo cleaning task cho phòng cũ (oldMembers)
       return tx.bookings.findFirstOrThrow({ where: { id } });
     });
@@ -596,7 +630,7 @@ export class BookingsService {
     return withTenant(this.prisma, tenantId, async (tx) => {
       const expired = await tx.bookings.findMany({
         where: { status: 'HOLD', expires_at: { lt: new Date() } },
-        select: { id: true },
+        select: { id: true, property_id: true },
         take: HOLD_SWEEP_BATCH,
       });
       for (const b of expired) {
@@ -620,6 +654,7 @@ export class BookingsService {
             reason: 'HOLD_EXPIRED',
           },
         });
+        await this.emitBooking(tx, 'booking.cancelled', b.id, b.property_id, 'HOLD_EXPIRED');
       }
       return expired.length;
     });

@@ -61,6 +61,7 @@ describe('Properties / Rooms / Resources / Blocks (task 2.1)', () => {
   afterAll(async () => {
     if (admin) {
       const tid = `(SELECT id FROM tenants WHERE slug = '${tenantSlug}')`;
+      await admin.query(`DELETE FROM outbox_events WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM room_occupancy WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM room_blocks WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM resource_members WHERE tenant_id IN ${tid}`);
