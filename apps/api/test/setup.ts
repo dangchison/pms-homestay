@@ -21,3 +21,6 @@ process.env.S3_BUCKET ??= 'pms-test';
 process.env.S3_ACCESS_KEY ??= 'test';
 process.env.S3_SECRET_KEY ??= 'test';
 process.env.OTEL_ENABLED ??= 'false';
+// Tắt cron/worker BullMQ trong test (ÉP CỨNG — kể cả .env bật): worker không
+// poll Redis, không chạy nền đua với test. Test gọi sweepExpiredHolds() trực tiếp.
+process.env.ENABLE_SCHEDULERS = 'false';

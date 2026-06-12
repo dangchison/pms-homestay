@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import {
   type BookingResponse,
+  type BookingStatus,
   type CancelBookingRequest,
+  type ConfirmBookingRequest,
   type CreateBookingRequest,
   type JwtClaims,
   type OffsetPageInfo,
+  type SwitchResourceRequest,
   type UpdateBookingRequest,
 } from '@pms/shared-types';
 import { Prisma, type bookings } from '@prisma/client';
@@ -19,6 +22,9 @@ import { offsetToSkipTake } from '@/shared/dto';
 import { assertTransition, isTerminal } from './booking-status-machine';
 
 const HOLD_TTL_MS = 10 * 60 * 1000; // docs/06 §4
+const DEPOSIT_DEADLINE_HOURS = 24; // hạn cọc PENDING (docs/06 §4) — per-tenant config: task 4.7
+/** Trần số HOLD huỷ mỗi tenant mỗi lượt quét — chống tx dài; backlog dọn ở lượt sau. */
+const HOLD_SWEEP_BATCH = 500;
 
 function toBookingResponse(b: bookings): BookingResponse {
   return {
@@ -294,6 +300,288 @@ export class BookingsService {
       return row;
     });
     return toBookingResponse(updated);
+  }
+
+  /**
+   * Xác nhận booking (docs/06 §4, task 2.7). Mặc định HOLD → PENDING + đặt hạn
+   * cọc (`expires_at = now + 24h`; night-audit 4.6 dọn PENDING quá hạn). `force`
+   * (CHỈ OWNER) → CONFIRMED luôn, bỏ qua bước cọc — dùng khi nhận tiền ngoài luồng.
+   *
+   * TODO(task 3.2): PENDING → phát hành DEPOSIT invoice theo deposit_type/value;
+   * deposit_type=NONE → auto CONFIRMED ngay.
+   */
+  async confirm(id: string, dto: ConfirmBookingRequest, user: JwtClaims): Promise<BookingResponse> {
+    const booking = await this.loadOrThrow(id, user);
+    await this.permissionService.authorizeOnProperty(user, booking.property_id, 'booking.update');
+
+    if (dto.force && user.rol !== 'OWNER') {
+      throw new AppException({
+        code: 'FORBIDDEN',
+        title: 'Chỉ OWNER được xác nhận thẳng (force) — bỏ qua bước cọc',
+        status: 403,
+      });
+    }
+
+    const target: BookingStatus = dto.force ? 'CONFIRMED' : 'PENDING';
+    assertTransition(booking.status, target); // HOLD→PENDING|CONFIRMED, PENDING→CONFIRMED; else 422
+    const expiresAt =
+      target === 'PENDING' ? new Date(Date.now() + DEPOSIT_DEADLINE_HOURS * 3_600_000) : null;
+
+    const updated = await withTenant(this.prisma, user.tnt, async (tx) => {
+      // điều kiện theo status hiện tại → tránh đua với cron expiry (HOLD vừa bị huỷ)
+      const result = await tx.bookings.updateMany({
+        where: { id, status: booking.status },
+        data: { status: target, expires_at: expiresAt, version: { increment: 1 } },
+      });
+      if (result.count === 0) {
+        throw new AppException({
+          code: 'BOOKING_INVALID_STATUS',
+          title: 'Booking đã đổi trạng thái — tải lại rồi thử lại',
+          status: 409,
+        });
+      }
+      await tx.booking_status_history.create({
+        data: {
+          tenant_id: user.tnt,
+          booking_id: id,
+          from_status: booking.status,
+          to_status: target,
+          changed_by: user.sub,
+        },
+      });
+      // TODO(task 4.3): outbox.publish(tx, 'booking.confirmed', booking)
+      return tx.bookings.findFirstOrThrow({ where: { id } });
+    });
+    return toBookingResponse(updated);
+  }
+
+  /** Check-in (docs/06, task 2.8) — chỉ CONFIRMED → CHECKED_IN, ghi actual_check_in. */
+  async checkIn(id: string, user: JwtClaims): Promise<BookingResponse> {
+    const booking = await this.loadOrThrow(id, user);
+    await this.permissionService.authorizeOnProperty(user, booking.property_id, 'booking.checkin_out');
+    assertTransition(booking.status, 'CHECKED_IN'); // chỉ CONFIRMED hợp lệ; else 422
+
+    const updated = await withTenant(this.prisma, user.tnt, async (tx) => {
+      const result = await tx.bookings.updateMany({
+        where: { id, status: 'CONFIRMED' },
+        data: { status: 'CHECKED_IN', actual_check_in: new Date(), version: { increment: 1 } },
+      });
+      if (result.count === 0) {
+        throw new AppException({
+          code: 'BOOKING_INVALID_STATUS',
+          title: 'Booking đã đổi trạng thái — tải lại rồi thử lại',
+          status: 409,
+        });
+      }
+      await tx.booking_status_history.create({
+        data: {
+          tenant_id: user.tnt,
+          booking_id: id,
+          from_status: 'CONFIRMED',
+          to_status: 'CHECKED_IN',
+          changed_by: user.sub,
+        },
+      });
+      return tx.bookings.findFirstOrThrow({ where: { id } });
+    });
+    return toBookingResponse(updated);
+  }
+
+  /**
+   * Check-out (docs/06, task 2.8) — CHECKED_IN → CHECKED_OUT, ghi actual_check_out
+   * + **xoá occupancy** (giải phóng phòng) CÙNG tx.
+   *
+   * TODO(task 3.2): finalize STAY invoice (items từ quote snapshot + phụ thu +
+   * DEPOSIT_APPLIED). TODO(task 4.1): sinh cleaning task. Stub event tới khi có.
+   */
+  async checkOut(id: string, user: JwtClaims): Promise<BookingResponse> {
+    const booking = await this.loadOrThrow(id, user);
+    await this.permissionService.authorizeOnProperty(user, booking.property_id, 'booking.checkin_out');
+    assertTransition(booking.status, 'CHECKED_OUT'); // chỉ CHECKED_IN hợp lệ; else 422
+
+    const updated = await withTenant(this.prisma, user.tnt, async (tx) => {
+      const result = await tx.bookings.updateMany({
+        where: { id, status: 'CHECKED_IN' },
+        data: { status: 'CHECKED_OUT', actual_check_out: new Date(), version: { increment: 1 } },
+      });
+      if (result.count === 0) {
+        throw new AppException({
+          code: 'BOOKING_INVALID_STATUS',
+          title: 'Booking đã đổi trạng thái — tải lại rồi thử lại',
+          status: 409,
+        });
+      }
+      await this.occupancy.deleteForBooking(tx, id);
+      await tx.booking_status_history.create({
+        data: {
+          tenant_id: user.tnt,
+          booking_id: id,
+          from_status: 'CHECKED_IN',
+          to_status: 'CHECKED_OUT',
+          changed_by: user.sub,
+        },
+      });
+      // TODO(task 3.2): outbox.publish(tx, 'booking.checked_out', booking) → finalize STAY invoice
+      return tx.bookings.findFirstOrThrow({ where: { id } });
+    });
+    return toBookingResponse(updated);
+  }
+
+  /**
+   * Đổi resource (docs/06 §6, task 2.8) — occupancy delete (cũ) + reinsert (mới)
+   * trong MỘT tx; EXCLUDE chặn nếu phòng mới bận (→ 409). Resource mới phải cùng
+   * property. Lock union phòng cũ∪mới (sorted) chống deadlock. Không đổi status.
+   *
+   * TODO(task 4.1): sinh cleaning task cho phòng cũ. TODO(task 4.5): audit log.
+   */
+  async switchResource(
+    id: string,
+    dto: SwitchResourceRequest,
+    user: JwtClaims,
+  ): Promise<BookingResponse> {
+    const booking = await this.loadOrThrow(id, user);
+    await this.permissionService.authorizeOnProperty(
+      user,
+      booking.property_id,
+      'booking.switch_resource',
+    );
+    if (isTerminal(booking.status)) {
+      throw new AppException({
+        code: 'BOOKING_INVALID_STATUS',
+        title: `Booking ${booking.status} không thể đổi phòng`,
+        status: 422,
+      });
+    }
+    if (dto.new_resource_id === booking.resource_id) {
+      throw new AppException({
+        code: 'BOOKING_SAME_RESOURCE',
+        title: 'Resource mới trùng resource hiện tại',
+        status: 422,
+      });
+    }
+    const newResource = await this.loadResource(dto.new_resource_id, user);
+    if (newResource.property_id !== booking.property_id) {
+      throw new AppException({
+        code: 'RESOURCE_PROPERTY_MISMATCH',
+        title: 'Resource mới phải cùng cơ sở với booking',
+        status: 422,
+      });
+    }
+
+    const updated = await withTenant(this.prisma, user.tnt, async (tx) => {
+      const oldMembers = await this.occupancy.memberRooms(tx, booking.resource_id);
+      const newMembers = await this.occupancy.memberRooms(tx, newResource.id);
+      if (newMembers.length === 0) {
+        throw new AppException({
+          code: 'RESOURCE_NO_ROOMS',
+          title: 'Resource mới chưa có phòng thành viên',
+          status: 422,
+        });
+      }
+      // lock union phòng cũ ∪ mới (sorted) — serialize với request đụng cùng phòng
+      const lockIds = [...new Set([...oldMembers, ...newMembers].map((m) => m.room_id))];
+      await this.occupancy.lockRooms(tx, lockIds);
+
+      // nhả occupancy cũ TRƯỚC → pre-check phòng mới không tự đụng chính booking này
+      await this.occupancy.deleteForBooking(tx, id);
+      const conflicts = await this.occupancy.findOverlaps(
+        tx,
+        newMembers.map((m) => m.room_id),
+        booking.check_in,
+        booking.check_out,
+      );
+      if (conflicts.length > 0) {
+        throw new AppException({
+          code: 'BOOKING_OVERLAP',
+          title: 'Phòng mới đã có khách đặt/chặn trong khoảng này',
+          status: 409,
+          detail: `${conflicts.length} khoảng chồng lấn`,
+        });
+      }
+      // EXCLUDE là chốt chặn cuối (23P01 → 409 nếu race vượt pre-check)
+      await this.occupancy.insertForBooking(tx, {
+        tenantId: user.tnt,
+        bookingId: id,
+        members: newMembers,
+        checkIn: booking.check_in,
+        checkOut: booking.check_out,
+      });
+      await tx.bookings.update({
+        where: { id },
+        data: { resource_id: newResource.id, version: { increment: 1 } },
+      });
+      // status không đổi — ghi dấu vết đổi phòng vào history (audit_logs nối ở 4.5)
+      await tx.booking_status_history.create({
+        data: {
+          tenant_id: user.tnt,
+          booking_id: id,
+          from_status: booking.status,
+          to_status: booking.status,
+          changed_by: user.sub,
+          reason: `Đổi resource ${booking.resource_id} → ${newResource.id}: ${dto.reason}`,
+        },
+      });
+      // TODO(task 4.1): tạo cleaning task cho phòng cũ (oldMembers)
+      return tx.bookings.findFirstOrThrow({ where: { id } });
+    });
+    return toBookingResponse(updated);
+  }
+
+  /**
+   * ★ Cron HOLD expiry (docs/06 §4) — gọi mỗi phút từ hold-expiry.cron.ts.
+   * Lặp per-tenant qua `withTenant` (RLS set per-job — ADR-0002 §5; KHÔNG dùng
+   * connection BYPASSRLS). Bảng `tenants` không có RLS nên query trần hợp lệ —
+   * đây đúng là job cross-tenant của platform mà ADR-0002 §5 dự liệu.
+   * Trả tổng số HOLD đã huỷ trong lượt.
+   */
+  async sweepExpiredHolds(): Promise<number> {
+    // Liệt kê tenant cho job cross-tenant của platform: `tenants` KHÔNG có RLS nên
+    // không bọc withTenant được (không có 1 tenantId để set GUC). Đây đúng là ngoại
+    // lệ ADR-0002 §5 — guard rule chỉ nhắm bảng tenant-scoped trong modules/.
+    // eslint-disable-next-line no-restricted-syntax -- platform cross-tenant, bảng non-RLS (ADR-0002 §5)
+    const tenants = await this.prisma.tenants.findMany({
+      where: { status: { in: ['TRIAL', 'ACTIVE'] } },
+      select: { id: true },
+    });
+    let total = 0;
+    for (const t of tenants) {
+      total += await this.expireHoldsForTenant(t.id);
+    }
+    return total;
+  }
+
+  /** Huỷ mọi HOLD quá hạn của 1 tenant + xoá occupancy CÙNG tx (docs/06 §4). */
+  private async expireHoldsForTenant(tenantId: string): Promise<number> {
+    return withTenant(this.prisma, tenantId, async (tx) => {
+      const expired = await tx.bookings.findMany({
+        where: { status: 'HOLD', expires_at: { lt: new Date() } },
+        select: { id: true },
+        take: HOLD_SWEEP_BATCH,
+      });
+      for (const b of expired) {
+        await tx.bookings.update({
+          where: { id: b.id },
+          data: {
+            status: 'CANCELLED',
+            cancellation_reason: 'HOLD_EXPIRED',
+            cancelled_at: new Date(),
+            version: { increment: 1 },
+          },
+        });
+        await this.occupancy.deleteForBooking(tx, b.id);
+        await tx.booking_status_history.create({
+          data: {
+            tenant_id: tenantId,
+            booking_id: b.id,
+            from_status: 'HOLD',
+            to_status: 'CANCELLED',
+            changed_by: null, // hệ thống (cron)
+            reason: 'HOLD_EXPIRED',
+          },
+        });
+      }
+      return expired.length;
+    });
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────

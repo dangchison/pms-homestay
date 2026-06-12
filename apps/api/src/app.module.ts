@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { AuthCoreModule } from '@core/auth/auth-core.module';
 import { JwtAuthGuard } from '@core/auth/jwt-auth.guard';
 import { PermissionsGuard } from '@core/auth/permissions.guard';
+import { BullmqModule } from '@core/bullmq/bullmq.module';
 import { AppConfigModule } from '@core/config/config.module';
 import { type Env } from '@core/config/env.schema';
 import { CountersModule } from '@core/counters/counters.module';
@@ -38,6 +39,7 @@ export class AppModule implements NestModule {
         RedisModule,
         CryptoModule,
         CountersModule,
+        BullmqModule,
         AuthCoreModule,
         AuthPublicModule,
         HealthModule,
