@@ -7,3 +7,4 @@
  */
 export const QUEUE_HOLD_EXPIRY = 'hold-expiry';
 export const QUEUE_PAYMENT_RECONCILE = 'payment-reconcile';
+export const QUEUE_NIGHT_AUDIT = 'night-audit';

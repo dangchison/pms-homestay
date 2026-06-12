@@ -11,11 +11,11 @@
 
 | Chỉ số | Trạng thái |
 |---|---|
-| **Sprint hoàn thành** | **1 / 6** · **EPIC 2 BE xong 8/8** · EPIC 3 🟡 (7/8 — còn 3.7) |
-| **Task backend xong** | **23 / 50** (EPIC 1 + task 2.1–2.8 + 3.1–3.6 + 3.8) · ~46% |
+| **Sprint hoàn thành** | **1 / 6** · **EPIC 2 BE xong 8/8** · EPIC 3 🟡 (7/8) · EPIC 4 🟡 (4.6 ✅) |
+| **Task backend xong** | **24 / 50** (EPIC 1 + task 2.1–2.8 + 3.1–3.6 + 3.8 + 4.6) · ~48% |
 | **Nền tảng FE** | 🟡 scaffold + design system xong; chưa nối API |
-| **Chạy được gì** | API (auth, property/room/resource/block + rate-plan/rule + guests + `POST /pricing/quote` + **booking đầy đủ vòng đời** + **hoá đơn cọc/STAY** + **thanh toán** (trigger `paid_vnd` + cọc đủ→CONFIRMED + hoàn tiền + VietQR PNG) + **đối soát webhook Casso/SePay** (HMAC + dedup + tự khớp mã/số tiền → auto-confirm; còn lại → unmatched cho đối soát tay)) + **tài sản & khấu hao** (CRUD + khấu hao đường thẳng: plug tháng cuối/pro-rate/thanh lý) + **chi phí vận hành** (CRUD + định kỳ + auto hoa hồng OTA khi check-out) + **billing thuê tháng** (chỉ số điện nước + invoice MONTHLY_RENT pro-rate /30), pricing-engine, 2 web app (UI), DB + migrations + seed, CI |
-| **Chất lượng** | 121/121 test API + **21 pricing-engine** xanh · lint/typecheck/build xanh · e2e ổn định (Redis db test riêng + cap fork; transient môi trường hiếm) · 3 theme |
+| **Chạy được gì** | API (auth, property/room/resource/block + rate-plan/rule + guests + `POST /pricing/quote` + **booking đầy đủ vòng đời** + **hoá đơn cọc/STAY** + **thanh toán** (trigger `paid_vnd` + cọc đủ→CONFIRMED + hoàn tiền + VietQR PNG) + **đối soát webhook Casso/SePay** (HMAC + dedup + tự khớp mã/số tiền → auto-confirm; còn lại → unmatched cho đối soát tay)) + **tài sản & khấu hao** (CRUD + khấu hao đường thẳng: plug tháng cuối/pro-rate/thanh lý) + **chi phí vận hành** (CRUD + định kỳ + auto hoa hồng OTA khi check-out) + **billing thuê tháng** (chỉ số điện nước + invoice MONTHLY_RENT pro-rate /30) + **night-audit** (cron đêm: deposit-timeout/no-show/OVERDUE/rollup + chốt tháng), pricing-engine, 2 web app (UI), DB + migrations + seed, CI |
+| **Chất lượng** | 123/123 test API + **21 pricing-engine** xanh · lint/typecheck/build xanh · e2e ổn định (Redis db test riêng + cap fork; transient môi trường hiếm) · 3 theme |
 
 ### Demo được gì hôm nay
 - **Backend auth thật chạy:** đăng ký tenant + OWNER (trial 14 ngày), đăng nhập Argon2id + khoá tài khoản, refresh rotation + grace, 2FA TOTP, quên/đặt lại mật khẩu, RBAC theo role + property — qua `http://localhost:3001/api/v1/auth/*`.
@@ -34,6 +34,7 @@
 - **Tài sản & khấu hao (task 3.5) chạy thật:** CRUD tài sản cố định (nguyên giá, số tháng, giá trị còn lại, gắn cơ sở/phòng, `room_id` NULL = khu vực chung), **thanh lý giữa kỳ** (disposal_date/value → dừng sinh kỳ sau). **Khấu hao đường thẳng** theo kỳ tháng (`runMonthlyDepreciation` — night-audit 4.6 sẽ gọi per tenant): **chống N+1** (1 query luỹ kế GROUP BY), **pro-rate tháng đầu** theo số ngày sở hữu, **THÁNG CUỐI = plug số dư** (accumulated == nguyên giá − residual, triệt tiêu lệch làm tròn), `createMany skipDuplicates` → chạy lại cùng kỳ không sinh đôi. Property-scoped RBAC `asset.crud` (pha-2 authorizeOnProperty). Đã verify e2e 5 ca.
 - **Chi phí vận hành + hoa hồng OTA (task 3.6) chạy thật:** migration `0014` `operational_expenses` (14 loại chi phí; định kỳ MONTHLY/QUARTERLY/YEARLY qua template `parent_expense_id`; partial unique OTA). CRUD property-scoped (`expense.crud`, cấm nhập tay OTA_COMMISSION); **booking CHECKED_OUT → auto-sinh `OTA_COMMISSION`** từ `bookings.commission_vnd` (idempotent partial unique, gọi TRONG tx check-out ở `bookings.service`); `generateRecurringExpenses(tenant,year,month)` sinh chi phí định kỳ kỳ sau (idempotent, night-audit 4.6 gọi). P&L đọc hoa hồng DUY NHẤT từ expenses (docs/09 §6 — không double-count). Đã verify e2e 4 ca.
 - **Billing thuê tháng (task 3.8) chạy thật:** migration `0015` `monthly_meter_readings` (chỉ số điện/nước start/end). Ghi chỉ số (`POST /meter-readings`, upsert theo booking+kỳ, quyền `booking.update`); `runMonthlyBilling(tenant,year,month)` (night-audit 4.6 gọi ngày 1): mỗi booking **MONTHLY** đang CHECKED_IN → invoice `MONTHLY_RENT` — **tiền nhà full tháng hoặc pro-rate /30** (tháng đầu/cuối) + **điện nước** = (end−start) × đơn giá plan; **thiếu chỉ số → DRAFT** (chờ ghi + notification 4.4); idempotent theo (booking, billing_period). Đã verify e2e 4 ca (16/01→16/04 = 4.8M/9M/9M/4.5M; điện nước; DRAFT; upsert).
+- **Night-audit (task 4.6) chạy thật:** cron đêm BullMQ (queue `night-audit`, 02:00) quét per-tenant (`NightAuditService.runForTenant`): **PENDING quá hạn cọc → CANCELLED(DEPOSIT_TIMEOUT)** + giải phóng phòng · **CONFIRMED quá ngày nhận → NO_SHOW** · **invoice quá `due_date` còn nợ → OVERDUE** · **rollup `daily_property_stats`** (migration `0016`: occupied/available room-nights + doanh thu phòng phân bổ /đêm + ADR/RevPAR — nguồn cho P&L 3.7) · **ngày 1 gọi `runMonthlyDepreciation` (3.5) + `generateRecurringExpenses` (3.6) + `runMonthlyBilling` (3.8)** · purge quote hết hạn >7 ngày. Idempotent (chạy lại không double). Đã verify e2e 2 ca (full + idempotent). _(Forfeit cọc NO_SHOW + retention matrix đầy đủ → TODO.)_
 - **Giao diện:** `web-admin` (http://localhost:3000) — Dashboard (Modern Hospitality, KPI + sparkline), login/register/forgot/reset, sidebar/topbar, các trang placeholder; `web-staff` PWA (http://localhost:3002) — today/rooms/cleaning/profile/login. Hệ **design token 2 tầng + 3 theme** (light/dark/warm) đổi ổn định.
 - **Hạ tầng dev:** Docker (PG16 + Redis7 + Mailpit), migration SQL-first + Prisma introspect, seed; CI GitHub Actions.
 
@@ -85,8 +86,9 @@
 - ✅ **3.8** Monthly billing (thuê tháng) — migration `0015` `monthly_meter_readings` (UNIQUE booking+kỳ, composite FK, RLS). `BillingService`: ghi chỉ số điện/nước (upsert, `POST/GET /meter-readings`, `booking.update`) + `runMonthlyBilling(tenant,year,month)` (night-audit 4.6 gọi): booking MONTHLY CHECKED_IN → invoice `MONTHLY_RENT` tiền nhà full/pro-rate /30 + điện nước = (end−start)×đơn giá; thiếu chỉ số → DRAFT; idempotent theo (booking, billing_period); số INV qua DocumentCounterService. E2E 4 ca (pro-rate đầu/cuối/giữa; điện nước ISSUED; DRAFT; upsert chỉ số).
 - ⬜ 3.7 Reports P&L/break-even **(phụ thuộc 4.6 night-audit fill `daily_property_stats`)**
 
-### EPIC 4 — Operations ⬜ (0/7)
-- ⬜ 4.1 Cleaning · 4.2 Outbox v2 + SSE · 4.3 Emit events · 4.4 Notifications · 4.5 Audit log · 4.6 Night-audit · 4.7 Billing-lite SaaS
+### EPIC 4 — Operations 🟡 (1/7)
+- ✅ **4.6** Night-audit — migration `0016` `daily_property_stats` (PK tenant+property+ngày, RLS). Cron đêm per-tenant (queue `night-audit` 02:00, `ENABLE_SCHEDULERS`): ② PENDING quá hạn → CANCELLED(DEPOSIT_TIMEOUT)+occupancy · ① CONFIRMED quá ngày nhận → NO_SHOW+occupancy · ③ invoice quá `due_date` còn nợ → OVERDUE · ④ rollup `daily_property_stats` (occupied/available room-nights + doanh thu /đêm + ADR/RevPAR, raw SQL tstzrange) · ⑤ ngày 1 gọi 3.5/3.6/3.8 · ⑥ purge quote >7 ngày. Idempotent. E2E 2 ca. TODO: forfeit cọc NO_SHOW (ADJUSTMENT), retention matrix đầy đủ, per-property TZ.
+- ⬜ 4.1 Cleaning · 4.2 Outbox v2 + SSE · 4.3 Emit events · 4.4 Notifications · 4.5 Audit log · 4.7 Billing-lite SaaS
 
 ### EPIC 5 — Channel Sync ⬜ (0/3)
 - ⬜ 5.1 Channels + resource mappings · 5.2 iCal pull · 5.3 iCal push
@@ -108,8 +110,8 @@
 
 ## 4. Việc kế tiếp (đề xuất thứ tự)
 
-1. ✅ ~~Task 2.1–2.8, 3.1–3.6, 3.8~~ — **đã xong** (EPIC 2 + booking vòng đời + hoá đơn + thanh toán/VietQR + đối soát + tài sản/khấu hao + chi phí/hoa hồng OTA + billing thuê tháng).
-2. Khuyến nghị **EPIC 4.6 night-audit** kế tiếp — orchestrator gọi `runMonthlyDepreciation` (3.5) + `generateRecurringExpenses` (3.6) + `runMonthlyBilling` (3.8) ngày 1, + no-show/PENDING-expiry/OVERDUE + rollup `daily_property_stats` → **mở khoá 3.7 Reports** (task cuối EPIC 3). Cần nền 4.2 Outbox+SSE / 4.3 emit events trước cho realtime.
+1. ✅ ~~Task 2.1–2.8, 3.1–3.6, 3.8, 4.6~~ — **đã xong** (EPIC 2 + booking vòng đời + hoá đơn + thanh toán/VietQR + đối soát + tài sản/khấu hao + chi phí/hoa hồng OTA + billing thuê tháng + night-audit orchestrator).
+2. **3.7 Reports P&L/break-even** giờ đã **mở khoá** (4.6 đã fill `daily_property_stats`) — task cuối EPIC 3, đọc rollup + tính live hôm nay. Hoặc tiếp EPIC 4: **4.2 Outbox+SSE + 4.3 emit events** (nền realtime, nối TODO `payment.received`/`booking.*`) · 4.1 Cleaning · 4.5 Audit log · 4.4 Notifications · 4.7 Billing-lite SaaS.
 3. Song song FE: **Task 6.1** nối API thật cho `web-admin`; **6.2** calendar timeline; **6.3** booking form + quote (+ panel VietQR realtime 6.4 — đã có QR + webhook).
 
 ---
@@ -146,4 +148,4 @@ pnpm dev                                # api :3001 · web-admin :3000 · web-st
 ```
 Truy cập: **Dashboard** http://localhost:3000 · **Staff** http://localhost:3002 · **API** http://localhost:3001/health/liveness · **Mail** http://localhost:8025
 
-> **Env mới (xem `.env.example`):** `ENABLE_SCHEDULERS=true` bật cron/worker BullMQ (HOLD expiry, đối soát payment) — test ép `false`; `PAYMENT_WEBHOOK_SECRET` (≥16 ký tự) để nhận webhook Casso/SePay (thiếu → webhook trả 503). Migration mới nhất: `0015` (monthly_meter_readings).
+> **Env mới (xem `.env.example`):** `ENABLE_SCHEDULERS=true` bật cron/worker BullMQ (HOLD expiry, đối soát payment, **night-audit 02:00**) — test ép `false`; `PAYMENT_WEBHOOK_SECRET` (≥16 ký tự) để nhận webhook Casso/SePay (thiếu → webhook trả 503). Migration mới nhất: `0016` (daily_property_stats).

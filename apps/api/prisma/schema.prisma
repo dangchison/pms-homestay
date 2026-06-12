@@ -45,6 +45,7 @@ model tenants {
   bookable_resources     bookable_resources[]
   booking_status_history booking_status_history[]
   bookings               bookings[]
+  daily_property_stats   daily_property_stats[]
   depreciation_entries   depreciation_entries[]
   document_counters      document_counters[]
   guests                 guests[]
@@ -205,6 +206,7 @@ model properties {
   assets                      assets[]
   bookable_resources          bookable_resources[]
   bookings                    bookings[]
+  daily_property_stats        daily_property_stats[]
   operational_expenses        operational_expenses[]
   tenants                     tenants                @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   rate_plans                  rate_plans[]
@@ -772,6 +774,24 @@ model monthly_meter_readings {
 
   @@unique([booking_id, period_year, period_month])
   @@index([tenant_id, booking_id], map: "idx_meter_readings_booking")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model daily_property_stats {
+  tenant_id             String     @db.Uuid
+  property_id           String     @db.Uuid
+  stat_date             DateTime   @db.Date
+  available_room_nights Int        @default(0)
+  occupied_room_nights  Int        @default(0)
+  room_revenue_vnd      BigInt     @default(0)
+  other_revenue_vnd     BigInt     @default(0)
+  adr_vnd               BigInt?
+  revpar_vnd            BigInt?
+  computed_at           DateTime   @default(now()) @db.Timestamptz(6)
+  tenants               tenants    @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  properties            properties @relation(fields: [tenant_id, property_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([tenant_id, property_id, stat_date])
 }
 
 enum user_role {

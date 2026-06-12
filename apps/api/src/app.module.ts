@@ -21,6 +21,7 @@ import { ExpensesModule } from '@modules/expenses/expenses.module';
 import { GuestsModule } from '@modules/guests/guests.module';
 import { HealthModule } from '@modules/health/health.module';
 import { InvoicesModule } from '@modules/invoices/invoices.module';
+import { NightAuditModule } from '@modules/night-audit/night-audit.module';
 import { PaymentsModule } from '@modules/payments/payments.module';
 import { PricingModule } from '@modules/pricing/pricing.module';
 import { PropertiesModule } from '@modules/properties/properties.module';
@@ -60,6 +61,7 @@ export class AppModule implements NestModule {
         AssetsModule,
         ExpensesModule,
         BillingModule,
+        NightAuditModule,
       ],
       providers: [
         TenantResolverMiddleware,
