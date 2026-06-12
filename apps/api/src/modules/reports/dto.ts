@@ -1,0 +1,5 @@
+import { BreakEvenQuerySchema, PnlQuerySchema } from '@pms/shared-types';
+import { createZodDto } from '@core/http/pipes/zod-validation.pipe';
+
+export class PnlQueryDto extends createZodDto(PnlQuerySchema) {}
+export class BreakEvenQueryDto extends createZodDto(BreakEvenQuerySchema) {}

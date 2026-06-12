@@ -13,4 +13,5 @@ export * from './payment';
 export * from './asset';
 export * from './expense';
 export * from './billing';
+export * from './report';
 export * from './events';
