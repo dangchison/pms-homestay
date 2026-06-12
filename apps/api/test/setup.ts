@@ -12,6 +12,14 @@ if (existsSync(rootEnv)) {
 process.env.DATABASE_URL ??= 'postgresql://app_user:app_password@localhost:5432/pms';
 process.env.DATABASE_URL_MIGRATIONS ??= 'postgresql://postgres:postgres@localhost:5432/pms';
 process.env.REDIS_URL ??= 'redis://localhost:6379/0';
+// Ép test dùng Redis db RIÊNG (db 1) — tách hẳn db 0 của dev. Cách ly state dùng
+// chung (throttle IP, cache permission, BullMQ scheduler) khỏi dev + giữa các lần
+// chạy; global-setup.ts flush db này một lần trước mọi fork.
+{
+  const redisUrl = new URL(process.env.REDIS_URL);
+  redisUrl.pathname = '/1';
+  process.env.REDIS_URL = redisUrl.toString();
+}
 process.env.JWT_ACCESS_SECRET ??= 'test-access-secret-0123456789-0123456789';
 process.env.JWT_REFRESH_SECRET ??= 'test-refresh-secret-0123456789-012345678';
 process.env.PII_ENC_KEY_CURRENT ??= 'k1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';

@@ -22,6 +22,9 @@ export default defineConfig({
   test: {
     include: ['src/**/*.spec.ts', 'test/**/*.spec.ts', 'test/**/*.e2e-spec.ts'],
     setupFiles: ['./test/setup.ts'],
+    // Flush Redis db test (db 1) MỘT lần trước mọi fork — chống tích luỹ throttle/
+    // cache/scheduler giữa các lần chạy (xem test/global-setup.ts).
+    globalSetup: ['./test/global-setup.ts'],
     pool: 'forks',
     testTimeout: 30_000,
     hookTimeout: 30_000,

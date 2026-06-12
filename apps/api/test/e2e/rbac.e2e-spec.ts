@@ -213,9 +213,17 @@ describe('RBAC guard + permission cache (task 1.8)', () => {
     expect(res.body.error.code).toBe('AUTHZ_PROPERTY_SCOPE');
   });
 
-  it('bump pv (đổi quyền) → access token cũ bị từ chối NGAY (401 AUTH_TOKEN_STALE)', async () => {
+  it('bump pv (đổi quyền) → vô hiệu hoá cache permission NGAY + token cũ bị từ chối (401)', async () => {
     const permissionService = app.get(PermissionService);
+    const permKey = `perm:${staffUserId}:${propertyA}`;
+
+    // 1 request để chắc chắn cache permission-theo-property đã được nạp
+    await patchEntity(entityA, staffAccess);
+    expect(await redis.exists(permKey)).toBe(1);
+
     await permissionService.bumpPermissionVersion(staffUserId);
+    // bump vô hiệu hoá cache NGAY — không đợi TTL 60s (đóng cửa sổ stale)
+    expect(await redis.exists(permKey)).toBe(0);
 
     const res = await patchEntity(entityA, staffAccess);
     expect(res.status).toBe(401);
