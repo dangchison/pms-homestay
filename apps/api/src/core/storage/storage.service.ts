@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ENV, type Env } from '@core/config/env.schema';
 
@@ -43,5 +43,18 @@ export class StorageService {
     });
     const upload_url = await getSignedUrl(this.client, command, { expiresIn });
     return { key, upload_url, expires_in: expiresIn };
+  }
+
+  /**
+   * Tải object về buffer (server-side) — dùng khi BE cần chính bytes (vd gửi ảnh
+   * CCCD cho FPT.AI OCR, task 7.1). KHÁC presign: gọi mạng THẬT tới S3, nên chỉ
+   * dùng ngoài tx và không trong test (test bypass qua seam rawOcr).
+   */
+  async getObject(key: string): Promise<Buffer> {
+    const res = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    if (!res.Body) {
+      throw new Error(`StorageService.getObject: object rỗng tại key=${key}`);
+    }
+    return Buffer.from(await res.Body.transformToByteArray());
   }
 }

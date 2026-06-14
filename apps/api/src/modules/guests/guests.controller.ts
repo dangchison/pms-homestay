@@ -13,7 +13,14 @@ import {
 import { type JwtClaims } from '@pms/shared-types';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
-import { BlacklistGuestDto, CreateGuestDto, GuestListQueryDto, UpdateGuestDto } from './dto';
+import {
+  BlacklistGuestDto,
+  CreateGuestDto,
+  GuestListQueryDto,
+  IdScanPresignDto,
+  ScanIdDto,
+  UpdateGuestDto,
+} from './dto';
 import { GuestsService } from './guests.service';
 
 /**
@@ -29,6 +36,22 @@ export class GuestsController {
   @RequirePermissions('booking.create')
   async create(@Body() dto: CreateGuestDto, @CurrentUser() user: JwtClaims) {
     return { data: await this.guests.create(dto, user) };
+  }
+
+  /** Pre-sign upload ảnh CCCD lên storage tier VN (task 7.1). */
+  @Post('id-scan/presign')
+  @RequirePermissions('booking.create')
+  @HttpCode(200)
+  async presignIdScan(@Body() dto: IdScanPresignDto, @CurrentUser() user: JwtClaims) {
+    return { data: await this.guests.presignIdScan(dto, user) };
+  }
+
+  /** OCR scan CCCD/hộ chiếu (task 7.1) — trả extracted prefill, KHÔNG ghi DB. */
+  @Post('scan-id')
+  @RequirePermissions('booking.create')
+  @HttpCode(200)
+  async scanId(@Body() dto: ScanIdDto, @CurrentUser() user: JwtClaims) {
+    return { data: await this.guests.scanId(dto, user) };
   }
 
   @Get()

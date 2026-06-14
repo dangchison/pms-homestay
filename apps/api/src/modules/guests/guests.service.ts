@@ -1,11 +1,16 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import {
   type BlacklistGuestRequest,
   type CreateGuestRequest,
   type GuestIdDocumentResponse,
   type GuestResponse,
+  type IdScanPresignRequest,
+  type IdScanPresignResponse,
   type JwtClaims,
   type OffsetPageInfo,
+  type ScanIdRequest,
+  type ScanIdResponse,
   type UpdateGuestRequest,
 } from '@pms/shared-types';
 import { Prisma, type guests } from '@prisma/client';
@@ -13,8 +18,10 @@ import { AuditService } from '@modules/audit/audit.service';
 import { EncryptionService } from '@core/crypto/encryption.service';
 import { AppException } from '@core/http/exceptions/app.exception';
 import { PrismaService } from '@core/prisma/prisma.service';
+import { StorageService } from '@core/storage/storage.service';
 import { withTenant } from '@core/tenancy/with-tenant';
 import { offsetToSkipTake } from '@/shared/dto';
+import { OcrService } from './ocr.service';
 
 /** Chuẩn hoá số giấy tờ trước khi mã hoá/hash (bỏ khoảng trắng, in hoa). */
 function normalizeDoc(raw: string): string {
@@ -44,6 +51,7 @@ function toGuestResponse(g: guests): GuestResponse {
     id_document_masked: g.id_document_last4 ? `****${g.id_document_last4}` : null,
     id_document_issue_date: toDateOnly(g.id_document_issue_date),
     id_document_issue_place: g.id_document_issue_place,
+    id_document_scan_url: g.id_document_scan_url,
     date_of_birth: toDateOnly(g.date_of_birth),
     gender: g.gender,
     address: g.address,
@@ -63,7 +71,33 @@ export class GuestsService {
     private readonly prisma: PrismaService,
     private readonly encryption: EncryptionService,
     private readonly audit: AuditService,
+    private readonly storage: StorageService,
+    private readonly ocr: OcrService,
   ) {}
+
+  /**
+   * Pre-sign upload ảnh CCCD lên storage tier VN (task 7.1, docs/12 §3). Key
+   * scoped theo tenant + uuid (chưa có guest_id lúc scan): `cccd/<tnt>/<uuid>/<side>`.
+   * Client PUT trực tiếp lên S3; expire 15' (mặc định presignPut). Quyền booking.create.
+   */
+  async presignIdScan(dto: IdScanPresignRequest, user: JwtClaims): Promise<IdScanPresignResponse> {
+    const ext = dto.content_type.split('/')[1] ?? 'jpg';
+    const key = `cccd/${user.tnt}/${randomUUID()}/${dto.side}.${ext}`;
+    return this.storage.presignPut(key, dto.content_type);
+  }
+
+  /**
+   * Scan CCCD/hộ chiếu qua OCR → trả extracted để prefill form. KHÔNG ghi DB
+   * (raw response chứa PII không lưu — bản ghi gốc là ảnh trên storage). Lễ tân
+   * verify/sửa rồi mới save qua create/update. OCR fail → 502/503, FE fallback nhập tay.
+   */
+  async scanId(dto: ScanIdRequest, user: JwtClaims): Promise<ScanIdResponse> {
+    // Chỉ nhận key thuộc tenant hiện tại (chống đọc ảnh tenant khác qua key đoán).
+    if (!dto.image_key.startsWith(`cccd/${user.tnt}/`)) {
+      throw new AppException({ code: 'OCR_IMAGE_KEY_INVALID', title: 'Key ảnh không hợp lệ', status: 400 });
+    }
+    return this.ocr.scanIdDocument(dto.image_key);
+  }
 
   async create(dto: CreateGuestRequest, user: JwtClaims): Promise<GuestResponse> {
     const row = await withTenant(this.prisma, user.tnt, (tx) =>
@@ -213,6 +247,7 @@ export class GuestsService {
         ? new Date(dto.id_document_issue_date)
         : undefined,
       id_document_issue_place: dto.id_document_issue_place,
+      id_document_scan_url: dto.id_document_scan_url,
       date_of_birth: dto.date_of_birth ? new Date(dto.date_of_birth) : undefined,
       gender: dto.gender,
       address: dto.address,
