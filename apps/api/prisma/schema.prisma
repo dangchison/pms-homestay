@@ -53,6 +53,7 @@ model tenants {
   channels                  channels[]
   cleaning_tasks            cleaning_tasks[]
   daily_property_stats      daily_property_stats[]
+  data_processing_consents  data_processing_consents[]
   depreciation_entries      depreciation_entries[]
   document_counters         document_counters[]
   guests                    guests[]
@@ -430,30 +431,33 @@ model quotes {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model guests {
-  id                      String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id               String     @db.Uuid
-  full_name               String     @db.VarChar(255)
-  phone                   String?    @db.VarChar(20)
-  email                   String?    @db.Citext
-  nationality             String?    @default("VN") @db.VarChar(2)
-  id_document_type        String?    @db.VarChar(20)
-  id_document_number_enc  Bytes?
-  id_document_number_hash Bytes?
-  id_document_last4       String?    @db.VarChar(4)
-  id_document_issue_date  DateTime?  @db.Date
-  id_document_issue_place String?    @db.VarChar(255)
-  id_document_scan_url    String?
-  date_of_birth           DateTime?  @db.Date
-  gender                  String?    @db.VarChar(10)
-  address                 String?
-  notes                   String?
-  is_blacklisted          Boolean    @default(false)
-  blacklist_reason        String?
-  created_at              DateTime   @default(now()) @db.Timestamptz(6)
-  updated_at              DateTime   @default(now()) @db.Timestamptz(6)
-  deleted_at              DateTime?  @db.Timestamptz(6)
-  bookings                bookings[]
-  tenants                 tenants    @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                String                     @db.Uuid
+  full_name                String                     @db.VarChar(255)
+  phone                    String?                    @db.VarChar(20)
+  email                    String?                    @db.Citext
+  nationality              String?                    @default("VN") @db.VarChar(2)
+  id_document_type         String?                    @db.VarChar(20)
+  id_document_number_enc   Bytes?
+  id_document_number_hash  Bytes?
+  id_document_last4        String?                    @db.VarChar(4)
+  id_document_issue_date   DateTime?                  @db.Date
+  id_document_issue_place  String?                    @db.VarChar(255)
+  id_document_scan_url     String?
+  date_of_birth            DateTime?                  @db.Date
+  gender                   String?                    @db.VarChar(10)
+  address                  String?
+  notes                    String?
+  is_blacklisted           Boolean                    @default(false)
+  blacklist_reason         String?
+  created_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  deleted_at               DateTime?                  @db.Timestamptz(6)
+  anonymized_at            DateTime?                  @db.Timestamptz(6)
+  legal_hold_until         DateTime?                  @db.Date
+  bookings                 bookings[]
+  data_processing_consents data_processing_consents[]
+  tenants                  tenants                    @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([tenant_id, id])
   @@index([tenant_id, id_document_number_hash], map: "idx_guests_doc_hash")
@@ -1004,6 +1008,26 @@ model sync_logs {
   tenants     tenants   @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([sync_job_id, created_at], map: "idx_sync_logs_job")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model data_processing_consents {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id         String    @db.Uuid
+  guest_id          String    @db.Uuid
+  consent_type      String    @db.VarChar(64)
+  consent_text_hash String    @db.VarChar(64)
+  consent_text      String
+  granted_at        DateTime  @default(now()) @db.Timestamptz(6)
+  revoked_at        DateTime? @db.Timestamptz(6)
+  ip_address        String?   @db.Inet
+  user_agent        String?
+  tenants           tenants   @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  guests            guests    @relation(fields: [tenant_id, guest_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([tenant_id, id])
+  @@index([tenant_id, guest_id], map: "idx_consents_guest")
 }
 
 enum user_role {

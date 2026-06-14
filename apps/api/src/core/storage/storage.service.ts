@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ENV, type Env } from '@core/config/env.schema';
 
@@ -56,5 +56,13 @@ export class StorageService {
       throw new Error(`StorageService.getObject: object rỗng tại key=${key}`);
     }
     return Buffer.from(await res.Body.transformToByteArray());
+  }
+
+  /**
+   * Xoá object (vd ảnh CCCD khi erasure NĐ13, task 7.3). Gọi mạng THẬT tới S3 →
+   * caller nên best-effort (try/catch), không để chặn nghiệp vụ chính nếu S3 lỗi.
+   */
+  async deleteObject(key: string): Promise<void> {
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 }
