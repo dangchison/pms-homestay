@@ -19,3 +19,4 @@ export * from './notification';
 export * from './cleaning-task';
 export * from './audit-log';
 export * from './subscription';
+export * from './channel';

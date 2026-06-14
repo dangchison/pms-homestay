@@ -23,6 +23,7 @@ import { AuditModule } from '@modules/audit/audit.module';
 import { AuthPublicModule } from '@modules/auth-public/auth-public.module';
 import { BillingModule } from '@modules/billing/billing.module';
 import { BookingsModule } from '@modules/bookings/bookings.module';
+import { ChannelsModule } from '@modules/channels/channels.module';
 import { CleaningModule } from '@modules/cleaning/cleaning.module';
 import { EventsModule } from '@modules/events/events.module';
 import { ExpensesModule } from '@modules/expenses/expenses.module';
@@ -83,6 +84,7 @@ export class AppModule implements NestModule {
         NotificationsModule,
         AuditModule,
         SubscriptionModule,
+        ChannelsModule,
       ],
       providers: [
         TenantResolverMiddleware,

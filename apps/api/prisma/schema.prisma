@@ -31,53 +31,55 @@ model subscription_plans {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model tenants {
-  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  slug                   String                   @unique @db.VarChar(64)
-  display_name           String                   @db.VarChar(255)
-  business_type          String?                  @db.VarChar(32)
-  status                 String                   @default("TRIAL") @db.VarChar(16)
-  subscription_plan_id   String?                  @db.Uuid
-  trial_ends_at          DateTime?                @db.Timestamptz(6)
-  timezone               String                   @default("Asia/Ho_Chi_Minh") @db.VarChar(64)
-  currency               String                   @default("VND") @db.Char(3)
-  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
-  updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
-  suspended_at           DateTime?                @db.Timestamptz(6)
-  current_period_end     DateTime?                @db.Timestamptz(6)
-  assets                 assets[]
-  audit_logs             audit_logs[]
-  bookable_resources     bookable_resources[]
-  booking_status_history booking_status_history[]
-  bookings               bookings[]
-  cleaning_tasks         cleaning_tasks[]
-  daily_property_stats   daily_property_stats[]
-  depreciation_entries   depreciation_entries[]
-  document_counters      document_counters[]
-  guests                 guests[]
-  idempotency_keys       idempotency_keys[]
-  invoice_items          invoice_items[]
-  invoices               invoices[]
-  monthly_meter_readings monthly_meter_readings[]
-  notifications          notifications[]
-  operational_expenses   operational_expenses[]
-  outbox_events          outbox_events[]
-  payment_attempts       payment_attempts[]
-  payments               payments[]
-  properties             properties[]
-  quotes                 quotes[]
-  rate_plan_resources    rate_plan_resources[]
-  rate_plan_rules        rate_plan_rules[]
-  rate_plans             rate_plans[]
-  refresh_tokens         refresh_tokens[]
-  resource_members       resource_members[]
-  room_blocks            room_blocks[]
-  room_occupancy         room_occupancy[]
-  rooms                  rooms[]
-  subscription_payments  subscription_payments[]
-  subscription_plans     subscription_plans?      @relation(fields: [subscription_plan_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  unmatched_payments     unmatched_payments[]
-  user_property_roles    user_property_roles[]
-  users                  users[]
+  id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug                      String                      @unique @db.VarChar(64)
+  display_name              String                      @db.VarChar(255)
+  business_type             String?                     @db.VarChar(32)
+  status                    String                      @default("TRIAL") @db.VarChar(16)
+  subscription_plan_id      String?                     @db.Uuid
+  trial_ends_at             DateTime?                   @db.Timestamptz(6)
+  timezone                  String                      @default("Asia/Ho_Chi_Minh") @db.VarChar(64)
+  currency                  String                      @default("VND") @db.Char(3)
+  created_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  suspended_at              DateTime?                   @db.Timestamptz(6)
+  current_period_end        DateTime?                   @db.Timestamptz(6)
+  assets                    assets[]
+  audit_logs                audit_logs[]
+  bookable_resources        bookable_resources[]
+  booking_status_history    booking_status_history[]
+  bookings                  bookings[]
+  channel_resource_mappings channel_resource_mappings[]
+  channels                  channels[]
+  cleaning_tasks            cleaning_tasks[]
+  daily_property_stats      daily_property_stats[]
+  depreciation_entries      depreciation_entries[]
+  document_counters         document_counters[]
+  guests                    guests[]
+  idempotency_keys          idempotency_keys[]
+  invoice_items             invoice_items[]
+  invoices                  invoices[]
+  monthly_meter_readings    monthly_meter_readings[]
+  notifications             notifications[]
+  operational_expenses      operational_expenses[]
+  outbox_events             outbox_events[]
+  payment_attempts          payment_attempts[]
+  payments                  payments[]
+  properties                properties[]
+  quotes                    quotes[]
+  rate_plan_resources       rate_plan_resources[]
+  rate_plan_rules           rate_plan_rules[]
+  rate_plans                rate_plans[]
+  refresh_tokens            refresh_tokens[]
+  resource_members          resource_members[]
+  room_blocks               room_blocks[]
+  room_occupancy            room_occupancy[]
+  rooms                     rooms[]
+  subscription_payments     subscription_payments[]
+  subscription_plans        subscription_plans?         @relation(fields: [subscription_plan_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unmatched_payments        unmatched_payments[]
+  user_property_roles       user_property_roles[]
+  users                     users[]
 
   @@index([subscription_plan_id], map: "idx_tenants_plan")
   @@index([status], map: "idx_tenants_status")
@@ -166,21 +168,22 @@ model users {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model bookable_resources {
-  id                  String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id           String                 @db.Uuid
-  property_id         String                 @db.Uuid
-  type                bookable_resource_type
-  name                String                 @db.VarChar(255)
-  is_active           Boolean                @default(true)
-  created_at          DateTime               @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime               @default(now()) @db.Timestamptz(6)
-  deleted_at          DateTime?              @db.Timestamptz(6)
-  tenants             tenants                @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  properties          properties             @relation(fields: [tenant_id, property_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
-  bookings            bookings[]
-  quotes              quotes[]
-  rate_plan_resources rate_plan_resources[]
-  resource_members    resource_members[]
+  id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                 String                      @db.Uuid
+  property_id               String                      @db.Uuid
+  type                      bookable_resource_type
+  name                      String                      @db.VarChar(255)
+  is_active                 Boolean                     @default(true)
+  created_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  deleted_at                DateTime?                   @db.Timestamptz(6)
+  tenants                   tenants                     @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  properties                properties                  @relation(fields: [tenant_id, property_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  bookings                  bookings[]
+  channel_resource_mappings channel_resource_mappings[]
+  quotes                    quotes[]
+  rate_plan_resources       rate_plan_resources[]
+  resource_members          resource_members[]
 
   @@unique([tenant_id, id])
 }
@@ -215,6 +218,7 @@ model properties {
   assets                      assets[]
   bookable_resources          bookable_resources[]
   bookings                    bookings[]
+  channels                    channels[]
   cleaning_tasks              cleaning_tasks[]
   daily_property_stats        daily_property_stats[]
   operational_expenses        operational_expenses[]
@@ -915,6 +919,50 @@ model subscription_payments {
   @@index([tenant_id, created_at(sort: Desc)], map: "idx_subscription_payments_tenant")
 }
 
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model channel_resource_mappings {
+  id                   String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id            String             @db.Uuid
+  channel_id           String             @db.Uuid
+  resource_id          String             @db.Uuid
+  external_listing_id  String             @db.VarChar(255)
+  external_listing_url String?
+  ical_pull_url        String?
+  ical_push_token      String             @unique(map: "idx_ical_push_token") @default(dbgenerated("encode(gen_random_bytes(24), 'hex'::text)")) @db.VarChar(255)
+  is_active            Boolean            @default(true)
+  last_pulled_at       DateTime?          @db.Timestamptz(6)
+  last_event_count     Int                @default(0)
+  created_at           DateTime           @default(now()) @db.Timestamptz(6)
+  channels             channels           @relation(fields: [tenant_id, channel_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  tenants              tenants            @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  bookable_resources   bookable_resources @relation(fields: [tenant_id, resource_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([channel_id, resource_id])
+  @@unique([tenant_id, id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model channels {
+  id                        String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                 String                      @db.Uuid
+  property_id               String                      @db.Uuid
+  channel_type              String                      @db.VarChar(32)
+  display_name              String                      @db.VarChar(255)
+  config                    Json                        @default("{}")
+  is_active                 Boolean                     @default(true)
+  last_synced_at            DateTime?                   @db.Timestamptz(6)
+  last_sync_status          sync_job_status?
+  created_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  channel_resource_mappings channel_resource_mappings[]
+  tenants                   tenants                     @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  properties                properties                  @relation(fields: [tenant_id, property_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([tenant_id, id])
+  @@index([tenant_id, property_id], map: "idx_channels_property")
+}
+
 enum user_role {
   OWNER
   MANAGER
@@ -1000,4 +1048,12 @@ enum audit_action {
   LOGOUT
   EXPORT
   READ_PII
+}
+
+enum sync_job_status {
+  QUEUED
+  RUNNING
+  SUCCESS
+  FAILED
+  PARTIAL
 }
