@@ -61,6 +61,14 @@ export const envSchema = z.object({
 
   SMTP_HOST: z.string().default('localhost'),
   SMTP_PORT: z.coerce.number().int().positive().default(1025),
+
+  /**
+   * OCR CCCD/hộ chiếu FPT.AI Vision (task 7.1, docs/12 §3). Thiếu API key →
+   * POST /guests/scan-id trả 503 (fallback nhập tay luôn sẵn). Endpoint mặc định
+   * idr/vnm (nhận diện giấy tờ VN). Hợp đồng FPT.AI là track lead-time dài (docs/14).
+   */
+  FPT_AI_API_KEY: z.string().min(1).optional(),
+  FPT_AI_ENDPOINT: z.url().default('https://api.fpt.ai/vision/idr/vnm'),
 });
 
 export type Env = z.infer<typeof envSchema>;
