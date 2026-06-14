@@ -1,0 +1,85 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
+import { type JwtClaims } from '@pms/shared-types';
+import { CurrentUser } from '@core/http/decorators/current-user.decorator';
+import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
+import { ChannelsService } from './channels.service';
+import {
+  ChannelListQueryDto,
+  CreateChannelDto,
+  CreateChannelMappingDto,
+  UpdateChannelDto,
+} from './dto';
+
+/**
+ * /api/v1/channels — kênh OTA + listing mapping (task 5.1, docs/03 §4.8).
+ * Property-scoped: pha-1 `channel.manage` (OWNER/MANAGER) + pha-2
+ * authorizeOnProperty (service, property_id từ channel). Mapping item ops ở
+ * ChannelMappingsController (/channel-mappings/:id).
+ */
+@Controller('channels')
+export class ChannelsController {
+  constructor(private readonly channels: ChannelsService) {}
+
+  @Post()
+  @RequirePermissions('channel.manage')
+  async create(@Body() dto: CreateChannelDto, @CurrentUser() user: JwtClaims) {
+    return { data: await this.channels.createChannel(dto, user) };
+  }
+
+  @Get()
+  @RequirePermissions('channel.manage')
+  async list(@Query() query: ChannelListQueryDto, @CurrentUser() user: JwtClaims) {
+    return { data: await this.channels.listChannels(query.property_id, user) };
+  }
+
+  @Get(':id')
+  @RequirePermissions('channel.manage')
+  async getById(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtClaims) {
+    return { data: await this.channels.getChannel(id, user) };
+  }
+
+  @Patch(':id')
+  @RequirePermissions('channel.manage')
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateChannelDto,
+    @CurrentUser() user: JwtClaims,
+  ) {
+    return { data: await this.channels.updateChannel(id, dto, user) };
+  }
+
+  @Delete(':id')
+  @RequirePermissions('channel.manage')
+  @HttpCode(204)
+  async remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtClaims) {
+    await this.channels.removeChannel(id, user);
+  }
+
+  // ── Mappings nested dưới channel (tạo/liệt kê) ──────────────────────────────
+  @Post(':id/mappings')
+  @RequirePermissions('channel.manage')
+  async createMapping(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateChannelMappingDto,
+    @CurrentUser() user: JwtClaims,
+  ) {
+    return { data: await this.channels.createMapping(id, dto, user) };
+  }
+
+  @Get(':id/mappings')
+  @RequirePermissions('channel.manage')
+  async listMappings(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtClaims) {
+    return { data: await this.channels.listMappings(id, user) };
+  }
+}
