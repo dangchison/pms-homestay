@@ -25,6 +25,7 @@ import { BillingModule } from '@modules/billing/billing.module';
 import { BookingsModule } from '@modules/bookings/bookings.module';
 import { ChannelsModule } from '@modules/channels/channels.module';
 import { CleaningModule } from '@modules/cleaning/cleaning.module';
+import { ComplianceModule } from '@modules/compliance/compliance.module';
 import { EventsModule } from '@modules/events/events.module';
 import { ExpensesModule } from '@modules/expenses/expenses.module';
 import { GuestsModule } from '@modules/guests/guests.module';
@@ -85,6 +86,7 @@ export class AppModule implements NestModule {
         AuditModule,
         SubscriptionModule,
         ChannelsModule,
+        ComplianceModule,
       ],
       providers: [
         TenantResolverMiddleware,
