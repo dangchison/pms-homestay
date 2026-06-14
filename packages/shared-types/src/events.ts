@@ -100,3 +100,15 @@ export type RoomBlockEventPayload = {
   room_id: string;
   block_id: string;
 };
+export type RoomHousekeepingEventPayload = {
+  property_id: string;
+  room_id: string;
+  housekeeping_status: string; // CLEAN | DIRTY | CLEANING | INSPECTION
+};
+export type CleaningTaskEventPayload = {
+  cleaning_task_id: string;
+  property_id: string;
+  room_id: string;
+  booking_id?: string;
+  assigned_to?: string;
+};

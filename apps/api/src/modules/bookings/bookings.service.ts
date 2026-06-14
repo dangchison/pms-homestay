@@ -20,6 +20,7 @@ import { OutboxService } from '@core/outbox/outbox.service';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { withTenant } from '@core/tenancy/with-tenant';
 import { OccupancyService } from '@modules/occupancy/occupancy.service';
+import { CleaningService } from '@modules/cleaning/cleaning.service';
 import { ExpensesService } from '@modules/expenses/expenses.service';
 import { InvoicesService } from '@modules/invoices/invoices.service';
 import { PricingService } from '@modules/pricing/pricing.service';
@@ -71,6 +72,7 @@ export class BookingsService {
     private readonly counters: DocumentCounterService,
     private readonly invoices: InvoicesService,
     private readonly expenses: ExpensesService,
+    private readonly cleaning: CleaningService,
     private readonly outbox: OutboxService,
   ) {}
 
@@ -461,8 +463,8 @@ export class BookingsService {
    * Check-out (docs/06, task 2.8) — CHECKED_IN → CHECKED_OUT, ghi actual_check_out
    * + **xoá occupancy** (giải phóng phòng) CÙNG tx.
    *
-   * TODO(task 3.2): finalize STAY invoice (items từ quote snapshot + phụ thu +
-   * DEPOSIT_APPLIED). TODO(task 4.1): sinh cleaning task. Stub event tới khi có.
+   * Finalize STAY invoice (3.2) + hoa hồng OTA (3.6) + sinh cleaning task cho phòng
+   * (4.1) — tất cả CÙNG tx với chuyển trạng thái.
    */
   async checkOut(id: string, user: JwtClaims): Promise<BookingResponse> {
     const booking = await this.loadOrThrow(id, user);
@@ -496,6 +498,14 @@ export class BookingsService {
       // Auto-sinh hoa hồng OTA (docs/09 §6, task 3.6) — idempotent qua partial unique
       await this.expenses.createOtaCommissionForBooking(tx, booking);
       await this.emitBooking(tx, 'booking.checked_out', id, booking.property_id);
+      // Phòng bẩn sau khi khách trả → sinh cleaning task + housekeeping DIRTY (task 4.1)
+      const checkoutRooms = await this.occupancy.memberRooms(tx, booking.resource_id);
+      await this.cleaning.createCheckoutTasksTx(tx, {
+        tenantId: user.tnt,
+        propertyId: booking.property_id,
+        bookingId: id,
+        roomIds: checkoutRooms.map((r) => r.room_id),
+      });
       return tx.bookings.findFirstOrThrow({ where: { id } });
     });
     return toBookingResponse(updated);
@@ -506,7 +516,7 @@ export class BookingsService {
    * trong MỘT tx; EXCLUDE chặn nếu phòng mới bận (→ 409). Resource mới phải cùng
    * property. Lock union phòng cũ∪mới (sorted) chống deadlock. Không đổi status.
    *
-   * TODO(task 4.1): sinh cleaning task cho phòng cũ. TODO(task 4.5): audit log.
+   * Sinh cleaning task cho phòng cũ (task 4.1). TODO(task 4.5): audit log.
    */
   async switchResource(
     id: string,
@@ -596,7 +606,13 @@ export class BookingsService {
         },
       });
       await this.emitBooking(tx, 'booking.resource_switched', id, booking.property_id);
-      // TODO(task 4.1): tạo cleaning task cho phòng cũ (oldMembers)
+      // Phòng cũ vừa nhả → cần dọn trước khách kế (task 4.1)
+      await this.cleaning.createCheckoutTasksTx(tx, {
+        tenantId: user.tnt,
+        propertyId: booking.property_id,
+        bookingId: id,
+        roomIds: oldMembers.map((m) => m.room_id),
+      });
       return tx.bookings.findFirstOrThrow({ where: { id } });
     });
     return toBookingResponse(updated);

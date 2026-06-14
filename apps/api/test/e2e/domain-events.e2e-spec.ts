@@ -127,7 +127,7 @@ describe('Domain events emit (task 4.3)', () => {
     if (admin) {
       const tid = `(SELECT id FROM tenants WHERE slug = '${tenantSlug}')`;
       for (const t of [
-        'outbox_events', 'payment_attempts', 'payments', 'invoice_items', 'invoices',
+        'outbox_events', 'cleaning_tasks', 'payment_attempts', 'payments', 'invoice_items', 'invoices',
         'room_occupancy', 'room_blocks', 'booking_status_history', 'quotes', 'bookings',
         'rate_plans', 'resource_members', 'bookable_resources', 'rooms', 'idempotency_keys',
         'document_counters', 'user_property_roles', 'properties', 'refresh_tokens', 'users',

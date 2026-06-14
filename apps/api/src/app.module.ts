@@ -13,12 +13,14 @@ import { MailModule } from '@core/mail/mail.module';
 import { OutboxModule } from '@core/outbox/outbox.module';
 import { PrismaModule } from '@core/prisma/prisma.module';
 import { RedisModule } from '@core/redis/redis.module';
+import { StorageModule } from '@core/storage/storage.module';
 import { TenantGuard } from '@core/tenancy/tenant.guard';
 import { TenantResolverMiddleware } from '@core/tenancy/tenant-resolver.middleware';
 import { AssetsModule } from '@modules/assets/assets.module';
 import { AuthPublicModule } from '@modules/auth-public/auth-public.module';
 import { BillingModule } from '@modules/billing/billing.module';
 import { BookingsModule } from '@modules/bookings/bookings.module';
+import { CleaningModule } from '@modules/cleaning/cleaning.module';
 import { EventsModule } from '@modules/events/events.module';
 import { ExpensesModule } from '@modules/expenses/expenses.module';
 import { GuestsModule } from '@modules/guests/guests.module';
@@ -53,6 +55,7 @@ export class AppModule implements NestModule {
         BullmqModule,
         MailModule,
         OutboxModule,
+        StorageModule,
         AuthCoreModule,
         AuthPublicModule,
         HealthModule,
@@ -64,6 +67,7 @@ export class AppModule implements NestModule {
         GuestsModule,
         InvoicesModule,
         BookingsModule,
+        CleaningModule,
         PaymentsModule,
         AssetsModule,
         ExpensesModule,
