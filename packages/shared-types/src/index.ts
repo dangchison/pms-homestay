@@ -17,3 +17,4 @@ export * from './report';
 export * from './events';
 export * from './notification';
 export * from './cleaning-task';
+export * from './audit-log';

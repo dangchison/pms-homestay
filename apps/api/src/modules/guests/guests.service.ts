@@ -9,6 +9,7 @@ import {
   type UpdateGuestRequest,
 } from '@pms/shared-types';
 import { Prisma, type guests } from '@prisma/client';
+import { AuditService } from '@modules/audit/audit.service';
 import { EncryptionService } from '@core/crypto/encryption.service';
 import { AppException } from '@core/http/exceptions/app.exception';
 import { PrismaService } from '@core/prisma/prisma.service';
@@ -61,6 +62,7 @@ export class GuestsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly encryption: EncryptionService,
+    private readonly audit: AuditService,
   ) {}
 
   async create(dto: CreateGuestRequest, user: JwtClaims): Promise<GuestResponse> {
@@ -147,10 +149,18 @@ export class GuestsService {
       });
     }
     const number = this.encryption.decrypt(Buffer.from(guest.id_document_number_enc).toString('utf8'));
-    // TODO(task 4.5): ghi vào audit_logs qua AuditInterceptor; tạm log có cấu trúc (pino redact PII)
-    this.logger.log(
-      `READ_PII action=READ_PII tenant=${user.tnt} actor=${user.sub} guest=${id} field=id_document_number`,
-    );
+    // Vết kiểm toán READ_PII (task 4.5, ADR-0007 §3) — GET không qua AuditInterceptor
+    // nên ghi tường minh tại đây. KHÔNG ghi số giấy tờ (chỉ ghi đã đọc field nào).
+    // Log thêm cho observability/SIEM (defense-in-depth nếu audit DB write hỏng).
+    this.logger.log(`READ_PII tenant=${user.tnt} actor=${user.sub} guest=${id} field=id_document_number`);
+    await this.audit.record({
+      tenantId: user.tnt,
+      userId: user.sub,
+      action: 'READ_PII',
+      entityType: 'guests',
+      entityId: id,
+      afterData: { field: 'id_document_number' },
+    });
     return { id: guest.id, id_document_type: guest.id_document_type, id_document_number: number };
   }
 

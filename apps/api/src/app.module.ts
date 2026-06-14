@@ -17,6 +17,7 @@ import { StorageModule } from '@core/storage/storage.module';
 import { TenantGuard } from '@core/tenancy/tenant.guard';
 import { TenantResolverMiddleware } from '@core/tenancy/tenant-resolver.middleware';
 import { AssetsModule } from '@modules/assets/assets.module';
+import { AuditModule } from '@modules/audit/audit.module';
 import { AuthPublicModule } from '@modules/auth-public/auth-public.module';
 import { BillingModule } from '@modules/billing/billing.module';
 import { BookingsModule } from '@modules/bookings/bookings.module';
@@ -76,6 +77,7 @@ export class AppModule implements NestModule {
         ReportsModule,
         EventsModule,
         NotificationsModule,
+        AuditModule,
       ],
       providers: [
         TenantResolverMiddleware,

@@ -42,6 +42,7 @@ model tenants {
   created_at             DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
   assets                 assets[]
+  audit_logs             audit_logs[]
   bookable_resources     bookable_resources[]
   booking_status_history booking_status_history[]
   bookings               bookings[]
@@ -867,6 +868,29 @@ model cleaning_tasks {
   @@index([tenant_id, property_id, created_at(sort: Desc)], map: "idx_cleaning_property")
 }
 
+/// This table is a partition table and requires additional setup for migrations. Visit https://pris.ly/d/partition-tables for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model audit_logs {
+  id          String       @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id   String       @db.Uuid
+  user_id     String?      @db.Uuid
+  action      audit_action
+  entity_type String       @db.VarChar(64)
+  entity_id   String?      @db.Uuid
+  before_data Json?
+  after_data  Json?
+  diff        Json?
+  ip_address  String?      @db.Inet
+  user_agent  String?
+  request_id  String?      @db.VarChar(64)
+  created_at  DateTime     @default(now()) @db.Timestamptz(6)
+  tenants     tenants      @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([id, created_at])
+  @@index([entity_type, entity_id, created_at(sort: Desc)], map: "idx_audit_entity")
+  @@index([tenant_id, created_at(sort: Desc)], map: "idx_audit_tenant_time")
+}
+
 enum user_role {
   OWNER
   MANAGER
@@ -941,4 +965,15 @@ enum cleaning_task_status {
   COMPLETED
   VERIFIED
   CANCELLED
+}
+
+enum audit_action {
+  CREATE
+  UPDATE
+  DELETE
+  STATE_CHANGE
+  LOGIN
+  LOGOUT
+  EXPORT
+  READ_PII
 }
