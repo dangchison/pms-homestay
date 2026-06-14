@@ -7,6 +7,7 @@ import {
 } from '@pms/shared-types';
 import { Prisma, type properties } from '@prisma/client';
 import type { JwtClaims } from '@pms/shared-types';
+import { SubscriptionService } from '@modules/subscription/subscription.service';
 import { PermissionService } from '@core/auth/permission.service';
 import { AppException } from '@core/http/exceptions/app.exception';
 import { PrismaService } from '@core/prisma/prisma.service';
@@ -49,12 +50,15 @@ export class PropertiesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly permissionService: PermissionService,
+    private readonly subscription: SubscriptionService,
   ) {}
 
   async create(dto: CreatePropertyRequest, user: JwtClaims): Promise<PropertyResponse> {
-    const row = await withTenant(this.prisma, user.tnt, (tx) =>
-      tx.properties.create({ data: this.toCreateData(dto, user.tnt) }),
-    );
+    const row = await withTenant(this.prisma, user.tnt, async (tx) => {
+      // Plan-limit (task 4.7): chặn vượt subscription_plans.max_properties (cùng tx → không race)
+      await this.subscription.assertWithinPlanLimitTx(tx, user.tnt, 'property');
+      return tx.properties.create({ data: this.toCreateData(dto, user.tnt) });
+    });
     return toPropertyResponse(row);
   }
 
