@@ -50,6 +50,13 @@ describe('Rate Plans + Rules + vietnam_holidays (task 2.2)', () => {
         full_name: 'Owner',
       })
       .expect(201);
+    // Test này cần 2 property (fixture "gán resource khác property") — nâng gói
+    // ENTERPRISE để qua plan-limit guard (task 4.7; gói FREE mặc định chỉ 1 property).
+    await admin.query(
+      `UPDATE tenants SET subscription_plan_id = (SELECT id FROM subscription_plans WHERE code = 'ENTERPRISE')
+       WHERE slug = $1`,
+      [tenantSlug],
+    );
     token = (
       await request(http)
         .post('/api/v1/auth/login')

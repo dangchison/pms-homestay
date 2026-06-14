@@ -6,11 +6,12 @@ import {
   type UpdateRoomRequest,
 } from '@pms/shared-types';
 import { Prisma, type rooms } from '@prisma/client';
+import { ResourcesService } from '@modules/resources/resources.service';
+import { SubscriptionService } from '@modules/subscription/subscription.service';
 import { PermissionService } from '@core/auth/permission.service';
 import { AppException } from '@core/http/exceptions/app.exception';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { withTenant } from '@core/tenancy/with-tenant';
-import { ResourcesService } from '@modules/resources/resources.service';
 
 function toRoomResponse(r: rooms): RoomResponse {
   return {
@@ -40,6 +41,7 @@ export class RoomsService {
     private readonly prisma: PrismaService,
     private readonly permissionService: PermissionService,
     private readonly resources: ResourcesService,
+    private readonly subscription: SubscriptionService,
   ) {}
 
   /** Tạo phòng → TỰ SINH resource type=ROOM + member 1:1 trong cùng tx (ADR-0006). */
@@ -48,6 +50,8 @@ export class RoomsService {
     await this.permissionService.authorizeOnProperty(user, dto.property_id, 'room.crud');
 
     const row = await withTenant(this.prisma, user.tnt, async (tx) => {
+      // Plan-limit (task 4.7): chặn vượt subscription_plans.max_rooms (cùng tx → không race)
+      await this.subscription.assertWithinPlanLimitTx(tx, user.tnt, 'room');
       const room = await tx.rooms.create({ data: this.toCreateData(dto, user.tnt) });
       await this.resources.createRoomResourceTx(tx, {
         tenantId: user.tnt,

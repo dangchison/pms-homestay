@@ -29,6 +29,15 @@ export const envSchema = z.object({
   /** HMAC secret xác thực webhook thanh toán (Casso/SePay) — task 3.4. Thiếu → từ chối webhook. */
   PAYMENT_WEBHOOK_SECRET: z.string().min(16).optional(),
 
+  /**
+   * Billing-lite SaaS (task 4.7). Secret để platform admin xác nhận thanh toán
+   * thuê bao (header X-Platform-Secret) — thiếu → endpoint confirm trả 503.
+   * Tài khoản nhận phí nền tảng cho VietQR động (mặc định dev: MB BIN 970422).
+   */
+  PLATFORM_ADMIN_SECRET: z.string().min(16).optional(),
+  PLATFORM_BANK_BIN: z.string().default('970422'),
+  PLATFORM_BANK_ACCOUNT: z.string().default('0000000000'),
+
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
 

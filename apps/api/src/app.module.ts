@@ -16,6 +16,8 @@ import { RedisModule } from '@core/redis/redis.module';
 import { StorageModule } from '@core/storage/storage.module';
 import { TenantGuard } from '@core/tenancy/tenant.guard';
 import { TenantResolverMiddleware } from '@core/tenancy/tenant-resolver.middleware';
+import { TenantStatusGuard } from '@core/tenancy/tenant-status.guard';
+import { TenantStatusModule } from '@core/tenancy/tenant-status.module';
 import { AssetsModule } from '@modules/assets/assets.module';
 import { AuditModule } from '@modules/audit/audit.module';
 import { AuthPublicModule } from '@modules/auth-public/auth-public.module';
@@ -36,6 +38,7 @@ import { RatePlansModule } from '@modules/rate-plans/rate-plans.module';
 import { ReportsModule } from '@modules/reports/reports.module';
 import { ResourcesModule } from '@modules/resources/resources.module';
 import { RoomsModule } from '@modules/rooms/rooms.module';
+import { SubscriptionModule } from '@modules/subscription/subscription.module';
 
 /**
  * Root module — nhận env đã validate từ bootstrap (fail-fast trước khi
@@ -51,6 +54,7 @@ export class AppModule implements NestModule {
         AppLoggerModule,
         PrismaModule,
         RedisModule,
+        TenantStatusModule,
         CryptoModule,
         CountersModule,
         BullmqModule,
@@ -78,6 +82,7 @@ export class AppModule implements NestModule {
         EventsModule,
         NotificationsModule,
         AuditModule,
+        SubscriptionModule,
       ],
       providers: [
         TenantResolverMiddleware,
@@ -86,6 +91,8 @@ export class AppModule implements NestModule {
         { provide: APP_GUARD, useClass: JwtAuthGuard },
         { provide: APP_GUARD, useClass: TenantGuard },
         { provide: APP_GUARD, useClass: PermissionsGuard },
+        // Sau RBAC: chặn write khi tenant SUSPENDED / mọi truy cập khi CHURNED (task 4.7)
+        { provide: APP_GUARD, useClass: TenantStatusGuard },
       ],
     };
   }
