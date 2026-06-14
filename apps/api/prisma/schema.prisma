@@ -76,6 +76,8 @@ model tenants {
   room_occupancy            room_occupancy[]
   rooms                     rooms[]
   subscription_payments     subscription_payments[]
+  sync_jobs                 sync_jobs[]
+  sync_logs                 sync_logs[]
   subscription_plans        subscription_plans?         @relation(fields: [subscription_plan_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   unmatched_payments        unmatched_payments[]
   user_property_roles       user_property_roles[]
@@ -958,9 +960,50 @@ model channels {
   channel_resource_mappings channel_resource_mappings[]
   tenants                   tenants                     @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   properties                properties                  @relation(fields: [tenant_id, property_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  sync_jobs                 sync_jobs[]
 
   @@unique([tenant_id, id])
   @@index([tenant_id, property_id], map: "idx_channels_property")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model sync_jobs {
+  id                 String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id          String          @db.Uuid
+  channel_id         String          @db.Uuid
+  channel_mapping_id String?         @db.Uuid
+  job_type           String          @db.VarChar(32)
+  status             sync_job_status
+  started_at         DateTime        @default(now()) @db.Timestamptz(6)
+  finished_at        DateTime?       @db.Timestamptz(6)
+  events_processed   Int             @default(0)
+  events_created     Int             @default(0)
+  events_updated     Int             @default(0)
+  events_removed     Int             @default(0)
+  conflict_count     Int             @default(0)
+  error_message      String?
+  channels           channels        @relation(fields: [tenant_id, channel_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  tenants            tenants         @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sync_logs          sync_logs[]
+
+  @@index([tenant_id, channel_id, started_at(sort: Desc)], map: "idx_sync_jobs_channel")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model sync_logs {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id   String    @db.Uuid
+  sync_job_id String    @db.Uuid
+  level       String    @db.VarChar(16)
+  message     String
+  payload     Json?
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  sync_jobs   sync_jobs @relation(fields: [sync_job_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants     tenants   @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([sync_job_id, created_at], map: "idx_sync_logs_job")
 }
 
 enum user_role {

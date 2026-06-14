@@ -4,6 +4,7 @@ import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
 import { ChannelsService } from './channels.service';
 import { UpdateChannelMappingDto } from './dto';
+import { IcalSyncService } from './ical-sync.service';
 
 /**
  * /api/v1/channel-mappings/:id — thao tác trên 1 mapping (task 5.1). Tách path
@@ -12,7 +13,10 @@ import { UpdateChannelMappingDto } from './dto';
  */
 @Controller('channel-mappings')
 export class ChannelMappingsController {
-  constructor(private readonly channels: ChannelsService) {}
+  constructor(
+    private readonly channels: ChannelsService,
+    private readonly icalSync: IcalSyncService,
+  ) {}
 
   @Patch(':id')
   @RequirePermissions('channel.manage')
@@ -37,5 +41,14 @@ export class ChannelMappingsController {
   @HttpCode(200)
   async regenerateToken(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtClaims) {
     return { data: await this.channels.regenerateToken(id, user) };
+  }
+
+  /** Sync ngay (task 5.2) — fetch iCal pull URL + áp feed. */
+  @Post(':id/sync')
+  @RequirePermissions('channel.manage')
+  @HttpCode(200)
+  async syncNow(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtClaims) {
+    await this.channels.assertCanManageMapping(id, user);
+    return { data: await this.icalSync.syncMapping(user.tnt, id) };
   }
 }

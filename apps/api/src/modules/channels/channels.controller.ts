@@ -20,6 +20,7 @@ import {
   CreateChannelMappingDto,
   UpdateChannelDto,
 } from './dto';
+import { IcalSyncService } from './ical-sync.service';
 
 /**
  * /api/v1/channels — kênh OTA + listing mapping (task 5.1, docs/03 §4.8).
@@ -29,7 +30,10 @@ import {
  */
 @Controller('channels')
 export class ChannelsController {
-  constructor(private readonly channels: ChannelsService) {}
+  constructor(
+    private readonly channels: ChannelsService,
+    private readonly icalSync: IcalSyncService,
+  ) {}
 
   @Post()
   @RequirePermissions('channel.manage')
@@ -81,5 +85,13 @@ export class ChannelsController {
   @RequirePermissions('channel.manage')
   async listMappings(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtClaims) {
     return { data: await this.channels.listMappings(id, user) };
+  }
+
+  /** Lịch sử sync job của kênh (task 5.2). */
+  @Get(':id/sync-jobs')
+  @RequirePermissions('channel.manage')
+  async syncJobs(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtClaims) {
+    await this.channels.assertCanManageChannel(id, user);
+    return { data: await this.icalSync.listJobs(user.tnt, id) };
   }
 }

@@ -257,6 +257,17 @@ export class ChannelsService {
     return toMappingResponse(row);
   }
 
+  /** Authz cho endpoint sync (task 5.2) — load + pha-2 channel.manage. */
+  async assertCanManageChannel(channelId: string, user: JwtClaims): Promise<void> {
+    const channel = await this.loadChannelOrThrow(channelId, user);
+    await this.permissionService.authorizeOnProperty(user, channel.property_id, 'channel.manage');
+  }
+
+  async assertCanManageMapping(mappingId: string, user: JwtClaims): Promise<void> {
+    const mapping = await this.loadMappingOrThrow(mappingId, user);
+    await this.permissionService.authorizeOnProperty(user, mapping.channels.property_id, 'channel.manage');
+  }
+
   // ── Helpers ──────────────────────────────────────────────────────────────────
   private async loadChannelOrThrow(id: string, user: JwtClaims): Promise<channels> {
     const channel = await withTenant(
