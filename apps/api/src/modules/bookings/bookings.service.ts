@@ -193,6 +193,90 @@ export class BookingsService {
     return toBookingResponse(booking);
   }
 
+  /**
+   * ★ Tạo booking từ iCal OTA (task 5.2) — TRONG tx của iCal sync worker. KHÔNG
+   * quote/pricing/invoice (OTA tự xử lý tiền): chỉ chặn occupancy chống overbooking
+   * qua CÙNG choke-point (lock + EXCLUDE). status=CONFIRMED, source=AIRBNB_ICAL...,
+   * external_uid=UID iCal (dedup vòng sau). EXCLUDE ném 23P01 nếu trùng → caller
+   * (sync service) bắt → emit booking.overbooking_detected ở tx riêng (KHÔNG auto-resolve).
+   */
+  async createFromIcalTx(
+    tx: Prisma.TransactionClient,
+    input: {
+      tenantId: string;
+      propertyId: string;
+      resourceId: string;
+      channelMappingId: string;
+      source: string;
+      externalUid: string;
+      summary: string;
+      checkIn: Date;
+      checkOut: Date;
+    },
+  ): Promise<string> {
+    const members = await this.occupancy.memberRooms(tx, input.resourceId);
+    if (members.length === 0) {
+      throw new AppException({
+        code: 'RESOURCE_NO_ROOMS',
+        title: 'Resource chưa có phòng thành viên',
+        status: 422,
+      });
+    }
+    await this.occupancy.lockRooms(tx, members.map((m) => m.room_id));
+    const code = await this.counters.nextCode(tx, input.tenantId, 'BK', periodOf(new Date()));
+    const booking = await tx.bookings.create({
+      data: {
+        tenant_id: input.tenantId,
+        property_id: input.propertyId,
+        resource_id: input.resourceId,
+        booking_code: code,
+        source: input.source,
+        external_uid: input.externalUid,
+        channel_mapping_id: input.channelMappingId,
+        status: 'CONFIRMED',
+        mode: 'DAILY',
+        check_in: input.checkIn,
+        check_out: input.checkOut,
+        total_amount_vnd: 0,
+        notes: input.summary || null,
+      },
+    });
+    // EXCLUDE room_occupancy_no_overlap → 23P01 nếu trùng (cả tx rollback → không booking).
+    await this.occupancy.insertForBooking(tx, {
+      tenantId: input.tenantId,
+      bookingId: booking.id,
+      members,
+      checkIn: input.checkIn,
+      checkOut: input.checkOut,
+    });
+    await tx.booking_status_history.create({
+      data: { tenant_id: input.tenantId, booking_id: booking.id, to_status: 'CONFIRMED', changed_by: null },
+    });
+    await this.emitBooking(tx, 'booking.created', booking.id, booking.property_id);
+    return booking.id;
+  }
+
+  /** Huỷ booking OTA biến mất khỏi feed (task 5.2) — giải phóng occupancy + emit. */
+  async cancelFromIcalTx(
+    tx: Prisma.TransactionClient,
+    input: { tenantId: string; bookingId: string; propertyId: string; reason: string },
+  ): Promise<void> {
+    await tx.bookings.update({
+      where: { id: input.bookingId },
+      data: {
+        status: 'CANCELLED',
+        cancellation_reason: input.reason,
+        cancelled_at: new Date(),
+        version: { increment: 1 },
+      },
+    });
+    await this.occupancy.deleteForBooking(tx, input.bookingId);
+    await tx.booking_status_history.create({
+      data: { tenant_id: input.tenantId, booking_id: input.bookingId, to_status: 'CANCELLED', changed_by: null },
+    });
+    await this.emitBooking(tx, 'booking.cancelled', input.bookingId, input.propertyId, input.reason);
+  }
+
   async list(
     user: JwtClaims,
     query: {

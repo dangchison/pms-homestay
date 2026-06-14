@@ -90,3 +90,33 @@ export const ChannelMappingResponseSchema = z.object({
   created_at: z.iso.datetime(),
 });
 export type ChannelMappingResponse = z.infer<typeof ChannelMappingResponseSchema>;
+
+// ── Sync jobs (task 5.2) ──────────────────────────────────────────────────────
+export const SyncJobResponseSchema = z.object({
+  id: z.uuid(),
+  channel_id: z.uuid(),
+  channel_mapping_id: z.uuid().nullable(),
+  job_type: z.string(),
+  status: SyncJobStatusSchema,
+  started_at: z.iso.datetime(),
+  finished_at: z.iso.datetime().nullable(),
+  events_processed: z.number().int(),
+  events_created: z.number().int(),
+  events_updated: z.number().int(),
+  events_removed: z.number().int(),
+  conflict_count: z.number().int(),
+  error_message: z.string().nullable(),
+});
+export type SyncJobResponse = z.infer<typeof SyncJobResponseSchema>;
+
+/** Kết quả 1 lần iCal pull (trả ở POST sync-now). */
+export const IcalSyncResultSchema = z.object({
+  status: SyncJobStatusSchema,
+  feed_count: z.number().int(),
+  created: z.number().int(),
+  cancelled: z.number().int(),
+  conflicts: z.number().int(),
+  skipped: z.number().int(),
+  guard_triggered: z.boolean(),
+});
+export type IcalSyncResult = z.infer<typeof IcalSyncResultSchema>;
