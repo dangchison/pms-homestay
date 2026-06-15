@@ -3,6 +3,7 @@ import { Inject, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import { type Job, Queue } from 'bullmq';
 import { QUEUE_NIGHT_AUDIT } from '@core/bullmq/queues';
 import { ENV, type Env } from '@core/config/env.schema';
+import { DataRightsService } from '@modules/compliance/data-rights.service';
 import { SubscriptionService } from '@modules/subscription/subscription.service';
 import { NightAuditService } from './night-audit.service';
 
@@ -23,6 +24,7 @@ export class NightAuditProcessor extends WorkerHost implements OnApplicationBoot
   constructor(
     private readonly nightAudit: NightAuditService,
     private readonly subscription: SubscriptionService,
+    private readonly dataRights: DataRightsService,
     @InjectQueue(QUEUE_NIGHT_AUDIT) private readonly queue: Queue,
     @Inject(ENV) private readonly env: Env,
   ) {
@@ -46,8 +48,10 @@ export class NightAuditProcessor extends WorkerHost implements OnApplicationBoot
     // Lifecycle thuê bao trước (4.7): TRIAL/ACTIVE hết hạn → SUSPENDED; SUSPENDED 60d → CHURNED.
     const lifecycle = await this.subscription.runLifecycleSweep(now);
     const tenants = await this.nightAudit.runAllTenants(now);
+    // NĐ13 retention (7.3): ẩn danh khách không booking ≥5 năm (cross-tenant, idempotent).
+    const anonymized = await this.dataRights.anonymizeStaleGuests(now);
     this.logger.log(
-      `Night-audit xong cho ${tenants} tenant (lifecycle: suspended=${lifecycle.suspended} churned=${lifecycle.churned})`,
+      `Night-audit xong cho ${tenants} tenant (lifecycle: suspended=${lifecycle.suspended} churned=${lifecycle.churned}; anonymized=${anonymized})`,
     );
     return { tenants };
   }

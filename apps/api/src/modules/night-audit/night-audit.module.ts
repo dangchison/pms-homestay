@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { QUEUE_NIGHT_AUDIT } from '@core/bullmq/queues';
 import { AssetsModule } from '@modules/assets/assets.module';
 import { BillingModule } from '@modules/billing/billing.module';
+import { ComplianceModule } from '@modules/compliance/compliance.module';
 import { ExpensesModule } from '@modules/expenses/expenses.module';
 import { OccupancyModule } from '@modules/occupancy/occupancy.module';
 import { SubscriptionModule } from '@modules/subscription/subscription.module';
@@ -21,6 +22,7 @@ import { NightAuditService } from './night-audit.service';
     ExpensesModule,
     BillingModule,
     SubscriptionModule,
+    ComplianceModule,
     BullModule.registerQueue({ name: QUEUE_NIGHT_AUDIT }),
   ],
   providers: [NightAuditService, NightAuditProcessor],
