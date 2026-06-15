@@ -2,15 +2,17 @@
 
 import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ResetPasswordRequestSchema, type ResetPasswordRequest } from '@pms/shared-types';
 import { Button, Input, Label, toast } from '@pms/ui';
 import { useForm } from 'react-hook-form';
 import { AuthCard } from '@/components/auth/AuthCard';
+import { ApiClientError, apiClient } from '@/lib/api-client';
 
 /** A4 /reset-password?token= (docs/ui/01): đặt mật khẩu mới (min 10). */
 function ResetPasswordForm() {
+  const router = useRouter();
   const token = useSearchParams().get('token') ?? '';
   const [confirm, setConfirm] = useState('');
   const {
@@ -44,13 +46,18 @@ function ResetPasswordForm() {
     );
   }
 
-  const onSubmit = (_values: ResetPasswordRequest) => {
-    if (_values.new_password !== confirm) {
+  const onSubmit = async (values: ResetPasswordRequest) => {
+    if (values.new_password !== confirm) {
       toast.error('Mật khẩu xác nhận không khớp');
       return;
     }
-    // TODO(task 6.1): apiClient.post('/auth/reset-password') → toast + chuyển /login
-    toast.info('Nối API ở task 6.1 — backend /auth/reset-password đã chạy (link 30 phút, revoke mọi phiên)');
+    try {
+      await apiClient.post('/auth/reset-password', values);
+      toast.success('Đặt lại mật khẩu thành công — đăng nhập lại');
+      router.push('/login');
+    } catch (err) {
+      toast.error(err instanceof ApiClientError ? err.message : 'Link hết hạn hoặc không hợp lệ');
+    }
   };
 
   const mismatch = confirm.length > 0 && watch('new_password') !== confirm;

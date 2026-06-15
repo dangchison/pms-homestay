@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { RegisterTenantRequestSchema, type RegisterTenantRequest } from '@pms/shared-types';
 import { Button, Input, Label, toast } from '@pms/ui';
 import { useForm } from 'react-hook-form';
 import { AuthCard } from '@/components/auth/AuthCard';
+import { ApiClientError, apiClient } from '@/lib/api-client';
 
 /** A2 /register (docs/ui/01): tạo tenant + OWNER, trial 14 ngày. */
 function slugify(value: string): string {
@@ -21,6 +23,7 @@ function slugify(value: string): string {
 }
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [slugEdited, setSlugEdited] = useState(false);
   const {
     register,
@@ -29,9 +32,14 @@ export default function RegisterPage() {
     formState: { errors, isSubmitting },
   } = useForm<RegisterTenantRequest>({ resolver: zodResolver(RegisterTenantRequestSchema) });
 
-  const onSubmit = (_values: RegisterTenantRequest) => {
-    // TODO(task 6.1): apiClient.post('/auth/register') → chuyển sang onboarding checklist
-    toast.info('Nối API đăng ký ở task 6.1 — backend /auth/register đã chạy (tenant + OWNER, trial 14 ngày)');
+  const onSubmit = async (values: RegisterTenantRequest) => {
+    try {
+      await apiClient.post('/auth/register', values);
+      toast.success('Đăng ký thành công — đăng nhập để bắt đầu');
+      router.push('/login');
+    } catch (err) {
+      toast.error(err instanceof ApiClientError ? err.message : 'Đăng ký thất bại');
+    }
   };
 
   return (

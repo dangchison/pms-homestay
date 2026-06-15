@@ -1,9 +1,14 @@
-import { type ApiError } from '@pms/shared-types';
+import { type ApiError, type AuthTokensResponse } from '@pms/shared-types';
+import { useAuthStore } from '@/stores/auth.store';
+import { getTenantSlug } from './tenant';
 
 /**
  * Fetch wrapper gọi thẳng API domain (docs/13 §3 — KHÔNG proxy qua Next).
- * TODO(task 1.7): refresh interceptor (401 → POST /auth/refresh → retry 1 lần).
- * TODO(task 2.6): tự gắn If-Match từ version của entity với PATCH.
+ * - Access token in-memory (auth store) → header `Authorization: Bearer`.
+ * - `X-Tenant-Slug` từ subdomain/env (BE resolve tenant cho auth-public).
+ * - Refresh interceptor: 401 → POST /auth/refresh (CSRF double-submit qua
+ *   `X-CSRF-Token`, refresh cookie HttpOnly tự gửi) → retry 1 lần. Lock chống
+ *   stampede khi nhiều request 401 cùng lúc.
  */
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -20,21 +25,65 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { body, headers, ...rest } = options;
+function baseHeaders(extra?: HeadersInit): Headers {
+  const h = new Headers(extra);
+  h.set('Content-Type', 'application/json');
+  h.set('X-Request-Id', crypto.randomUUID());
+  const slug = getTenantSlug();
+  if (slug) h.set('X-Tenant-Slug', slug);
+  const token = useAuthStore.getState().accessToken;
+  if (token) h.set('Authorization', `Bearer ${token}`);
+  return h;
+}
 
+// ── Refresh interceptor (1 lock dùng chung) ─────────────────────────────────
+let refreshing: Promise<boolean> | null = null;
+
+async function refreshSession(): Promise<boolean> {
+  const csrf = useAuthStore.getState().csrfToken;
+  const headers = new Headers({ 'X-Request-Id': crypto.randomUUID() });
+  const slug = getTenantSlug();
+  if (slug) headers.set('X-Tenant-Slug', slug);
+  if (csrf) headers.set('X-CSRF-Token', csrf); // double-submit
+  const res = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+  });
+  if (!res.ok) {
+    useAuthStore.getState().clear();
+    return false;
+  }
+  const { data } = (await res.json()) as { data: AuthTokensResponse };
+  useAuthStore.getState().setSession({
+    accessToken: data.access_token,
+    csrfToken: data.csrf_token,
+    user: data.user,
+  });
+  return true;
+}
+
+/** Đảm bảo chỉ 1 refresh chạy tại 1 thời điểm. */
+export function ensureRefreshed(): Promise<boolean> {
+  refreshing ??= refreshSession().finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
+}
+
+async function request<T>(path: string, options: RequestOptions = {}, retry = true): Promise<T> {
+  const { body, headers, ...rest } = options;
   const res = await fetch(`${BASE_URL}/api/v1${path}`, {
     ...rest,
-    // refresh cookie HTTP-only + CSRF double-submit (docs/13 §3)
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Request-Id': crypto.randomUUID(),
-      // TODO(task 1.7): Authorization: Bearer <access token in-memory>
-      ...headers,
-    },
+    headers: baseHeaders(headers),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+
+  if (res.status === 401 && retry && !path.startsWith('/auth/')) {
+    const ok = await ensureRefreshed();
+    if (ok) return request<T>(path, options, false); // retry 1 lần với token mới
+  }
 
   if (!res.ok) {
     const errorBody = (await res.json().catch(() => undefined)) as ApiError | undefined;
@@ -45,12 +94,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 }
 
 export const apiClient = {
-  get: <T>(path: string, options?: RequestOptions) =>
-    request<T>(path, { ...options, method: 'GET' }),
+  get: <T>(path: string, options?: RequestOptions) => request<T>(path, { ...options, method: 'GET' }),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'POST', body }),
   patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'PATCH', body }),
-  delete: <T>(path: string, options?: RequestOptions) =>
-    request<T>(path, { ...options, method: 'DELETE' }),
+  delete: <T>(path: string, options?: RequestOptions) => request<T>(path, { ...options, method: 'DELETE' }),
 };

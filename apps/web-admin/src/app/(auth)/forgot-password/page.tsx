@@ -8,6 +8,7 @@ import { Button, Input, Label } from '@pms/ui';
 import { ArrowLeft, MailCheck } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { AuthCard } from '@/components/auth/AuthCard';
+import { apiClient } from '@/lib/api-client';
 
 /** A3 /forgot-password (docs/ui/01): thông báo TRUNG TÍNH (không lộ email tồn tại). */
 export default function ForgotPasswordPage() {
@@ -18,8 +19,9 @@ export default function ForgotPasswordPage() {
     formState: { errors, isSubmitting },
   } = useForm<ForgotPasswordRequest>({ resolver: zodResolver(ForgotPasswordRequestSchema) });
 
-  const onSubmit = (_values: ForgotPasswordRequest) => {
-    // TODO(task 6.1): apiClient.post('/auth/forgot-password') — luôn 204 (chống enumeration)
+  const onSubmit = async (values: ForgotPasswordRequest) => {
+    // BE luôn 204 (chống enumeration) → màn neutral dù email tồn tại hay không.
+    await apiClient.post('/auth/forgot-password', values).catch(() => undefined);
     setSent(true);
   };
 
