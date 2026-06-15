@@ -6,6 +6,8 @@ import {
   Button,
   Card,
   CardContent,
+  type DateRange,
+  DateRangePicker,
   Dialog,
   DialogContent,
   DialogFooter,
@@ -44,21 +46,22 @@ function PoliceReportCard() {
   const propertyId = usePropertyStore((s) => s.selectedId);
   const { data: properties } = useProperties();
   const download = useDownloadPoliceReport();
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [range, setRange] = useState<DateRange | undefined>();
   const propName = properties?.find((p) => p.id === propertyId)?.name;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
   const submit = async () => {
     if (!propertyId) {
       toast.error('Chọn cơ sở ở thanh trên');
       return;
     }
-    if (!from || !to) {
+    if (!range?.from || !range?.to) {
       toast.error('Chọn khoảng thời gian');
       return;
     }
     try {
-      await download.mutateAsync({ propertyId, from, to });
+      await download.mutateAsync({ propertyId, from: ymd(range.from), to: ymd(range.to) });
     } catch (err) {
       toast.error(err instanceof ApiClientError ? err.message : 'Tải báo cáo thất bại');
     }
@@ -76,12 +79,8 @@ function PoliceReportCard() {
         </p>
         <div className="flex flex-wrap items-end gap-2">
           <div className="grid gap-1.5">
-            <Label className="text-xs">Từ ngày</Label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-40" />
-          </div>
-          <div className="grid gap-1.5">
-            <Label className="text-xs">Đến ngày</Label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40" />
+            <Label className="text-xs">Khoảng thời gian</Label>
+            <DateRangePicker className="w-[18rem]" value={range} onChange={setRange} />
           </div>
           <Button onClick={submit} disabled={download.isPending}>
             {download.isPending ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}

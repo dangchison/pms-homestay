@@ -1,7 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { Badge, Button, Card, CardContent, Skeleton, cn, toast } from '@pms/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Skeleton,
+  cn,
+  toast,
+} from '@pms/ui';
 import { KeyRound } from 'lucide-react';
 import type { UserResponse, UserRole } from '@pms/shared-types';
 import { ApiClientError } from '@/lib/api-client';
@@ -65,16 +78,22 @@ export default function UsersPage() {
                       <p className="truncate text-sm text-muted-foreground">{u.email}</p>
                     </div>
 
-                    <select
+                    <Select
                       value={u.default_role}
                       disabled={isSelf || update.isPending}
-                      onChange={(e) => changeRole(u, e.target.value as UserRole)}
-                      className="h-8 rounded-md border border-border bg-surface px-2 text-sm disabled:opacity-60"
+                      onValueChange={(v) => changeRole(u, v as UserRole)}
                     >
-                      {ROLE_OPTIONS.map((r) => (
-                        <option key={r} value={r}>{ROLE_LABEL[r]}</option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="h-8 w-[8.5rem]" aria-label="Vai trò">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ROLE_OPTIONS.map((r) => (
+                          <SelectItem key={r} value={r}>
+                            {ROLE_LABEL[r]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
 
                     <Button variant="outline" size="sm" onClick={() => setRolesFor(u)}>
                       Phân quyền
