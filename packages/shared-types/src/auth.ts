@@ -61,6 +61,19 @@ export const TwoFaVerifyRequestSchema = z.object({
 });
 export type TwoFaVerifyRequest = z.infer<typeof TwoFaVerifyRequestSchema>;
 
+/** Đổi mật khẩu khi đã đăng nhập (task 6.7 S4) — xác minh mật khẩu hiện tại. */
+export const ChangePasswordRequestSchema = z.object({
+  current_password: z.string().min(1),
+  new_password: z.string().min(10),
+});
+export type ChangePasswordRequest = z.infer<typeof ChangePasswordRequestSchema>;
+
+/** Tắt 2FA (task 6.7 S4) — cần TOTP hợp lệ để chứng minh sở hữu. */
+export const TwoFaDisableRequestSchema = z.object({
+  totp_code: z.string().length(6).regex(/^\d{6}$/),
+});
+export type TwoFaDisableRequest = z.infer<typeof TwoFaDisableRequestSchema>;
+
 /** Response của login/refresh — access token in-memory, refresh nằm trong cookie HTTP-only. */
 export const AuthTokensResponseSchema = z.object({
   access_token: z.string(),

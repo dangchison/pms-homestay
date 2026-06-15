@@ -1,8 +1,10 @@
 import {
+  ChangePasswordRequestSchema,
   ForgotPasswordRequestSchema,
   LoginRequestSchema,
   RegisterTenantRequestSchema,
   ResetPasswordRequestSchema,
+  TwoFaDisableRequestSchema,
   TwoFaVerifyRequestSchema,
 } from '@pms/shared-types';
 import { createZodDto } from '@core/http/pipes/zod-validation.pipe';
@@ -13,3 +15,5 @@ export class LoginDto extends createZodDto(LoginRequestSchema) {}
 export class ForgotPasswordDto extends createZodDto(ForgotPasswordRequestSchema) {}
 export class ResetPasswordDto extends createZodDto(ResetPasswordRequestSchema) {}
 export class TwoFaVerifyDto extends createZodDto(TwoFaVerifyRequestSchema) {}
+export class ChangePasswordDto extends createZodDto(ChangePasswordRequestSchema) {}
+export class TwoFaDisableDto extends createZodDto(TwoFaDisableRequestSchema) {}

@@ -20,10 +20,12 @@ import { SkipTenantScope } from '@core/http/decorators/skip-tenant.decorator';
 import { AppException } from '@core/http/exceptions/app.exception';
 import { AuthService, type IssuedTokens, type RequestContext } from './auth.service';
 import {
+  ChangePasswordDto,
   ForgotPasswordDto,
   LoginDto,
   RegisterDto,
   ResetPasswordDto,
+  TwoFaDisableDto,
   TwoFaVerifyDto,
 } from './dto';
 
@@ -117,6 +119,18 @@ export class AuthController {
   @HttpCode(204)
   async twoFaVerify(@CurrentUser() user: JwtClaims, @Body() dto: TwoFaVerifyDto) {
     await this.authService.twoFaVerify(user, dto.totp_code);
+  }
+
+  @Post('2fa/disable')
+  @HttpCode(204)
+  async twoFaDisable(@CurrentUser() user: JwtClaims, @Body() dto: TwoFaDisableDto) {
+    await this.authService.twoFaDisable(user, dto.totp_code);
+  }
+
+  @Post('change-password')
+  @HttpCode(204)
+  async changePassword(@CurrentUser() user: JwtClaims, @Body() dto: ChangePasswordDto) {
+    await this.authService.changePassword(user, dto.current_password, dto.new_password);
   }
 
   @Get('sessions')

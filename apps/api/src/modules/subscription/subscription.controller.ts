@@ -23,6 +23,13 @@ export class SubscriptionController {
     return { data: await this.subscription.getSummary(user) };
   }
 
+  /** Danh sách gói khả dụng (task 6.7 S3 — chọn để nâng cấp). */
+  @Get('plans')
+  @RequirePermissions('tenant.billing.manage')
+  async plans() {
+    return { data: await this.subscription.listPlans() };
+  }
+
   /** Lịch sử thanh toán thuê bao. */
   @Get('payments')
   @RequirePermissions('tenant.billing.manage')

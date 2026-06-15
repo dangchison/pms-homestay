@@ -463,6 +463,50 @@ export class AuthService {
     );
   }
 
+  /** Đổi mật khẩu khi đã đăng nhập (task 6.7 S4) — xác minh mật khẩu hiện tại. */
+  async changePassword(user: JwtClaims, currentPassword: string, newPassword: string): Promise<void> {
+    const row = await this.loadUser(user);
+    const ok = await argon2.verify(row.password_hash, currentPassword);
+    if (!ok) {
+      throw new AppException({
+        code: 'AUTH_PASSWORD_INVALID',
+        title: 'Mật khẩu hiện tại không đúng',
+        status: 400,
+      });
+    }
+    this.assertPasswordStrong(newPassword);
+    const passwordHash = await argon2.hash(newPassword, ARGON2_OPTIONS);
+    await withTenant(this.prisma, user.tnt, (tx) =>
+      tx.users.update({ where: { id: user.sub }, data: { password_hash: passwordHash } }),
+    );
+  }
+
+  /** Tắt 2FA (task 6.7 S4) — cần TOTP hợp lệ. */
+  async twoFaDisable(user: JwtClaims, code: string): Promise<void> {
+    const row = await this.loadUser(user);
+    if (!row.two_factor_enabled || !row.two_factor_secret) {
+      throw new AppException({
+        code: 'AUTH_2FA_NOT_ENABLED',
+        title: '2FA chưa được bật',
+        status: 400,
+      });
+    }
+    const verdict = this.twoFactor.verify(row.two_factor_secret, code);
+    if (!verdict.ok) {
+      throw new AppException({
+        code: 'AUTH_2FA_CODE_INVALID',
+        title: 'Mã xác thực không đúng',
+        status: 400,
+      });
+    }
+    await withTenant(this.prisma, user.tnt, (tx) =>
+      tx.users.update({
+        where: { id: user.sub },
+        data: { two_factor_enabled: false, two_factor_secret: null },
+      }),
+    );
+  }
+
   // ── Sessions (docs/04 §2) ──────────────────────────────────────────────────
 
   async listSessions(user: JwtClaims, currentRefreshCookie?: string): Promise<SessionInfo[]> {
