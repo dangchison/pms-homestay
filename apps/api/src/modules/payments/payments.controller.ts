@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { type JwtClaims } from '@pms/shared-types';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
@@ -38,6 +38,16 @@ export class PaymentsController {
   @HttpCode(200)
   async ignoreUnmatched(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtClaims) {
     return { data: await this.reconciliation.ignore(id, user) };
+  }
+
+  /** Liệt kê payment của 1 hoá đơn (task 6.4, F2) — `?invoice_id=`. */
+  @Get()
+  @RequirePermissions('invoice.read')
+  async listByInvoice(
+    @Query('invoice_id', ParseUUIDPipe) invoiceId: string,
+    @CurrentUser() user: JwtClaims,
+  ) {
+    return { data: await this.payments.listByInvoice(invoiceId, user) };
   }
 
   @Post()

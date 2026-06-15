@@ -5,6 +5,7 @@ import {
   type InvoiceEventPayload,
   type InvoiceResponse,
   type JwtClaims,
+  type OffsetPageInfo,
   type QuoteLineItem,
   type VoidInvoiceRequest,
 } from '@pms/shared-types';
@@ -341,6 +342,67 @@ export class InvoicesService {
       { readOnly: true },
     );
     return rows.map((r) => toInvoiceResponse(r, r.invoice_items));
+  }
+
+  /** Danh sách hoá đơn theo cơ sở + filter (F1, task 6.4). JOIN bookings để lấy property
+   *  (hoá đơn ad-hoc booking_id null KHÔNG vào list theo property). */
+  async listByProperty(
+    query: {
+      property_id?: string;
+      status?: InvoiceResponse['status'];
+      kind?: InvoiceResponse['kind'];
+      from?: string;
+      to?: string;
+      page: number;
+      page_size: number;
+    },
+    user: JwtClaims,
+  ): Promise<{ data: InvoiceResponse[]; page_info: OffsetPageInfo }> {
+    const propertyId = query.property_id;
+    if (!propertyId) {
+      throw new AppException({ code: 'VALIDATION', title: 'Cần property_id', status: 400 });
+    }
+    await this.permissionService.authorizeOnProperty(user, propertyId, 'invoice.read');
+    const where: Prisma.invoicesWhereInput = {
+      bookings: { property_id: propertyId },
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.kind ? { kind: query.kind } : {}),
+      ...(query.from || query.to
+        ? {
+            created_at: {
+              ...(query.from ? { gte: new Date(query.from) } : {}),
+              ...(query.to ? { lte: new Date(`${query.to}T23:59:59.999Z`) } : {}),
+            },
+          }
+        : {}),
+    };
+    const { page, page_size } = query;
+    return withTenant(
+      this.prisma,
+      user.tnt,
+      async (tx) => {
+        const [rows, total] = await Promise.all([
+          tx.invoices.findMany({
+            where,
+            orderBy: { created_at: 'desc' },
+            include: { invoice_items: true },
+            skip: (page - 1) * page_size,
+            take: page_size,
+          }),
+          tx.invoices.count({ where }),
+        ]);
+        return {
+          data: rows.map((r) => toInvoiceResponse(r, r.invoice_items)),
+          page_info: {
+            page,
+            page_size,
+            total_items: total,
+            total_pages: Math.max(1, Math.ceil(total / page_size)),
+          },
+        };
+      },
+      { readOnly: true },
+    );
   }
 
   /** Bối cảnh invoice để PaymentsService (3.3) phân quyền + validate trước khi ghi payment. */

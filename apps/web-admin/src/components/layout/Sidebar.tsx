@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@pms/ui';
 import {
+  ArrowLeftRight,
   BarChart3,
   BedDouble,
   Building2,
@@ -38,6 +39,7 @@ const SECTIONS = [
     label: 'Tài chính',
     items: [
       { href: '/invoices', label: 'Hoá đơn & Thanh toán', icon: ReceiptText },
+      { href: '/payments/unmatched', label: 'Đối soát', icon: ArrowLeftRight },
       { href: '/reports', label: 'Báo cáo', icon: BarChart3 },
     ],
   },
