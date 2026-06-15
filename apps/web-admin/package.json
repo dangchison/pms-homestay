@@ -23,6 +23,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.54.0",
+    "recharts": "^2.15.4",
     "zod": "^4.0.0",
     "zustand": "^5.0.0"
   },
