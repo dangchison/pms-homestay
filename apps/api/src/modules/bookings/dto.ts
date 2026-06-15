@@ -5,6 +5,7 @@ import {
   CreateBookingRequestSchema,
   OffsetPaginationQuerySchema,
   SwitchResourceRequestSchema,
+  TodayBoardQuerySchema,
   UpdateBookingRequestSchema,
 } from '@pms/shared-types';
 import { z } from 'zod';
@@ -23,3 +24,4 @@ const BookingListQuerySchema = OffsetPaginationQuerySchema.extend({
   to: z.iso.datetime().optional(),
 });
 export class BookingListQueryDto extends createZodDto(BookingListQuerySchema) {}
+export class TodayBoardQueryDto extends createZodDto(TodayBoardQuerySchema) {}

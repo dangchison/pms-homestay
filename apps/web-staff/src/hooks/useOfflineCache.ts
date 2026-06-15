@@ -12,9 +12,8 @@ function subscribe(callback: () => void): () => void {
 }
 
 /**
- * ★ READ-CACHE ONLY (docs/13 §4): hook trả trạng thái mạng để UI
- * disable mutation + hiện OfflineBanner khi offline.
- * TODO(task 6.6): kết hợp Workbox runtime cache cho GET.
+ * ★ READ-CACHE ONLY (docs/13 §4): hook trả trạng thái mạng để UI disable mutation
+ * + hiện OfflineBanner khi offline. Cặp với service worker (public/sw.js) cache GET.
  */
 export function useOnlineStatus(): boolean {
   return useSyncExternalStore(

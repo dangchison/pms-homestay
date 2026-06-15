@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster, themeInitScript } from '@pms/ui';
+import { Providers } from './providers';
+import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
 import './globals.css';
 
 // Font hệ thống: Inter latin + vietnamese (docs/ui/00 §3); ≥16px tránh zoom iOS
@@ -27,7 +29,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="vi" data-theme="light" suppressHydrationWarning>
       <body className={`${inter.variable} min-h-screen font-sans antialiased`}>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-        {children}
+        <Providers>{children}</Providers>
+        <ServiceWorkerRegister />
         <Toaster position="top-center" />
       </body>
     </html>

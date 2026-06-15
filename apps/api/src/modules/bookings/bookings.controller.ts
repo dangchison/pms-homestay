@@ -23,6 +23,7 @@ import {
   ConfirmBookingDto,
   CreateBookingDto,
   SwitchResourceDto,
+  TodayBoardQueryDto,
   UpdateBookingDto,
 } from './dto';
 
@@ -43,6 +44,13 @@ export class BookingsController {
   async list(@Query() query: BookingListQueryDto, @CurrentUser() user: JwtClaims) {
     const { data, page_info } = await this.bookings.list(user, query);
     return { data, page_info };
+  }
+
+  // Phải khai BEFORE @Get(':id') để 'today' không bị bắt làm param id (Nest match theo thứ tự).
+  @Get('today')
+  @RequirePermissions('booking.read')
+  async today(@Query() query: TodayBoardQueryDto, @CurrentUser() user: JwtClaims) {
+    return { data: await this.bookings.listTodayBoard(query, user) };
   }
 
   @Get(':id')

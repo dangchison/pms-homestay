@@ -62,6 +62,37 @@ export const RoomResponseSchema = z.object({
 });
 export type RoomResponse = z.infer<typeof RoomResponseSchema>;
 
+/**
+ * PATCH /rooms/:id/housekeeping (task 6.6, ui/02 #T7) — đổi trạng thái buồng phòng
+ * nhanh từ room board. Quyền `room.housekeeping.change`; HOUSEKEEPER bị giới hạn
+ * CLEANING→CLEAN (enforce ở service). KHÔNG If-Match (low-stakes, idempotent).
+ */
+export const UpdateHousekeepingRequestSchema = z.object({
+  housekeeping_status: HousekeepingStatusSchema,
+});
+export type UpdateHousekeepingRequest = z.infer<typeof UpdateHousekeepingRequestSchema>;
+
+/**
+ * Room board (task 6.6, ui/02 #T7): grid phòng + dot housekeeping + cờ "đang có
+ * khách" (derive từ room_occupancy của booking CHECKED_IN phủ thời điểm hiện tại).
+ */
+export const RoomBoardItemSchema = z.object({
+  id: z.uuid(),
+  room_number: z.string(),
+  display_name: z.string().nullable(),
+  housekeeping_status: HousekeepingStatusSchema,
+  is_occupied_now: z.boolean(),
+  current_guest_name: z.string().nullable(),
+  current_booking_id: z.uuid().nullable(),
+});
+export type RoomBoardItem = z.infer<typeof RoomBoardItemSchema>;
+
+export const RoomBoardResponseSchema = z.object({
+  property_id: z.uuid(),
+  rooms: z.array(RoomBoardItemSchema),
+});
+export type RoomBoardResponse = z.infer<typeof RoomBoardResponseSchema>;
+
 // ── Room blocks (chặn phòng — bảo trì/owner dùng) ───────────────────────────
 
 export const CreateRoomBlockRequestSchema = z

@@ -10,6 +10,9 @@ import {
   type JwtClaims,
   type OffsetPageInfo,
   type SwitchResourceRequest,
+  type TodayBoardQuery,
+  type TodayBoardResponse,
+  type TodayBookingCard,
   type UpdateBookingRequest,
 } from '@pms/shared-types';
 import { Prisma, type bookings } from '@prisma/client';
@@ -31,6 +34,26 @@ const HOLD_TTL_MS = 10 * 60 * 1000; // docs/06 §4
 const DEPOSIT_DEADLINE_HOURS = 24; // hạn cọc PENDING (docs/06 §4) — per-tenant config: task 4.7
 /** Trần số HOLD huỷ mỗi tenant mỗi lượt quét — chống tx dài; backlog dọn ở lượt sau. */
 const HOLD_SWEEP_BATCH = 500;
+
+/** Dòng raw cho bảng "Hôm nay" (listTodayBoard) — bucket phân nhóm tính ở SQL. */
+interface RawTodayRow {
+  id: string;
+  booking_code: string;
+  status: string;
+  mode: string;
+  resource_id: string;
+  resource_name: string;
+  is_whole: boolean;
+  guest_id: string | null;
+  guest_name: string | null;
+  check_in: Date;
+  check_out: Date;
+  adults: number;
+  children: number;
+  balance_due_vnd: bigint;
+  deposit_due_vnd: bigint;
+  bucket: 'arrivals' | 'departures' | 'in_house';
+}
 
 function toBookingResponse(b: bookings): BookingResponse {
   return {
@@ -343,6 +366,113 @@ export class BookingsService {
     const booking = await this.loadOrThrow(id, user);
     await this.permissionService.authorizeOnProperty(user, booking.property_id, 'booking.read');
     return toBookingResponse(booking);
+  }
+
+  /**
+   * Bảng "Hôm nay" (task 6.6, ui/02 #T2) — đọc-only cho web-staff. Phân nhóm theo
+   * NGÀY ở timezone cơ sở: đến (PENDING/CONFIRMED, check_in hôm nay), đi (CHECKED_IN,
+   * check_out ≤ hôm nay), đang ở (CHECKED_IN, check_out > hôm nay). Kèm số dư còn nợ
+   * (tổng + riêng cọc) để FE gate check-in/hiện balance. 1 query raw, không tự suy.
+   */
+  async listTodayBoard(query: TodayBoardQuery, user: JwtClaims): Promise<TodayBoardResponse> {
+    await this.permissionService.authorizeOnProperty(user, query.property_id, 'booking.read');
+
+    const prop = await withTenant(
+      this.prisma,
+      user.tnt,
+      (tx) =>
+        tx.properties.findFirst({
+          where: { id: query.property_id },
+          select: { id: true, timezone: true },
+        }),
+      { readOnly: true },
+    );
+    if (!prop) {
+      throw new AppException({ code: 'PROPERTY_NOT_FOUND', title: 'Không tìm thấy cơ sở', status: 404 });
+    }
+    // Ngày mục tiêu theo giờ địa phương cơ sở (en-CA → YYYY-MM-DD).
+    const dateStr =
+      query.date ?? new Intl.DateTimeFormat('en-CA', { timeZone: prop.timezone }).format(new Date());
+
+    const rows = await withTenant(
+      this.prisma,
+      user.tnt,
+      (tx) =>
+        tx.$queryRaw<RawTodayRow[]>(Prisma.sql`
+          SELECT
+            b.id::text          AS id,
+            b.booking_code      AS booking_code,
+            b.status::text      AS status,
+            b.mode::text        AS mode,
+            b.resource_id::text AS resource_id,
+            br.name             AS resource_name,
+            (br.type = 'WHOLE') AS is_whole,
+            b.guest_id::text    AS guest_id,
+            g.full_name         AS guest_name,
+            b.check_in          AS check_in,
+            b.check_out         AS check_out,
+            b.adults            AS adults,
+            b.children          AS children,
+            COALESCE((
+              SELECT SUM(i.balance_vnd) FROM invoices i
+              WHERE i.tenant_id = b.tenant_id AND i.booking_id = b.id
+                AND i.status::text IN ('ISSUED', 'PARTIALLY_PAID', 'OVERDUE')
+            ), 0)::bigint       AS balance_due_vnd,
+            COALESCE((
+              SELECT SUM(i.balance_vnd) FROM invoices i
+              WHERE i.tenant_id = b.tenant_id AND i.booking_id = b.id AND i.kind::text = 'DEPOSIT'
+                AND i.status::text IN ('ISSUED', 'PARTIALLY_PAID', 'OVERDUE')
+            ), 0)::bigint       AS deposit_due_vnd,
+            CASE
+              WHEN b.status::text IN ('PENDING', 'CONFIRMED') THEN 'arrivals'
+              WHEN (b.check_out AT TIME ZONE ${prop.timezone})::date <= ${dateStr}::date THEN 'departures'
+              ELSE 'in_house'
+            END                 AS bucket
+          FROM bookings b
+          JOIN bookable_resources br ON br.id = b.resource_id
+          LEFT JOIN guests g ON g.tenant_id = b.tenant_id AND g.id = b.guest_id
+          WHERE b.property_id = ${query.property_id}::uuid
+            AND (
+              (b.status::text IN ('PENDING', 'CONFIRMED')
+                AND (b.check_in AT TIME ZONE ${prop.timezone})::date = ${dateStr}::date)
+              OR b.status::text = 'CHECKED_IN'
+            )
+          ORDER BY b.check_in
+        `),
+      { readOnly: true },
+    );
+
+    const groups: Record<RawTodayRow['bucket'], TodayBookingCard[]> = {
+      arrivals: [],
+      departures: [],
+      in_house: [],
+    };
+    for (const r of rows) {
+      groups[r.bucket].push({
+        id: r.id,
+        booking_code: r.booking_code,
+        status: r.status as TodayBookingCard['status'],
+        mode: r.mode as TodayBookingCard['mode'],
+        resource_id: r.resource_id,
+        resource_name: r.resource_name,
+        is_whole: r.is_whole,
+        guest_name: r.guest_name,
+        guest_id: r.guest_id,
+        check_in: r.check_in.toISOString(),
+        check_out: r.check_out.toISOString(),
+        adults: r.adults,
+        children: r.children,
+        balance_due_vnd: Number(r.balance_due_vnd),
+        deposit_due_vnd: Number(r.deposit_due_vnd),
+      });
+    }
+    return {
+      property_id: query.property_id,
+      date: dateStr,
+      arrivals: groups.arrivals,
+      departures: groups.departures,
+      in_house: groups.in_house,
+    };
   }
 
   /** PATCH — sửa guest/adults/children/notes (If-Match version); không đổi occupancy. */
