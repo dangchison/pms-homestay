@@ -54,7 +54,7 @@ Tenant **`demo`** + 3 tài khoản theo vai trò, **mật khẩu chung `Demo@202
 | STAFF (lễ tân) | `letan@demo.vn` | **web-staff** :3002 (hôm nay / check-in-out) |
 | HOUSEKEEPER (buồng phòng) | `buongphong@demo.vn` | **web-staff** :3002 (dọn phòng / room board) |
 
-> Seed đã tạo sẵn 1 cơ sở demo; phòng & đặt phòng thêm trực tiếp qua UI (cũng là một phần của demo). ⚠️ Đổi mật khẩu trước khi mở demo ra public.
+> Seed tạo sẵn 1 cơ sở demo **kèm dữ liệu mẫu** quanh "hôm nay" (8 phòng, ~17 đặt phòng đủ trạng thái: đang ở / đến / đi hôm nay / tương lai / giữ chỗ, 1 nguyên căn, 1 block bảo trì; 5 hoá đơn đã trả / trả một phần / quá hạn; 4 task dọn phòng; 31 ngày thống kê cho báo cáo) — để Lịch / Hôm nay / Hoá đơn / Báo cáo có dữ liệu thật ngay. Dữ liệu mẫu **idempotent**: chạy lại `pnpm db:seed:dev` sẽ reset rồi nạp lại bộ tươi (ngày tính theo `now()` nên luôn quanh hôm nay). Vẫn thêm phòng/đặt phòng qua UI bình thường. ⚠️ Đổi mật khẩu trước khi mở demo ra public.
 
 | Lệnh | Tác dụng |
 |---|---|
