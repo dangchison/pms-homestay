@@ -12,10 +12,12 @@
     "test": "echo \"@pms/web-admin: no tests yet\""
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@hookform/resolvers": "^5.0.0",
     "@pms/shared-types": "workspace:*",
     "@pms/ui": "workspace:*",
-    "@hookform/resolvers": "^5.0.0",
     "@tanstack/react-query": "^5.62.0",
+    "@tanstack/react-virtual": "^3.14.2",
     "lucide-react": "^0.469.0",
     "next": "^15.1.0",
     "react": "^19.0.0",
