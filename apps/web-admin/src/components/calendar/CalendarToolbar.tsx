@@ -1,7 +1,17 @@
 'use client';
 
 import { CalendarDays, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { BOOKING_STYLE, type BookingStatus, Button, cn } from '@pms/ui';
+import {
+  BOOKING_STYLE,
+  type BookingStatus,
+  Button,
+  cn,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@pms/ui';
 import { useT } from '@/lib/i18n';
 import { rangeLabel } from '@/lib/calendar/calendar-utils';
 
@@ -49,18 +59,18 @@ export function CalendarToolbar({
         <CalendarDays /> {t('calendar.today')}
       </Button>
 
-      <select
-        aria-label="Số ngày hiển thị"
-        value={days}
-        onChange={(e) => onDaysChange(Number(e.target.value))}
-        className="h-8 cursor-pointer rounded-md border border-border bg-surface px-2 text-sm outline-none"
-      >
-        {RANGE_OPTIONS.map((d) => (
-          <option key={d} value={d}>
-            {d} ngày
-          </option>
-        ))}
-      </select>
+      <Select value={String(days)} onValueChange={(val) => onDaysChange(Number(val))}>
+        <SelectTrigger aria-label="Số ngày hiển thị" className="h-8 w-[7rem]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {RANGE_OPTIONS.map((d) => (
+            <SelectItem key={d} value={String(d)}>
+              {d} ngày
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       <div className="flex items-center gap-1.5">
         {CALENDAR_STATUSES.map((s) => {

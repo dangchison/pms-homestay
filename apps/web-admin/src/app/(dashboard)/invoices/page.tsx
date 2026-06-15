@@ -2,15 +2,22 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Skeleton } from '@pms/ui';
+import { Button, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Skeleton } from '@pms/ui';
 import { vnd } from '@/lib/format';
 import { type InvoiceFilters, useInvoices } from '@/lib/hooks/use-invoices';
 import { useT } from '@/lib/i18n';
 import { usePropertyStore } from '@/stores/property.store';
 import { InvoiceKindBadge, InvoiceStatusBadge } from '@/components/invoices/badges';
 
-const STATUSES = ['', 'ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'VOID'];
-const KINDS = ['', 'DEPOSIT', 'STAY', 'MONTHLY_RENT', 'ADJUSTMENT'];
+// 'ALL' = sentinel "mọi giá trị" (Radix Select không nhận value rỗng).
+const STATUSES = [
+  { value: 'ALL', label: 'Mọi trạng thái' },
+  ...['ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'VOID'].map((s) => ({ value: s, label: s })),
+];
+const KINDS = [
+  { value: 'ALL', label: 'Mọi loại' },
+  ...['DEPOSIT', 'STAY', 'MONTHLY_RENT', 'ADJUSTMENT'].map((k) => ({ value: k, label: k })),
+];
 
 /** F1 /invoices — danh sách hoá đơn theo cơ sở + filter (task 6.4). */
 export default function InvoicesPage() {
@@ -32,26 +39,36 @@ export default function InvoicesPage() {
       <h1 className="text-lg font-semibold">Hoá đơn</h1>
 
       <div className="flex flex-wrap items-center gap-2">
-        <select
-          aria-label="Trạng thái"
-          value={filters.status ?? ''}
-          onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value || undefined, page: 1 }))}
-          className="h-9 rounded-md border border-border bg-surface px-2 text-sm outline-none"
+        <Select
+          value={filters.status ?? 'ALL'}
+          onValueChange={(v) => setFilters((f) => ({ ...f, status: v === 'ALL' ? undefined : v, page: 1 }))}
         >
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>{s === '' ? 'Mọi trạng thái' : s}</option>
-          ))}
-        </select>
-        <select
-          aria-label="Loại"
-          value={filters.kind ?? ''}
-          onChange={(e) => setFilters((f) => ({ ...f, kind: e.target.value || undefined, page: 1 }))}
-          className="h-9 rounded-md border border-border bg-surface px-2 text-sm outline-none"
+          <SelectTrigger aria-label="Trạng thái" className="h-9 w-[12rem]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {STATUSES.map((s) => (
+              <SelectItem key={s.value} value={s.value}>
+                {s.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={filters.kind ?? 'ALL'}
+          onValueChange={(v) => setFilters((f) => ({ ...f, kind: v === 'ALL' ? undefined : v, page: 1 }))}
         >
-          {KINDS.map((k) => (
-            <option key={k} value={k}>{k === '' ? 'Mọi loại' : k}</option>
-          ))}
-        </select>
+          <SelectTrigger aria-label="Loại" className="h-9 w-[11rem]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {KINDS.map((k) => (
+              <SelectItem key={k.value} value={k.value}>
+                {k.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {isFetching && <span className="text-xs text-muted-foreground">Đang tải…</span>}
       </div>
 

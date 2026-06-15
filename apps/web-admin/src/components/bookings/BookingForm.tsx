@@ -4,9 +4,22 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { Button, Input, Label, toast } from '@pms/ui';
+import {
+  Button,
+  Checkbox,
+  DateTimePicker,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Textarea,
+  toast,
+} from '@pms/ui';
 import type { BookingMode, CreateBookingRequest, QuoteRequest } from '@pms/shared-types';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ApiClientError } from '@/lib/api-client';
 import { isoToLocalInput, localInputToIso } from '@/lib/datetime';
@@ -29,6 +42,27 @@ const FormSchema = z.object({
 });
 type FormValues = z.infer<typeof FormSchema>;
 
+const MODE_LABEL: Record<FormValues['mode'], string> = {
+  DAILY: 'Theo ngày',
+  HOURLY: 'Theo giờ',
+  MONTHLY: 'Theo tháng',
+};
+const SOURCE_LABEL: Record<FormValues['source'], string> = {
+  DIRECT: 'Trực tiếp',
+  WALK_IN: 'Khách vãng lai',
+};
+
+/** Bắc cầu giữa `<input datetime-local>` (chuỗi local) và DateTimePicker (Date). */
+function localStringToDate(s: string): Date | undefined {
+  if (!s) return undefined;
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+function dateToLocalString(d: Date | undefined): string {
+  if (!d) return '';
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
+
 interface Props {
   propertyId: string;
   prefill: { resourceId?: string; checkIn?: string; checkOut?: string };
@@ -44,6 +78,7 @@ export function BookingForm({ propertyId, prefill }: Props) {
   const [priceChanged, setPriceChanged] = useState(false);
 
   const {
+    control,
     register,
     handleSubmit,
     watch,
@@ -133,56 +168,103 @@ export function BookingForm({ propertyId, prefill }: Props) {
       <div className="space-y-4">
         <div className="grid gap-1.5">
           <Label htmlFor="resource_id">Phòng / Nguyên căn</Label>
-          <select
-            id="resource_id"
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            {...register('resource_id')}
-          >
-            <option value="">— Chọn —</option>
-            {resources?.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name} ({r.type === 'WHOLE' ? 'Nguyên căn' : 'Phòng'})
-              </option>
-            ))}
-          </select>
+          <Controller
+            control={control}
+            name="resource_id"
+            render={({ field }) => (
+              <Select value={field.value} onValueChange={field.onChange}>
+                <SelectTrigger id="resource_id">
+                  <SelectValue placeholder="— Chọn —" />
+                </SelectTrigger>
+                <SelectContent>
+                  {resources?.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name} ({r.type === 'WHOLE' ? 'Nguyên căn' : 'Phòng'})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
           {fieldError('resource_id')}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-1.5">
             <Label htmlFor="mode">Hình thức</Label>
-            <select
-              id="mode"
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              {...register('mode')}
-            >
-              <option value="DAILY">Theo ngày</option>
-              <option value="HOURLY">Theo giờ</option>
-              <option value="MONTHLY">Theo tháng</option>
-            </select>
+            <Controller
+              control={control}
+              name="mode"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger id="mode">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(['DAILY', 'HOURLY', 'MONTHLY'] as const).map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {MODE_LABEL[m]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="source">Nguồn</Label>
-            <select
-              id="source"
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              {...register('source')}
-            >
-              <option value="DIRECT">Trực tiếp</option>
-              <option value="WALK_IN">Khách vãng lai</option>
-            </select>
+            <Controller
+              control={control}
+              name="source"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger id="source">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(['DIRECT', 'WALK_IN'] as const).map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {SOURCE_LABEL[s]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-1.5">
             <Label htmlFor="check_in">Nhận phòng</Label>
-            <Input id="check_in" type="datetime-local" {...register('check_in')} />
+            <Controller
+              control={control}
+              name="check_in"
+              render={({ field }) => (
+                <DateTimePicker
+                  id="check_in"
+                  defaultHour={14}
+                  value={localStringToDate(field.value)}
+                  onChange={(d) => field.onChange(dateToLocalString(d))}
+                />
+              )}
+            />
             {fieldError('check_in')}
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="check_out">Trả phòng</Label>
-            <Input id="check_out" type="datetime-local" {...register('check_out')} />
+            <Controller
+              control={control}
+              name="check_out"
+              render={({ field }) => (
+                <DateTimePicker
+                  id="check_out"
+                  defaultHour={12}
+                  value={localStringToDate(field.value)}
+                  onChange={(d) => field.onChange(dateToLocalString(d))}
+                />
+              )}
+            />
             {fieldError('check_out')}
           </div>
         </div>
@@ -206,18 +288,19 @@ export function BookingForm({ propertyId, prefill }: Props) {
 
         <div className="grid gap-1.5">
           <Label htmlFor="notes">Ghi chú</Label>
-          <textarea
-            id="notes"
-            rows={2}
-            className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            {...register('notes')}
-          />
+          <Textarea id="notes" rows={2} {...register('notes')} />
         </div>
 
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" {...register('hold')} className="size-4" />
-          Chỉ giữ chỗ tạm 10 phút (HOLD) — bỏ chọn để tạo PENDING chờ cọc
-        </label>
+        <Controller
+          control={control}
+          name="hold"
+          render={({ field }) => (
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={field.value} onCheckedChange={(c) => field.onChange(c === true)} />
+              Chỉ giữ chỗ tạm 10 phút (HOLD) — bỏ chọn để tạo PENDING chờ cọc
+            </label>
+          )}
+        />
       </div>
 
       {/* ── Cột phải: báo giá + submit ── */}

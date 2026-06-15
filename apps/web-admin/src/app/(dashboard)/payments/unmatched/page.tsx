@@ -9,6 +9,11 @@ import {
   DialogHeader,
   DialogTitle,
   Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Skeleton,
   toast,
 } from '@pms/ui';
@@ -134,20 +139,19 @@ function ResolveDialog({ unmatched, onClose }: { unmatched: UnmatchedPaymentResp
         ) : (
           <div className="mt-2 grid gap-1.5">
             <Label htmlFor="rs-invoice">Hoá đơn (cơ sở đang chọn, còn nợ)</Label>
-            <select
-              id="rs-invoice"
-              value={invoiceId}
-              onChange={(e) => setInvoiceId(e.target.value)}
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none"
-            >
-              <option value="">— Chọn hoá đơn —</option>
-              {candidates.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.invoice_number} · còn {vnd(i.balance_vnd)}
-                  {i.balance_vnd === unmatched.amount_vnd ? ' ✓ khớp số tiền' : ''}
-                </option>
-              ))}
-            </select>
+            <Select value={invoiceId} onValueChange={setInvoiceId}>
+              <SelectTrigger id="rs-invoice">
+                <SelectValue placeholder="— Chọn hoá đơn —" />
+              </SelectTrigger>
+              <SelectContent>
+                {candidates.map((i) => (
+                  <SelectItem key={i.id} value={i.id}>
+                    {i.invoice_number} · còn {vnd(i.balance_vnd)}
+                    {i.balance_vnd === unmatched.amount_vnd ? ' ✓ khớp số tiền' : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
         <DialogFooter>

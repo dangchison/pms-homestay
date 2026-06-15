@@ -1,12 +1,27 @@
 'use client';
 
 import { useState } from 'react';
-import { Button, Card, CardContent, Input, Skeleton, cn } from '@pms/ui';
+import {
+  Button,
+  Card,
+  CardContent,
+  DateRangePicker,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Skeleton,
+  cn,
+} from '@pms/ui';
 import { ChevronDown } from 'lucide-react';
 import type { AuditAction } from '@pms/shared-types';
 import { useAuditLogs, type AuditFilters } from '@/lib/hooks/use-audit';
 
 const ACTIONS: AuditAction[] = ['CREATE', 'UPDATE', 'DELETE', 'STATE_CHANGE', 'LOGIN', 'LOGOUT', 'EXPORT', 'READ_PII'];
+const pad = (n: number) => String(n).padStart(2, '0');
+const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const ACTION_STYLE: Record<string, string> = {
   CREATE: 'bg-success/10 text-success',
   UPDATE: 'bg-primary/10 text-primary',
@@ -49,25 +64,32 @@ export default function AuditLogsPage() {
           value={filters.entity_type ?? ''}
           onChange={(e) => set({ entity_type: e.target.value || undefined })}
         />
-        <select
-          value={filters.action ?? ''}
-          onChange={(e) => set({ action: e.target.value || undefined })}
-          className="h-9 rounded-md border border-border bg-surface px-2 text-sm"
+        <Select
+          value={filters.action ?? 'ALL'}
+          onValueChange={(v) => set({ action: v === 'ALL' ? undefined : (v as AuditAction) })}
         >
-          <option value="">Mọi hành động</option>
-          {ACTIONS.map((a) => (
-            <option key={a} value={a}>{a}</option>
-          ))}
-        </select>
-        <input
-          type="date"
-          className="h-9 rounded-md border border-border bg-surface px-2 text-sm"
-          onChange={(e) => set({ from: e.target.value ? `${e.target.value}T00:00:00.000Z` : undefined })}
-        />
-        <input
-          type="date"
-          className="h-9 rounded-md border border-border bg-surface px-2 text-sm"
-          onChange={(e) => set({ to: e.target.value ? `${e.target.value}T23:59:59.999Z` : undefined })}
+          <SelectTrigger aria-label="Hành động" className="h-9 w-[12rem]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Mọi hành động</SelectItem>
+            {ACTIONS.map((a) => (
+              <SelectItem key={a} value={a}>
+                {a}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <DateRangePicker
+          className="w-[16rem]"
+          placeholder="Khoảng thời gian"
+          value={filters.from ? { from: new Date(filters.from), to: filters.to ? new Date(filters.to) : undefined } : undefined}
+          onChange={(r) =>
+            set({
+              from: r?.from ? `${ymd(r.from)}T00:00:00.000Z` : undefined,
+              to: r?.to ? `${ymd(r.to)}T23:59:59.999Z` : undefined,
+            })
+          }
         />
       </div>
 
