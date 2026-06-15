@@ -35,6 +35,18 @@ pnpm dev                            # api :3001 · web-admin :3000 · web-staff 
 
 Kiểm tra: `curl localhost:3001/health/readiness` → `{"status":"ok"}` · Swagger (dev): `localhost:3001/api/docs` · Mailpit UI: `localhost:8025`.
 
+### Tài khoản demo (sau `pnpm db:seed:dev`)
+
+Tenant **`demo`** + 3 tài khoản theo vai trò, **mật khẩu chung `Demo@2026!`** — dùng để thử/giới thiệu sản phẩm. Đảm bảo `.env` có `NEXT_PUBLIC_DEFAULT_TENANT_SLUG=demo` để login localhost nhận đúng tenant.
+
+| Vai trò | Email | Dùng cho |
+|---|---|---|
+| OWNER | `owner@demo.vn` | **web-admin** :3000 (quản trị đầy đủ) |
+| STAFF (lễ tân) | `letan@demo.vn` | **web-staff** :3002 (hôm nay / check-in-out) |
+| HOUSEKEEPER (buồng phòng) | `buongphong@demo.vn` | **web-staff** :3002 (dọn phòng / room board) |
+
+> Seed đã tạo sẵn 1 cơ sở demo; phòng & đặt phòng thêm trực tiếp qua UI (cũng là một phần của demo). ⚠️ Đổi mật khẩu trước khi mở demo ra public.
+
 | Lệnh | Tác dụng |
 |---|---|
 | `pnpm dev:api` | Chạy riêng API (watch) |
