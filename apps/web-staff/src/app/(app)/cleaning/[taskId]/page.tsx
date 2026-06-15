@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Button, Card, CardContent, Separator, Skeleton, cn, toast } from '@pms/ui';
+import { Button, Card, CardContent, Separator, Skeleton, Textarea, cn, toast } from '@pms/ui';
 import { ArrowLeft, CheckCircle2, ImagePlus, Loader2, Wrench } from 'lucide-react';
 import {
   presignCleaningPhoto,
@@ -159,12 +159,12 @@ export default function CleaningTaskPage() {
         <Card>
           <CardContent className="grid gap-2 py-4">
             <h2 className="text-sm font-semibold">Ghi chú / hỏng hóc</h2>
-            <textarea
+            <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
               placeholder="VD: vòi sen rỉ nước, bóng đèn cháy…"
-              className="rounded-md border border-border bg-card p-2 text-base"
+              className="bg-card text-base"
             />
             <Button variant="ghost" className="h-10 justify-start" disabled={!online || createTask.isPending} onClick={reportDamage}>
               <Wrench className="size-4" />

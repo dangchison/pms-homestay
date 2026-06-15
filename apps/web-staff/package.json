@@ -12,6 +12,7 @@
     "test": "echo \"@pms/web-staff: no tests yet\""
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.0.0",
     "@pms/shared-types": "workspace:*",
     "@pms/ui": "workspace:*",
     "@tanstack/react-query": "^5.62.0",
@@ -19,6 +20,8 @@
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-hook-form": "^7.54.0",
+    "zod": "^4.0.0",
     "zustand": "^5.0.0"
   },
   "devDependencies": {

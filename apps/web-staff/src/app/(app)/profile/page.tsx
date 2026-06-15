@@ -1,7 +1,19 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Button, Card, CardContent, Separator, cn, toast } from '@pms/ui';
+import {
+  Button,
+  Card,
+  CardContent,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Separator,
+  cn,
+  toast,
+} from '@pms/ui';
 import { KeyRound, LogOut, Radio, Wifi, WifiOff } from 'lucide-react';
 import type { UserRole } from '@pms/shared-types';
 import { apiClient } from '@/lib/api-client';
@@ -63,17 +75,18 @@ export default function ProfilePage() {
         <Card>
           <CardContent className="grid gap-2 py-3">
             <span className="text-sm font-medium">Cơ sở đang làm</span>
-            <select
-              value={selectedId ?? ''}
-              onChange={(e) => setSelected(e.target.value)}
-              className="h-11 rounded-md border border-border bg-card px-3 text-base"
-            >
-              {properties.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+            <Select value={selectedId ?? ''} onValueChange={setSelected}>
+              <SelectTrigger className="h-11 text-base" aria-label="Cơ sở đang làm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {properties.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </CardContent>
         </Card>
       )}
