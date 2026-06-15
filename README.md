@@ -37,7 +37,14 @@ Kiểm tra: `curl localhost:3001/health/readiness` → `{"status":"ok"}` · Swag
 
 ### Tài khoản demo (sau `pnpm db:seed:dev`)
 
-Tenant **`demo`** + 3 tài khoản theo vai trò, **mật khẩu chung `Demo@2026!`** — dùng để thử/giới thiệu sản phẩm. Đảm bảo `.env` có `NEXT_PUBLIC_DEFAULT_TENANT_SLUG=demo` để login localhost nhận đúng tenant.
+Tenant **`demo`** + 3 tài khoản theo vai trò, **mật khẩu chung `Demo@2026!`** — dùng để thử/giới thiệu sản phẩm.
+
+> **Trước khi login web-admin trên localhost:** copy env FE rồi **restart** dev server (Next nội suy `NEXT_PUBLIC_*` lúc khởi động, đọc từ thư mục app — KHÔNG đọc root `.env`):
+> ```bash
+> cp apps/web-admin/.env.example apps/web-admin/.env.local   # có NEXT_PUBLIC_DEFAULT_TENANT_SLUG=demo
+> cp apps/web-staff/.env.example  apps/web-staff/.env.local
+> ```
+> Thiếu bước này → login web-admin lỗi `TENANT_CONTEXT_MISSING` (không gửi `X-Tenant-Slug`). web-staff có ô nhập mã homestay nên gõ `demo` là được.
 
 | Vai trò | Email | Dùng cho |
 |---|---|---|
