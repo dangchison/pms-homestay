@@ -6,6 +6,7 @@ export * from './components/card';
 export * from './components/dialog';
 export * from './components/input';
 export * from './components/label';
+export * from './components/loading-screen';
 export * from './components/section';
 export * from './components/separator';
 export * from './components/skeleton';

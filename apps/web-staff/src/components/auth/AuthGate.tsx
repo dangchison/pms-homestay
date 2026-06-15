@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { LoadingScreen } from '@pms/ui';
 import { bootstrapSession } from '@/lib/auth';
 import { useEvents } from '@/lib/hooks/use-events';
 import { useAuthStore } from '@/stores/auth.store';
@@ -27,11 +27,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   useEvents(); // no-op cho tới khi có access token
 
   if (status !== 'authenticated') {
-    return (
-      <div className="flex h-dvh items-center justify-center text-muted-foreground">
-        <Loader2 className="size-6 animate-spin" />
-      </div>
-    );
+    return <LoadingScreen title="PMS Staff" label="Đang tải…" />;
   }
   return <>{children}</>;
 }
