@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { LoginRequestSchema, type LoginRequest } from '@pms/shared-types';
 import { Button, Input, Label, toast } from '@pms/ui';
-import { BedDouble, CalendarDays, Home, QrCode, RefreshCw } from 'lucide-react';
+import { BedDouble, CalendarDays, Home, PlayCircle, QrCode, RefreshCw } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { ApiClientError } from '@/lib/api-client';
 import { login } from '@/lib/auth';
+import { DEMO_MODE, DEMO_OWNER } from '@/lib/demo';
 
 const HIGHLIGHTS = [
   { icon: CalendarDays, text: 'Calendar phòng × ngày — kéo thả đổi phòng, chống trùng tuyệt đối' },
@@ -29,6 +31,8 @@ export default function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<LoginRequest>({ resolver: zodResolver(LoginRequestSchema) });
 
+  const [demoLoading, setDemoLoading] = useState(false);
+
   const onSubmit = async (values: LoginRequest) => {
     try {
       await login(values);
@@ -37,6 +41,19 @@ export default function LoginPage() {
       const msg =
         err instanceof ApiClientError ? err.message : 'Đăng nhập thất bại — kiểm tra kết nối';
       toast.error(msg);
+    }
+  };
+
+  const demoLogin = async () => {
+    setDemoLoading(true);
+    try {
+      await login(DEMO_OWNER);
+      router.replace('/');
+    } catch (err) {
+      toast.error(
+        err instanceof ApiClientError ? err.message : 'Đăng nhập demo thất bại — kiểm tra kết nối',
+      );
+      setDemoLoading(false);
     }
   };
 
@@ -133,6 +150,24 @@ export default function LoginPage() {
               Đăng nhập
             </Button>
           </form>
+
+          {DEMO_MODE && (
+            <div className="mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={demoLoading}
+                onClick={demoLogin}
+                className="h-11 w-full text-base"
+              >
+                <PlayCircle className="size-4" />
+                {demoLoading ? 'Đang vào demo…' : 'Dùng thử với tài khoản demo'}
+              </Button>
+              <p className="mt-1.5 text-center text-xs text-muted-foreground">
+                Vào ngay bằng dữ liệu mẫu — không cần đăng ký
+              </p>
+            </div>
+          )}
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Chưa có tài khoản?{' '}

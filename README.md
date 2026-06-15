@@ -46,6 +46,8 @@ Tenant **`demo`** + 3 tài khoản theo vai trò, **mật khẩu chung `Demo@202
 > ```
 > Thiếu bước này → login web-admin lỗi `TENANT_CONTEXT_MISSING` (không gửi `X-Tenant-Slug`). web-staff có ô nhập mã homestay nên gõ `demo` là được.
 
+`.env.example` đã bật `NEXT_PUBLIC_DEMO_MODE=1` → trang login hiện **nút 1-chạm**: web-admin "Dùng thử với tài khoản demo" (vào `owner@demo.vn`), web-staff "Dùng thử nhanh" (Lễ tân / Buồng phòng) — partner/khách bấm là vào, không cần gõ. **Deploy tenant thật: bỏ `NEXT_PUBLIC_DEMO_MODE`** (ẩn nút); demo công khai để ở subdomain riêng `demo.pmsapp.vn` + đổi mật khẩu.
+
 | Vai trò | Email | Dùng cho |
 |---|---|---|
 | OWNER | `owner@demo.vn` | **web-admin** :3000 (quản trị đầy đủ) |

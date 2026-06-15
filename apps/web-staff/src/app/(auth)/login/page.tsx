@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Card, CardContent, Input, Label } from '@pms/ui';
-import { Download, Home, Loader2, Smartphone } from 'lucide-react';
+import { Download, Home, Loader2, PlayCircle, Smartphone } from 'lucide-react';
 import { ApiClientError } from '@/lib/api-client';
 import { login } from '@/lib/auth';
 import { rememberedTenantSlug } from '@/lib/tenant';
+import { DEMO_ACCOUNTS, DEMO_MODE, DEMO_PASSWORD, DEMO_TENANT } from '@/lib/demo';
 
 interface InstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -48,6 +49,18 @@ export default function StaffLoginPage() {
           ? 'Sai email hoặc mật khẩu'
           : 'Đăng nhập thất bại — kiểm tra mã homestay & kết nối',
       );
+      setLoading(false);
+    }
+  };
+
+  const demoLogin = async (demoEmail: string) => {
+    setError(null);
+    setLoading(true);
+    try {
+      await login(DEMO_TENANT, { email: demoEmail, password: DEMO_PASSWORD });
+      router.replace('/today');
+    } catch {
+      setError('Không vào được tài khoản demo — kiểm tra kết nối');
       setLoading(false);
     }
   };
@@ -109,6 +122,28 @@ export default function StaffLoginPage() {
               {loading ? <Loader2 className="size-5 animate-spin" /> : 'Đăng nhập'}
             </Button>
           </form>
+
+          {DEMO_MODE && (
+            <div className="grid gap-2">
+              <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
+                <PlayCircle className="size-3.5" /> Dùng thử nhanh
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {DEMO_ACCOUNTS.map((a) => (
+                  <Button
+                    key={a.email}
+                    type="button"
+                    variant="outline"
+                    disabled={loading}
+                    onClick={() => demoLogin(a.email)}
+                    className="h-11"
+                  >
+                    {a.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {installEvt ? (
             <Button
