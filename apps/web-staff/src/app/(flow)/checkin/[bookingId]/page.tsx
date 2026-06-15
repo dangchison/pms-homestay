@@ -7,8 +7,15 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
+  DatePicker,
   Input,
   Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Separator,
   Skeleton,
   cn,
@@ -56,6 +63,11 @@ const EMPTY: GuestForm = {
   id_document_issue_place: '',
   address: '',
 };
+
+// Bắc cầu DatePicker (Date) ↔ date_of_birth (chuỗi 'YYYY-MM-DD').
+const pad = (n: number) => String(n).padStart(2, '0');
+const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseYmd = (s: string): Date | undefined => (s ? new Date(`${s}T00:00:00`) : undefined);
 
 export default function CheckInPage() {
   const { bookingId } = useParams<{ bookingId: string }>();
@@ -237,25 +249,39 @@ export default function CheckInPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
                 <Label>Ngày sinh</Label>
-                <Input type="date" value={form.date_of_birth} onChange={(e) => set('date_of_birth', e.target.value)} className="h-11" />
+                <DatePicker
+                  className="h-11"
+                  placeholder="Chọn ngày"
+                  value={parseYmd(form.date_of_birth)}
+                  onChange={(d) => set('date_of_birth', d ? ymd(d) : '')}
+                />
               </div>
               <div className="grid gap-1.5">
                 <Label>Giới tính</Label>
-                <select value={form.gender} onChange={(e) => set('gender', e.target.value)} className="h-11 rounded-md border border-border bg-card px-2 text-base">
-                  <option value="">—</option>
-                  <option value="Nam">Nam</option>
-                  <option value="Nữ">Nữ</option>
-                </select>
+                <Select value={form.gender} onValueChange={(v) => set('gender', v)}>
+                  <SelectTrigger className="h-11 text-base">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Nam">Nam</SelectItem>
+                    <SelectItem value="Nữ">Nữ</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="grid gap-1.5">
                 <Label>Loại</Label>
-                <select value={form.id_document_type} onChange={(e) => set('id_document_type', e.target.value as IdDocumentType)} className="h-11 rounded-md border border-border bg-card px-2 text-base">
-                  <option value="CCCD">CCCD</option>
-                  <option value="CMND">CMND</option>
-                  <option value="PASSPORT">Hộ chiếu</option>
-                </select>
+                <Select value={form.id_document_type} onValueChange={(v) => set('id_document_type', v as IdDocumentType)}>
+                  <SelectTrigger className="h-11 text-base">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CCCD">CCCD</SelectItem>
+                    <SelectItem value="CMND">CMND</SelectItem>
+                    <SelectItem value="PASSPORT">Hộ chiếu</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="col-span-2 grid gap-1.5">
                 <Label>Số giấy tờ</Label>
@@ -266,7 +292,7 @@ export default function CheckInPage() {
             <Field label="Địa chỉ" value={form.address} onChange={(v) => set('address', v)} />
 
             <label className="mt-1 flex items-start gap-2.5 text-sm">
-              <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 size-5 rounded border-border" />
+              <Checkbox checked={consent} onCheckedChange={(c) => setConsent(c === true)} className="mt-0.5 size-5" />
               <span>Khách đồng ý cho cơ sở xử lý dữ liệu cá nhân theo Nghị định 13/2023.</span>
             </label>
 
