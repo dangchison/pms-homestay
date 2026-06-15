@@ -14,6 +14,7 @@ export * from './asset';
 export * from './expense';
 export * from './billing';
 export * from './report';
+export * from './calendar';
 export * from './events';
 export * from './notification';
 export * from './cleaning-task';

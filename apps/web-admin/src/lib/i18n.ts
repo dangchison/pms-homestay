@@ -14,6 +14,12 @@ const messages = {
     'property.loading': 'Đang tải cơ sở…',
     'auth.logout': 'Đăng xuất',
     'common.loading': 'Đang tải…',
+    'calendar.title': 'Lịch phòng',
+    'calendar.today': 'Hôm nay',
+    'calendar.filter': 'Trạng thái',
+    'calendar.prev': 'Khoảng trước',
+    'calendar.next': 'Khoảng sau',
+    'calendar.selectProperty': 'Chọn một cơ sở để xem lịch.',
   },
   en: {
     'topbar.realtime': 'Live',
@@ -24,6 +30,12 @@ const messages = {
     'property.loading': 'Loading properties…',
     'auth.logout': 'Sign out',
     'common.loading': 'Loading…',
+    'calendar.title': 'Calendar',
+    'calendar.today': 'Today',
+    'calendar.filter': 'Status',
+    'calendar.prev': 'Previous range',
+    'calendar.next': 'Next range',
+    'calendar.selectProperty': 'Select a property to view the calendar.',
   },
 } as const;
 
