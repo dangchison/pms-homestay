@@ -397,3 +397,16 @@
 :root {
   --radius: 0.75rem;
 }
+
+/* Loading screen (task: màn loading branded) — thanh tiến trình trượt mượt.
+   CSS thuần để render TỨC THÌ (không chờ JS/motion lib). Tôn trọng reduced-motion. */
+@keyframes pms-loading-bar {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(360%); }
+}
+.pms-loading-bar {
+  animation: pms-loading-bar 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pms-loading-bar { animation: none; }
+}

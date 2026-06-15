@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { LoadingScreen } from '@pms/ui';
 import { useT } from '@/lib/i18n';
 import { bootstrapSession } from '@/lib/auth';
 import { useEvents } from '@/lib/hooks/use-events';
@@ -28,11 +29,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   useEvents(); // no-op cho tới khi có access token
 
   if (status !== 'authenticated') {
-    return (
-      <div className="flex h-dvh items-center justify-center text-sm text-muted-foreground">
-        {t('common.loading')}
-      </div>
-    );
+    return <LoadingScreen label={t('common.loading')} />;
   }
   return <>{children}</>;
 }
