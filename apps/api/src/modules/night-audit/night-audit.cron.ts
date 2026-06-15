@@ -5,6 +5,7 @@ import { QUEUE_NIGHT_AUDIT } from '@core/bullmq/queues';
 import { ENV, type Env } from '@core/config/env.schema';
 import { DataRightsService } from '@modules/compliance/data-rights.service';
 import { SubscriptionService } from '@modules/subscription/subscription.service';
+import { MaintenanceService } from './maintenance.service';
 import { NightAuditService } from './night-audit.service';
 
 const SCHEDULER_ID = 'night-audit-daily';
@@ -25,6 +26,7 @@ export class NightAuditProcessor extends WorkerHost implements OnApplicationBoot
     private readonly nightAudit: NightAuditService,
     private readonly subscription: SubscriptionService,
     private readonly dataRights: DataRightsService,
+    private readonly maintenance: MaintenanceService,
     @InjectQueue(QUEUE_NIGHT_AUDIT) private readonly queue: Queue,
     @Inject(ENV) private readonly env: Env,
   ) {
@@ -50,8 +52,10 @@ export class NightAuditProcessor extends WorkerHost implements OnApplicationBoot
     const tenants = await this.nightAudit.runAllTenants(now);
     // NĐ13 retention (7.3): ẩn danh khách không booking ≥5 năm (cross-tenant, idempotent).
     const anonymized = await this.dataRights.anonymizeStaleGuests(now);
+    // Vòng đời partition audit_logs (8.5): tạo tháng kế + archive cũ + alert nếu thiếu.
+    const partitions = await this.maintenance.runAuditPartitionMaintenance();
     this.logger.log(
-      `Night-audit xong cho ${tenants} tenant (lifecycle: suspended=${lifecycle.suspended} churned=${lifecycle.churned}; anonymized=${anonymized})`,
+      `Night-audit xong cho ${tenants} tenant (lifecycle: suspended=${lifecycle.suspended} churned=${lifecycle.churned}; anonymized=${anonymized}; partitions: +${partitions.created}/archive ${partitions.archived.length}/missing ${partitions.missing.length})`,
     );
     return { tenants };
   }

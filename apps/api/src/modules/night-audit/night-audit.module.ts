@@ -7,6 +7,7 @@ import { ComplianceModule } from '@modules/compliance/compliance.module';
 import { ExpensesModule } from '@modules/expenses/expenses.module';
 import { OccupancyModule } from '@modules/occupancy/occupancy.module';
 import { SubscriptionModule } from '@modules/subscription/subscription.module';
+import { MaintenanceService } from './maintenance.service';
 import { NightAuditProcessor } from './night-audit.cron';
 import { NightAuditService } from './night-audit.service';
 
@@ -25,7 +26,7 @@ import { NightAuditService } from './night-audit.service';
     ComplianceModule,
     BullModule.registerQueue({ name: QUEUE_NIGHT_AUDIT }),
   ],
-  providers: [NightAuditService, NightAuditProcessor],
-  exports: [NightAuditService],
+  providers: [NightAuditService, MaintenanceService, NightAuditProcessor],
+  exports: [NightAuditService, MaintenanceService],
 })
 export class NightAuditModule {}
