@@ -1,11 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { LoginRequestSchema, type LoginRequest } from '@pms/shared-types';
 import { Button, Input, Label, toast } from '@pms/ui';
 import { BedDouble, CalendarDays, Home, QrCode, RefreshCw } from 'lucide-react';
 import { useForm } from 'react-hook-form';
+import { ApiClientError } from '@/lib/api-client';
+import { login } from '@/lib/auth';
 
 const HIGHLIGHTS = [
   { icon: CalendarDays, text: 'Calendar phòng × ngày — kéo thả đổi phòng, chống trùng tuyệt đối' },
@@ -19,15 +22,22 @@ const HIGHLIGHTS = [
  * Gọi API thật khi nối client auth (task 6.1) — backend /auth/login đã sẵn sàng.
  */
 export default function LoginPage() {
+  const router = useRouter();
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<LoginRequest>({ resolver: zodResolver(LoginRequestSchema) });
 
-  const onSubmit = (_values: LoginRequest) => {
-    // TODO(task 6.1): apiClient.post('/auth/login') + lưu access token in-memory
-    toast.info('Nối API login ở task 6.1 — backend /auth/login đã chạy');
+  const onSubmit = async (values: LoginRequest) => {
+    try {
+      await login(values);
+      router.replace('/');
+    } catch (err) {
+      const msg =
+        err instanceof ApiClientError ? err.message : 'Đăng nhập thất bại — kiểm tra kết nối';
+      toast.error(msg);
+    }
   };
 
   return (
