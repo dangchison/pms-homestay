@@ -73,6 +73,48 @@ export const SwitchResourceRequestSchema = z.object({
 });
 export type SwitchResourceRequest = z.infer<typeof SwitchResourceRequestSchema>;
 
+/**
+ * Bảng "Hôm nay" cho web-staff (task 6.6, ui/02 #T2). 3 nhóm theo NGÀY ở timezone
+ * cơ sở: đến (chờ check-in), đi (đang ở, trả hôm nay), đang ở (ở qua hôm nay).
+ * `date` mặc định = hôm nay (server tính theo properties.timezone).
+ */
+export const TodayBoardQuerySchema = z.object({
+  property_id: z.uuid(),
+  date: z.iso.date().optional(), // YYYY-MM-DD
+});
+export type TodayBoardQuery = z.infer<typeof TodayBoardQuerySchema>;
+
+/** 1 thẻ booking trên bảng hôm nay — đủ để render card + điều hướng check-in/out. */
+export const TodayBookingCardSchema = z.object({
+  id: z.uuid(),
+  booking_code: z.string(),
+  status: BookingStatusSchema,
+  mode: BookingModeSchema,
+  resource_id: z.uuid(),
+  resource_name: z.string(),
+  is_whole: z.boolean(),
+  guest_name: z.string().nullable(),
+  guest_id: z.uuid().nullable(),
+  check_in: z.iso.datetime(),
+  check_out: z.iso.datetime(),
+  adults: z.number().int(),
+  children: z.number().int(),
+  /** Tổng còn nợ trên mọi invoice của booking (ISSUED/PARTIALLY_PAID/OVERDUE). */
+  balance_due_vnd: z.number().int(),
+  /** Còn nợ riêng trên invoice DEPOSIT — gate check-in (cọc chưa đủ). */
+  deposit_due_vnd: z.number().int(),
+});
+export type TodayBookingCard = z.infer<typeof TodayBookingCardSchema>;
+
+export const TodayBoardResponseSchema = z.object({
+  property_id: z.uuid(),
+  date: z.iso.date(),
+  arrivals: z.array(TodayBookingCardSchema),
+  departures: z.array(TodayBookingCardSchema),
+  in_house: z.array(TodayBookingCardSchema),
+});
+export type TodayBoardResponse = z.infer<typeof TodayBoardResponseSchema>;
+
 export const BookingResponseSchema = z.object({
   id: z.uuid(),
   property_id: z.uuid(),

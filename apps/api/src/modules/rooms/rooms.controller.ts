@@ -15,7 +15,7 @@ import { type JwtClaims } from '@pms/shared-types';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
 import { parseIfMatch } from '@/shared/if-match';
-import { CreateRoomDto, UpdateRoomDto } from './dto';
+import { CreateRoomDto, UpdateHousekeepingDto, UpdateRoomDto } from './dto';
 import { RoomsService } from './rooms.service';
 
 /** /api/v1/rooms (docs/05). Tạo phòng tự sinh resource ROOM (ADR-0006). */
@@ -38,10 +38,31 @@ export class RoomsController {
     return { data: await this.rooms.list(propertyId, user) };
   }
 
+  // Phải khai BEFORE @Get(':id') để 'board' không bị bắt làm param id.
+  @Get('board')
+  @RequirePermissions('property.read')
+  async board(
+    @Query('property_id', ParseUUIDPipe) propertyId: string,
+    @CurrentUser() user: JwtClaims,
+  ) {
+    return { data: await this.rooms.getRoomBoard(propertyId, user) };
+  }
+
   @Get(':id')
   @RequirePermissions('property.read')
   async getById(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtClaims) {
     return { data: await this.rooms.getById(id, user) };
+  }
+
+  /** Đổi nhanh trạng thái buồng phòng từ room board (web-staff). HOUSEKEEPER giới hạn ở service. */
+  @Patch(':id/housekeeping')
+  @RequirePermissions('room.housekeeping.change')
+  async updateHousekeeping(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateHousekeepingDto,
+    @CurrentUser() user: JwtClaims,
+  ) {
+    return { data: await this.rooms.updateHousekeeping(id, dto, user) };
   }
 
   @Patch(':id')

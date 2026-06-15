@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
 export default function RootPage() {
-  // TODO(task 6.6): điều hướng theo trạng thái đăng nhập
+  // → /today; AuthGate (khu app) bootstrap phiên: chưa đăng nhập sẽ chuyển /login.
   redirect('/today');
 }

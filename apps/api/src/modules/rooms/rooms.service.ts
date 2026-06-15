@@ -1,8 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import {
   type CreateRoomRequest,
+  type HousekeepingStatus,
   type JwtClaims,
+  type RoomBoardResponse,
+  type RoomHousekeepingEventPayload,
   type RoomResponse,
+  type UpdateHousekeepingRequest,
   type UpdateRoomRequest,
 } from '@pms/shared-types';
 import { Prisma, type rooms } from '@prisma/client';
@@ -10,8 +14,19 @@ import { ResourcesService } from '@modules/resources/resources.service';
 import { SubscriptionService } from '@modules/subscription/subscription.service';
 import { PermissionService } from '@core/auth/permission.service';
 import { AppException } from '@core/http/exceptions/app.exception';
+import { OutboxService } from '@core/outbox/outbox.service';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { withTenant } from '@core/tenancy/with-tenant';
+
+/** Dòng raw cho room board (getRoomBoard). */
+interface RawBoardRow {
+  id: string;
+  room_number: string;
+  display_name: string | null;
+  housekeeping_status: string;
+  current_booking_id: string | null;
+  current_guest_name: string | null;
+}
 
 function toRoomResponse(r: rooms): RoomResponse {
   return {
@@ -42,6 +57,7 @@ export class RoomsService {
     private readonly permissionService: PermissionService,
     private readonly resources: ResourcesService,
     private readonly subscription: SubscriptionService,
+    private readonly outbox: OutboxService,
   ) {}
 
   /** Tạo phòng → TỰ SINH resource type=ROOM + member 1:1 trong cùng tx (ADR-0006). */
@@ -80,6 +96,105 @@ export class RoomsService {
     const room = await this.loadOrThrow(id, user);
     await this.permissionService.authorizeOnProperty(user, room.property_id, 'property.read');
     return toRoomResponse(room);
+  }
+
+  /**
+   * Room board (task 6.6, ui/02 #T7) — đọc-only cho web-staff. Mỗi phòng + dot
+   * housekeeping + cờ "đang có khách" (booking CHECKED_IN có room_occupancy phủ now()).
+   * LATERAL lấy đúng 1 booking đang ở (nếu có) + tên khách. Quyền `property.read`.
+   */
+  async getRoomBoard(propertyId: string, user: JwtClaims): Promise<RoomBoardResponse> {
+    await this.assertPropertyExists(propertyId, user);
+    await this.permissionService.authorizeOnProperty(user, propertyId, 'property.read');
+
+    const rows = await withTenant(
+      this.prisma,
+      user.tnt,
+      (tx) =>
+        tx.$queryRaw<RawBoardRow[]>(Prisma.sql`
+          SELECT
+            r.id::text                  AS id,
+            r.room_number               AS room_number,
+            r.display_name              AS display_name,
+            r.housekeeping_status::text AS housekeeping_status,
+            occ.booking_id::text        AS current_booking_id,
+            occ.guest_name              AS current_guest_name
+          FROM rooms r
+          LEFT JOIN LATERAL (
+            SELECT b.id AS booking_id, g.full_name AS guest_name
+            FROM room_occupancy ro
+            JOIN bookings b ON b.tenant_id = ro.tenant_id AND b.id = ro.booking_id
+            LEFT JOIN guests g ON g.tenant_id = b.tenant_id AND g.id = b.guest_id
+            WHERE ro.room_id = r.id
+              AND ro.booking_id IS NOT NULL
+              AND b.status::text = 'CHECKED_IN'
+              AND ro.period @> now()
+            ORDER BY lower(ro.period)
+            LIMIT 1
+          ) occ ON TRUE
+          WHERE r.property_id = ${propertyId}::uuid AND r.deleted_at IS NULL
+          ORDER BY r.room_number
+        `),
+      { readOnly: true },
+    );
+
+    return {
+      property_id: propertyId,
+      rooms: rows.map((r) => ({
+        id: r.id,
+        room_number: r.room_number,
+        display_name: r.display_name,
+        housekeeping_status: r.housekeeping_status as HousekeepingStatus,
+        is_occupied_now: r.current_booking_id != null,
+        current_guest_name: r.current_guest_name,
+        current_booking_id: r.current_booking_id,
+      })),
+    };
+  }
+
+  /**
+   * PATCH /rooms/:id/housekeeping (task 6.6, ui/02 #T7) — đổi nhanh trạng thái buồng
+   * phòng từ room board. Quyền `room.housekeeping.change`; HOUSEKEEPER chỉ được
+   * CLEANING→CLEAN (docs/04 §matrix). KHÔNG If-Match (idempotent, low-stakes). Emit
+   * room.housekeeping_changed qua outbox CÙNG tx (đồng bộ với cleaning flow task 4.1).
+   */
+  async updateHousekeeping(
+    id: string,
+    dto: UpdateHousekeepingRequest,
+    user: JwtClaims,
+  ): Promise<RoomResponse> {
+    const room = await this.loadOrThrow(id, user);
+    await this.permissionService.authorizeOnProperty(user, room.property_id, 'room.housekeeping.change');
+
+    const next = dto.housekeeping_status;
+    if (user.rol === 'HOUSEKEEPER' && !(room.housekeeping_status === 'CLEANING' && next === 'CLEAN')) {
+      throw new AppException({
+        code: 'HOUSEKEEPING_TRANSITION_FORBIDDEN',
+        title: 'Nhân viên buồng phòng chỉ được chuyển Đang dọn → Sạch',
+        status: 403,
+      });
+    }
+    if (room.housekeeping_status === next) return toRoomResponse(room); // no-op idempotent
+
+    const updated = await withTenant(this.prisma, user.tnt, async (tx) => {
+      const row = await tx.rooms.update({
+        where: { id },
+        data: { housekeeping_status: next, version: { increment: 1 } },
+      });
+      const payload: RoomHousekeepingEventPayload = {
+        property_id: room.property_id,
+        room_id: id,
+        housekeeping_status: next,
+      };
+      await this.outbox.publish(tx, {
+        event_type: 'room.housekeeping_changed',
+        aggregate_type: 'room',
+        aggregate_id: id,
+        payload,
+      });
+      return row;
+    });
+    return toRoomResponse(updated);
   }
 
   /** PATCH room cần If-Match = version (docs/05 §4.5); lệch → 409 VERSION_CONFLICT. */
