@@ -36,3 +36,14 @@ export const TenantSchema = z.object({
   updated_at: z.iso.datetime(),
 });
 export type Tenant = z.infer<typeof TenantSchema>;
+
+/** PATCH /tenant (task 6.7 S1) — hồ sơ tenant (slug/status/plan read-only). */
+export const UpdateTenantRequestSchema = z
+  .object({
+    display_name: z.string().min(1).max(255).optional(),
+    business_type: z.string().max(32).nullable().optional(),
+    timezone: z.string().min(1).max(64).optional(),
+    currency: z.string().length(3).optional(),
+  })
+  .refine((d) => Object.keys(d).length > 0, { message: 'Cần ít nhất một trường để cập nhật' });
+export type UpdateTenantRequest = z.infer<typeof UpdateTenantRequestSchema>;

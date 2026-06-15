@@ -132,6 +132,15 @@ export class SubscriptionService {
     }
   }
 
+  // ── Danh sách gói (task 6.7 S3 — chọn gói để nâng cấp) ──────────────────────
+  async listPlans(): Promise<SubscriptionPlan[]> {
+    // eslint-disable-next-line no-restricted-syntax -- subscription_plans GLOBAL không RLS (ADR-0002 §5)
+    const plans = await this.prisma.subscription_plans.findMany({
+      orderBy: { monthly_price_vnd: 'asc' },
+    });
+    return plans.map(toPlan);
+  }
+
   // ── Lịch sử thanh toán của tenant ───────────────────────────────────────────
   async listPayments(user: JwtClaims): Promise<SubscriptionPaymentResponse[]> {
     // eslint-disable-next-line no-restricted-syntax -- bảng GLOBAL không RLS; lọc tenant_id tường minh (task 4.7)

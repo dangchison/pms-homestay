@@ -7,6 +7,7 @@ import { type UserRole } from '@pms/shared-types';
  */
 export const ALL_PERMISSIONS = [
   'tenant.read',
+  'tenant.update',
   'tenant.billing.manage',
   'user.invite',
   'user.manage_roles',

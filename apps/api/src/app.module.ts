@@ -41,6 +41,8 @@ import { ReportsModule } from '@modules/reports/reports.module';
 import { ResourcesModule } from '@modules/resources/resources.module';
 import { RoomsModule } from '@modules/rooms/rooms.module';
 import { SubscriptionModule } from '@modules/subscription/subscription.module';
+import { TenantModule } from '@modules/tenant/tenant.module';
+import { UsersModule } from '@modules/users/users.module';
 
 /**
  * Root module — nhận env đã validate từ bootstrap (fail-fast trước khi
@@ -87,6 +89,8 @@ export class AppModule implements NestModule {
         SubscriptionModule,
         ChannelsModule,
         ComplianceModule,
+        TenantModule,
+        UsersModule,
       ],
       providers: [
         TenantResolverMiddleware,
