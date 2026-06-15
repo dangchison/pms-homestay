@@ -41,6 +41,16 @@ export const envSchema = z.object({
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
 
+  /**
+   * Bắt buộc 2FA cho vai trò đặc quyền OWNER/ACCOUNTANT (task 8.4, docs/04 §3).
+   * Mặc định TẮT → dev/demo/test không vướng. Bật ở PROD theo mô hình grace-period
+   * (giống GitHub org 2FA): sau khi các tài khoản đặc quyền đã enroll 2FA mới bật,
+   * vì khi bật, OWNER/ACCOUNTANT chưa bật 2FA sẽ bị chặn đăng nhập (403
+   * AUTH_2FA_REQUIRED_FOR_ROLE). Enforce ở /auth/login (không chặn /auth/register
+   * — owner mới vẫn nhận session ban đầu để vào enroll 2FA).
+   */
+  ENFORCE_2FA_FOR_PRIVILEGED_ROLES: z.stringbool().default(false),
+
   /** Domain cookie refresh (prod: .pmsapp.vn) — dev để trống (host-only) */
   COOKIE_DOMAIN: z.string().optional(),
   /** Base URL web-admin — dựng link reset password */

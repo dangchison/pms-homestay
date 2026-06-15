@@ -12,6 +12,7 @@ import * as argon2 from 'argon2';
 import type Redis from 'ioredis';
 import { PermissionService } from '@core/auth/permission.service';
 import { ACCESS_TOKEN_TTL_SECONDS, TokenService } from '@core/auth/token.service';
+import { ENV, type Env } from '@core/config/env.schema';
 import { AppException } from '@core/http/exceptions/app.exception';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { REDIS } from '@core/redis/redis.module';
@@ -88,6 +89,7 @@ export class AuthService {
     private readonly twoFactor: TwoFactorService,
     private readonly mailer: MailerService,
     @Inject(REDIS) private readonly redis: Redis,
+    @Inject(ENV) private readonly env: Env,
   ) {}
 
   // ── Register (docs/04: tenant + OWNER, trial 14 ngày) ─────────────────────
@@ -190,6 +192,21 @@ export class AuthService {
     if (!passwordOk) {
       await this.registerLoginFailure(tenantId, dto.email, ctx.ip, user);
       throw this.invalidCredentials();
+    }
+
+    // Bắt buộc 2FA cho vai trò đặc quyền (task 8.4, docs/04 §3) — gated env flag,
+    // mặc định tắt. Bật ở prod sau khi owner/accountant đã enroll (grace-period).
+    if (
+      this.env.ENFORCE_2FA_FOR_PRIVILEGED_ROLES &&
+      !user.two_factor_enabled &&
+      (user.default_role === 'OWNER' || user.default_role === 'ACCOUNTANT')
+    ) {
+      throw new AppException({
+        code: 'AUTH_2FA_REQUIRED_FOR_ROLE',
+        title: 'Vai trò này bắt buộc bật xác thực 2 lớp (2FA)',
+        status: 403,
+        detail: 'Bật 2FA cho tài khoản trước khi đăng nhập (liên hệ quản trị nếu cần).',
+      });
     }
 
     // Bước 2FA (docs/04 §3)
