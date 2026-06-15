@@ -71,3 +71,32 @@ export const BreakEvenResponseSchema = z.object({
   }),
 });
 export type BreakEvenResponse = z.infer<typeof BreakEvenResponseSchema>;
+
+/** GET /reports/occupancy (task 6.5, R3) — đọc rollup daily_property_stats theo ngày. */
+export const OccupancyReportQuerySchema = z
+  .object({
+    property_id: z.uuid(),
+    from: z.iso.date(),
+    to: z.iso.date(),
+  })
+  .refine((d) => d.to >= d.from, { message: 'to phải ≥ from', path: ['to'] });
+export type OccupancyReportQuery = z.infer<typeof OccupancyReportQuerySchema>;
+
+export const OccupancyDaySchema = z.object({
+  stat_date: z.string(), // YYYY-MM-DD
+  available_room_nights: z.number().int(),
+  occupied_room_nights: z.number().int(),
+  occupancy_rate_pct: z.number(),
+  adr_vnd: MoneyVndSchema,
+  revpar_vnd: MoneyVndSchema,
+  room_revenue_vnd: MoneyVndSchema,
+});
+export type OccupancyDay = z.infer<typeof OccupancyDaySchema>;
+
+export const OccupancyReportResponseSchema = z.object({
+  property_id: z.uuid(),
+  from: z.string(),
+  to: z.string(),
+  days: z.array(OccupancyDaySchema),
+});
+export type OccupancyReportResponse = z.infer<typeof OccupancyReportResponseSchema>;

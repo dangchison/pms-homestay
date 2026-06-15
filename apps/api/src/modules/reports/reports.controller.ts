@@ -2,7 +2,7 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { type JwtClaims } from '@pms/shared-types';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
-import { BreakEvenQueryDto, PnlQueryDto } from './dto';
+import { BreakEvenQueryDto, OccupancyReportQueryDto, PnlQueryDto } from './dto';
 import { ReportsService } from './reports.service';
 
 /**
@@ -24,5 +24,11 @@ export class ReportsController {
   @RequirePermissions('report.financial')
   async breakEven(@Query() query: BreakEvenQueryDto, @CurrentUser() user: JwtClaims) {
     return { data: await this.reports.getBreakEven(query, user) };
+  }
+
+  @Get('occupancy')
+  @RequirePermissions('report.financial')
+  async occupancy(@Query() query: OccupancyReportQueryDto, @CurrentUser() user: JwtClaims) {
+    return { data: await this.reports.getOccupancy(query, user) };
   }
 }

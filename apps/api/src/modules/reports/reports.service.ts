@@ -4,6 +4,9 @@ import {
   type BreakEvenResponse,
   type BreakEvenScenario,
   type JwtClaims,
+  type OccupancyDay,
+  type OccupancyReportQuery,
+  type OccupancyReportResponse,
   type PnlQuery,
   type PnlResponse,
 } from '@pms/shared-types';
@@ -306,6 +309,38 @@ export class ReportsService {
       if (key >= fromKey && key <= toKey) total += Number(e.amount_vnd);
     }
     return total;
+  }
+
+  /** Occupancy theo ngày (task 6.5, R3): đọc rollup daily_property_stats (night-audit fill). */
+  async getOccupancy(query: OccupancyReportQuery, user: JwtClaims): Promise<OccupancyReportResponse> {
+    await this.assertPropertyExists(query.property_id, user);
+    await this.permissionService.authorizeOnProperty(user, query.property_id, 'report.financial');
+    const rows = await withTenant(
+      this.prisma,
+      user.tnt,
+      (tx) =>
+        tx.daily_property_stats.findMany({
+          where: {
+            property_id: query.property_id,
+            stat_date: { gte: new Date(query.from), lte: new Date(query.to) },
+          },
+          orderBy: { stat_date: 'asc' },
+        }),
+      { readOnly: true },
+    );
+    const days: OccupancyDay[] = rows.map((r) => ({
+      stat_date: r.stat_date.toISOString().slice(0, 10),
+      available_room_nights: r.available_room_nights,
+      occupied_room_nights: r.occupied_room_nights,
+      occupancy_rate_pct:
+        r.available_room_nights > 0
+          ? Math.round((r.occupied_room_nights / r.available_room_nights) * 1000) / 10
+          : 0,
+      adr_vnd: Number(r.adr_vnd ?? 0n),
+      revpar_vnd: Number(r.revpar_vnd ?? 0n),
+      room_revenue_vnd: Number(r.room_revenue_vnd),
+    }));
+    return { property_id: query.property_id, from: query.from, to: query.to, days };
   }
 
   private async assertPropertyExists(propertyId: string, user: JwtClaims): Promise<void> {
