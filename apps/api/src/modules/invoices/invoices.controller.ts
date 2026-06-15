@@ -19,7 +19,10 @@ export class InvoicesController {
   @Get()
   @RequirePermissions('invoice.read')
   async list(@Query() query: InvoiceListQueryDto, @CurrentUser() user: JwtClaims) {
-    return { data: await this.invoices.listByBooking(query.booking_id, user) };
+    if (query.booking_id) {
+      return { data: await this.invoices.listByBooking(query.booking_id, user) };
+    }
+    return this.invoices.listByProperty(query, user); // { data, page_info }
   }
 
   @Get(':id')

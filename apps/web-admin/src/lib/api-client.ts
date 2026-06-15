@@ -93,8 +93,26 @@ async function request<T>(path: string, options: RequestOptions = {}, retry = tr
   return (await res.json()) as T;
 }
 
+/** Tải nội dung nhị phân có auth (vd ảnh QR VietQR) → Blob. Refresh 1 lần như request(). */
+async function requestBlob(path: string, retry = true): Promise<Blob> {
+  const res = await fetch(`${BASE_URL}/api/v1${path}`, {
+    credentials: 'include',
+    headers: baseHeaders(),
+  });
+  if (res.status === 401 && retry && !path.startsWith('/auth/')) {
+    const ok = await ensureRefreshed();
+    if (ok) return requestBlob(path, false);
+  }
+  if (!res.ok) {
+    const errorBody = (await res.json().catch(() => undefined)) as ApiError | undefined;
+    throw new ApiClientError(res.status, errorBody?.error);
+  }
+  return res.blob();
+}
+
 export const apiClient = {
   get: <T>(path: string, options?: RequestOptions) => request<T>(path, { ...options, method: 'GET' }),
+  getBlob: (path: string) => requestBlob(path),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'POST', body }),
   patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>

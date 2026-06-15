@@ -54,6 +54,21 @@ export class PaymentsService {
     private readonly outbox: OutboxService,
   ) {}
 
+  /** Liệt kê payment của một hoá đơn (task 6.4, F2 — để hiển thị + chọn refund). */
+  async listByInvoice(invoiceId: string, user: JwtClaims): Promise<PaymentResponse[]> {
+    const invoice = await this.invoices.loadForPayment(invoiceId, user);
+    if (invoice.property_id) {
+      await this.permissionService.authorizeOnProperty(user, invoice.property_id, 'invoice.read');
+    }
+    const rows = await withTenant(
+      this.prisma,
+      user.tnt,
+      (tx) => tx.payments.findMany({ where: { invoice_id: invoiceId }, orderBy: { created_at: 'desc' } }),
+      { readOnly: true },
+    );
+    return rows.map(toPaymentResponse);
+  }
+
   async record(
     dto: CreatePaymentRequest,
     idempotencyKey: string | undefined,
