@@ -1,0 +1,49 @@
+name: Restore drill
+
+# Drill khôi phục backup R2 (docs/11 §6, docs/17 §1) vào DB NHÁP ephemeral → sanity
+# + đo RTO/RPO. Chỉ chạy thủ công (workflow_dispatch) để KHÔNG làm đỏ CI khi chưa
+# cấu hình secret R2. Sau khi đã thêm secret R2_* + xác nhận drill chạy được, bật
+# lịch hằng quý bằng cách bỏ comment `schedule` dưới đây.
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: '0 19 1 1,4,7,10 *' # ~02:00 ICT (UTC+7) ngày 1, mỗi quý
+
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: drill
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d drill"
+          --health-interval 3s --health-timeout 3s --health-retries 15
+    env:
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      DRILL_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/drill
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Kiểm tra secret R2 (drill cần truy cập backup thật)
+        run: |
+          if [ -z "$R2_ENDPOINT" ] || [ -z "$R2_BUCKET" ] || [ -z "$R2_ACCESS_KEY_ID" ] || [ -z "$R2_SECRET_ACCESS_KEY" ]; then
+            echo "::error::Chưa cấu hình secret R2_* — thêm vào repo secrets rồi chạy lại (docs/17 §1)."
+            exit 1
+          fi
+
+      - name: Đảm bảo có aws CLI + pg_restore (runner thường có sẵn)
+        run: |
+          if ! command -v aws >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y awscli; fi
+          if ! command -v pg_restore >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y postgresql-client; fi
+
+      - name: Restore drill (backup mới nhất → DB nháp → sanity + RTO/RPO)
+        run: bash infra/scripts/restore-drill.sh

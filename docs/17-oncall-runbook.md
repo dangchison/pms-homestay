@@ -48,8 +48,16 @@ kịch bản DR ở [`11` §12]. Quy trình thao tác:
    - Toàn bộ → restore từ PITR/snapshot provider (hoặc logical dump gần nhất).
    - Một tenant → ưu tiên sửa có chủ đích thay vì restore toàn cục (xem §3/§4);
      chỉ restore một phần khi không còn cách khác.
-2. **Khôi phục.** Theo phương án hosting đã chốt (provider PITR **hoặc** logical
-   dump trên R2). Restore vào DB tạm trước khi cắt traffic nếu có thể.
+2. **Khôi phục.** Theo phương án hosting đã chốt ([`11` §6]):
+   - **PITR** (mất tới thời điểm gần nhất): của provider managed-PG, hoặc
+     pgBackRest WAL (self-host). `pg_dump` KHÔNG làm được PITR.
+   - **Logical dump trên R2** (lớp độc lập ta tự giữ): tải `.dump` mới nhất rồi
+     `pg_restore` vào DB tạm:
+     ```bash
+     aws s3 cp s3://$R2_BUCKET/daily/<file>.dump . --endpoint-url "$R2_ENDPOINT"
+     pg_restore --clean --if-exists -d "$TARGET_DATABASE_URL" <file>.dump
+     ```
+     (Restore vào DB tạm, xác minh, rồi mới cắt traffic.)
 3. **Migrate về đúng schema.** Sau restore:
    ```bash
    pnpm --filter @pms/api db:migrate:sql   # áp migration còn thiếu (idempotent)
@@ -63,8 +71,47 @@ kịch bản DR ở [`11` §12]. Quy trình thao tác:
 5. **Ghi lại** thời điểm dữ liệu (RPO thực tế) + thời lượng (RTO thực tế) vào
    incident log.
 
-> ⚠️ Drill restore là **bắt buộc theo quý** ([`11` §6]) — đừng để lần restore
-> đầu tiên là lúc cháy nhà.
+### 1a. Backup tự động (logical dump → R2)
+
+[`infra/scripts/backup-db.sh`](../infra/scripts/backup-db.sh) — `pg_dump` custom
+format → R2, chạy bằng **host cron 02:00 ICT** (KHÔNG dùng GitHub Actions: runner
+không vào được DB prod private):
+
+```cron
+0 19 * * *  R2_ENDPOINT=… R2_BUCKET=… R2_ACCESS_KEY_ID=… R2_SECRET_ACCESS_KEY=… \
+            BACKUP_DATABASE_URL=… /path/infra/scripts/backup-db.sh >> /var/log/pms-backup.log 2>&1
+```
+(19:00 UTC = 02:00 ICT). Chủ nhật + đặt `R2_BUCKET_DR` → tự copy weekly sang
+bucket khác vùng.
+
+### 1b. Drill khôi phục (BẮT BUỘC theo quý — [`11` §6])
+
+[`infra/scripts/restore-drill.sh`](../infra/scripts/restore-drill.sh): tải backup
+mới nhất → restore vào **DB nháp** (`DRILL_DATABASE_URL`, KHÔNG phải prod) → sanity
++ in RTO/RPO. Chạy thủ công, hoặc qua workflow
+[`.github/workflows/restore-drill.yml`](../.github/workflows/restore-drill.yml)
+(`workflow_dispatch`; bỏ comment `schedule` để chạy hằng quý sau khi đã thêm
+secret `R2_*`). Ghi kết quả vào bảng:
+
+| Ngày drill | backup_key | RPO đo được | RTO đo được | Người chạy |
+|---|---|---|---|---|
+| _(điền sau drill đầu tiên)_ | | | | |
+
+### 1c. Retention & cross-region
+
+Dùng **R2 bucket lifecycle policy** (KHÔNG xoá bằng script — tránh lỡ tay): prefix
+`daily/` giữ **30 ngày**, `weekly/` giữ **12 tuần** ([`11` §6]). Vd lifecycle JSON:
+
+```json
+{ "Rules": [
+  { "ID": "daily-30d",  "Filter": {"Prefix": "daily/"},  "Status": "Enabled", "Expiration": {"Days": 30} },
+  { "ID": "weekly-12w", "Filter": {"Prefix": "weekly/"}, "Status": "Enabled", "Expiration": {"Days": 84} }
+]}
+```
+
+> ⚠️ Drill restore là **bắt buộc theo quý** — đừng để lần restore đầu tiên là lúc
+> cháy nhà. Env backup (`R2_*`, `BACKUP_DATABASE_URL`, `DRILL_DATABASE_URL`) xem
+> `.env.example`; secret prod để ở Doppler ([`11` §7]).
 
 ---
 
