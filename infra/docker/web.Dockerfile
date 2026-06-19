@@ -30,8 +30,11 @@ ENV APP_DIR=apps/${APP}
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 WORKDIR /app
-COPY --from=build /app/apps/${APP}/.next/standalone ./
-COPY --from=build /app/apps/${APP}/.next/static ./apps/${APP}/.next/static
-COPY --from=build /app/apps/${APP}/public ./apps/${APP}/public
+# Chạy non-root (user `node` uid 1000 có sẵn) — Trivy DS-0002. chown khi COPY để
+# Next standalone server ghi được .next/cache (ISR / image optimization) lúc chạy.
+COPY --from=build --chown=node:node /app/apps/${APP}/.next/standalone ./
+COPY --from=build --chown=node:node /app/apps/${APP}/.next/static ./apps/${APP}/.next/static
+COPY --from=build --chown=node:node /app/apps/${APP}/public ./apps/${APP}/public
+USER node
 EXPOSE 3000
 CMD ["sh", "-c", "node ${APP_DIR}/server.js"]
