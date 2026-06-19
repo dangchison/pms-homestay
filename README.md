@@ -5,21 +5,23 @@ Kiến trúc đầy đủ ở [`docs/`](docs/00-overview.md) — **đọc `00 �
 
 ## Trạng thái
 
-**Sprint 1 hoàn chỉnh — task 1.1–1.8** ([docs/14](docs/14-roadmap-tasks.md)):
-- Nền tảng: monorepo, API skeleton (env zod, pino redact, RFC 7807, health, OTel), SQL-first
-  migrations + Prisma introspected client, **`withTenant` + RLS chứng minh bằng test interleaved**.
-- IAM (1.6): `users`/`user_property_roles`/`refresh_tokens`/`platform_users` + composite FK +
-  partial unique email + soft-delete Prisma Client Extension. (FK `user_property_roles→properties`
-  bổ sung ở migration task 2.1.)
-- Auth (1.7): register (tenant TRIAL 14 ngày + OWNER) · login Argon2id + lockout account-first
-  (5 fail/15' → khoá 30') · **refresh rotation + grace 60s** (double-refresh không logout-storm,
-  reuse → revoke chain) · CSRF double-submit · 2FA TOTP + backup codes (secret AES-256-GCM,
-  ADR-0007) · forgot/reset qua Mailpit · sessions.
-- RBAC (1.8): permission matrix (docs/04), `@RequirePermissions` + PermissionsGuard (tenant + pv
-  + role), `authorizeOnProperty` pha 2 (property từ entity — chống bypass), cache Redis 60s +
-  bump `pv` thu hồi quyền tức thì.
+**Backend EPIC 1–5 + 7 đóng · Frontend EPIC 6 đóng · EPIC 8 (production-readiness) đang chạy.**
+Scope: [`docs/14-roadmap-tasks.md`](docs/14-roadmap-tasks.md) · tiến độ thực: [`PROGRESS.md`](PROGRESS.md).
 
-Tiếp theo: **Sprint 2** — task 2.1 (property/room/bookable_resources/room_occupancy + OccupancyService).
+- **Nền tảng & IAM** (EPIC 1): monorepo, API skeleton (env zod fail-fast, pino redact, RFC 7807,
+  health, OTel), SQL-first migrations + Prisma introspect, `withTenant` + **RLS chứng minh bằng
+  test interleaved**; auth Argon2id + refresh rotation + CSRF double-submit + 2FA TOTP; RBAC 2 pha.
+- **Đặt phòng & tài chính** (EPIC 2–4): occupancy + chống overbooking (`createBookingTx` + EXCLUDE),
+  pricing engine + quote, booking lifecycle (hold/check-in-out/switch), invoice/payment + VietQR +
+  đối soát webhook, chi phí/tài sản/khấu hao, báo cáo P&L, **outbox + SSE realtime**, notifications,
+  audit log (partition tháng), billing-lite SaaS, dọn phòng.
+- **Kênh OTA & tuân thủ** (EPIC 5, 7): iCal pull/push 2 chiều, OCR CCCD (FPT.AI), báo cáo lưu trú
+  công an (TT56), quyền dữ liệu NĐ13 (export/erasure/consent).
+- **Giao diện** (EPIC 6): web-admin (lịch · đặt phòng · hoá đơn · báo cáo · settings) + web-staff
+  PWA (today/rooms board · check-in 3 bước OCR · check-out).
+- **Production-readiness** (EPIC 8 — đang chạy): partition lifecycle (8.5) ✅ · security audit
+  IDOR/RLS/CSRF/2FA + scanner CI gitleaks/Trivy (8.4) ✅ · docs + runbook + OpenAPI (8.6) ✅ ·
+  **còn**: backup (8.1) · monitoring/Sentry (8.2) · load-test k6 (8.3).
 
 ## Quickstart
 
@@ -71,7 +73,7 @@ packages/  ui (shadcn — BẢN DUY NHẤT) · shared-types (Zod chung BE/FE)
            pricing-engine (pure fn + roundVnd) · eslint-config-pms · tsconfig
 infra/     docker (compose dev, Dockerfiles) · migrations-sql (NGUỒN SỰ THẬT schema)
 scripts/   seed-prod-required.ts · seed-dev.ts
-docs/      00–16, ui/, adr/ — nguồn sự thật thiết kế
+docs/      00–17 (gồm on-call runbook), openapi.json, ui/, adr/ — nguồn sự thật thiết kế
 ```
 
 ## Quy tắc bất di bất dịch (enforce bằng lint/CI — chi tiết: docs + ADR)
@@ -101,4 +103,7 @@ pnpm --filter @pms/pricing-engine test # roundVnd + timezone
 
 [Tổng quan](docs/00-overview.md) · [Tech stack](docs/01-tech-stack.md) · [Multi-tenancy](docs/02-multi-tenancy.md) ·
 [ERD 42 bảng](docs/03-database-erd.md) · [API conventions](docs/05-api-conventions.md) ·
-[Folder structure](docs/13-folder-structure.md) · [Roadmap tasks](docs/14-roadmap-tasks.md) · [Sprint plan](docs/15-sprint-plan.md) · [ADR](docs/adr/README.md)
+[Folder structure](docs/13-folder-structure.md) · [Roadmap tasks](docs/14-roadmap-tasks.md) · [Sprint plan](docs/15-sprint-plan.md) ·
+[Observability & ops](docs/11-observability-ops.md) · [On-call runbook](docs/17-oncall-runbook.md) · [OpenAPI](docs/openapi.json) · [ADR](docs/adr/README.md)
+
+> README từng app/package: [`apps/api`](apps/api/README.md) · [`apps/web-admin`](apps/web-admin/README.md) · [`apps/web-staff`](apps/web-staff/README.md) · [`packages/*`](packages).
