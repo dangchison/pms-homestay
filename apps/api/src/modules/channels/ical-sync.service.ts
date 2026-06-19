@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { type IcalSyncResult, type SyncJobResponse, type SyncJobStatus } from '@pms/shared-types';
 import { type Prisma, type sync_jobs } from '@prisma/client';
 import { AppException } from '@core/http/exceptions/app.exception';
+import { captureError } from '@core/sentry/sentry';
 import { OutboxService } from '@core/outbox/outbox.service';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { withTenant } from '@core/tenancy/with-tenant';
@@ -250,6 +251,13 @@ export class IcalSyncService {
         `Sanity-guard: feed ${active.length} sự kiện < 50% baseline ${ctx.lastEventCount} → bỏ qua huỷ booking`,
         { feed_count: active.length, last_event_count: ctx.lastEventCount },
       );
+      // Manual capture (docs/11 §3) — sanity-guard kích hoạt = feed OTA khả nghi, đáng theo dõi.
+      captureError(new Error('iCal sanity-guard triggered'), {
+        tenantId,
+        level: 'warning',
+        tags: { kind: 'ical_sanity_guard' },
+        extra: { mappingId: ctx.mappingId, feed_count: active.length, last_event_count: ctx.lastEventCount },
+      });
     }
 
     const status: SyncJobStatus = conflicts > 0 ? 'PARTIAL' : 'SUCCESS';

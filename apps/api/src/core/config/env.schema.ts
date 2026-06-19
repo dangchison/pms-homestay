@@ -68,6 +68,8 @@ export const envSchema = z.object({
   S3_SECRET_KEY: z.string().min(1),
 
   SENTRY_DSN: z.url().optional(),
+  /** Gắn version vào event Sentry (vd git SHA) — set lúc deploy/CI. */
+  SENTRY_RELEASE: z.string().min(1).optional(),
 
   SMTP_HOST: z.string().default('localhost'),
   SMTP_PORT: z.coerce.number().int().positive().default(1025),

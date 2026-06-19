@@ -33,6 +33,7 @@
     "@pms/pricing-engine": "workspace:*",
     "@pms/shared-types": "workspace:*",
     "@prisma/client": "^6.1.0",
+    "@sentry/node": "^10.59.0",
     "argon2": "^0.44.0",
     "bullmq": "^5.78.0",
     "cookie-parser": "^1.4.7",

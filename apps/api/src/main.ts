@@ -2,10 +2,14 @@
 import '@core/otel/otel';
 import 'reflect-metadata';
 import { loadEnv } from '@core/config/env.schema';
+import { initSentry } from '@core/sentry/sentry';
 
 async function bootstrap(): Promise<void> {
   // 1) Env zod fail-fast — crash sớm, lỗi rõ ràng (docs/11 §env)
   const env = loadEnv();
+
+  // 1b) Sentry error tracking (docs/11 §3) — no-op nếu không có SENTRY_DSN.
+  initSentry(env);
 
   // 2) Import động để chắc chắn OTel đã chạy trước khi framework load
   const { NestFactory } = await import('@nestjs/core');
