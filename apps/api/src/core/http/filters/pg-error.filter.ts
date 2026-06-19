@@ -1,6 +1,7 @@
 import { Catch, HttpException, type ArgumentsHost, type ExceptionFilter } from '@nestjs/common';
 import { type Request, type Response } from 'express';
 import { Logger } from 'nestjs-pino';
+import { captureError } from '@core/sentry/sentry';
 import { buildErrorBody, requestIdOf } from '../exceptions/error-response';
 
 /**
@@ -90,6 +91,8 @@ export class PgErrorFilter implements ExceptionFilter {
       { err: exception, request_id: requestId, path: req.originalUrl },
       'Unhandled exception',
     );
+    // Auto-capture 5xx/unhandled lên Sentry (docs/11 §3) — no-op nếu chưa bật.
+    captureError(exception, { requestId, tenantId: req.tenantId, path: req.originalUrl });
     res.status(500).json(
       buildErrorBody({
         code: 'SYSTEM_INTERNAL_ERROR',

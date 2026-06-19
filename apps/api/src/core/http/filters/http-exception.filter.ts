@@ -5,6 +5,7 @@ import {
   type ExceptionFilter,
 } from '@nestjs/common';
 import { type Request, type Response } from 'express';
+import { captureError } from '@core/sentry/sentry';
 import { AppException } from '../exceptions/app.exception';
 import { buildErrorBody, requestIdOf } from '../exceptions/error-response';
 
@@ -16,6 +17,15 @@ export class HttpExceptionFilter implements ExceptionFilter<HttpException> {
     const res = ctx.getResponse<Response>();
     const req = ctx.getRequest<Request>();
     const status = exception.getStatus();
+
+    // 5xx (kể cả AppException 5xx hiếm) → Sentry (docs/11 §3); 4xx là lỗi nghiệp vụ, bỏ qua.
+    if (status >= 500) {
+      captureError(exception, {
+        requestId: requestIdOf(req),
+        tenantId: req.tenantId,
+        path: req.originalUrl,
+      });
+    }
 
     if (exception instanceof AppException) {
       res.status(status).json(

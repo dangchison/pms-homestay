@@ -15,6 +15,7 @@
     "@hookform/resolvers": "^5.0.0",
     "@pms/shared-types": "workspace:*",
     "@pms/ui": "workspace:*",
+    "@sentry/nextjs": "^10.59.0",
     "@tanstack/react-query": "^5.62.0",
     "lucide-react": "^0.469.0",
     "next": "^15.1.0",
