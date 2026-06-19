@@ -105,6 +105,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Task 8.4: Trivy thay Snyk (OSS, không cần token/account) — quét vuln deps
+      # (đọc pnpm-lock.yaml) + secret + misconfig. Chặn merge ở HIGH/CRITICAL;
+      # bỏ qua lỗ hổng chưa có bản vá (ignore-unfixed) để không kẹt ngoài tầm.
+      - name: Trivy (vuln + secret + misconfig)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          skip-dirs: node_modules
+
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
@@ -115,6 +129,7 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: pnpm audit (prod deps — chưa chặn merge ở scaffold)
-        run: pnpm audit --prod
-        continue-on-error: true
+      # Task 8.4: chặn merge khi có lỗ hổng HIGH/CRITICAL ở prod deps (zero
+      # high/critical). Moderate vẫn cho qua (hiện 2 moderate — theo dõi, không chặn).
+      - name: pnpm audit (prod deps — chặn HIGH/CRITICAL)
+        run: pnpm audit --prod --audit-level high

@@ -27,5 +27,8 @@ RUN pnpm --filter @pms/shared-types --filter @pms/pricing-engine build \
 FROM build AS runner
 ENV NODE_ENV=production
 WORKDIR /app/apps/api
+# Chạy non-root (node:22-slim đã có sẵn user `node` uid 1000) — Trivy DS-0002.
+# Runtime chỉ đọc dist/node_modules (root-owned, world-readable) + ghi /tmp → đủ.
+USER node
 EXPOSE 3001
 CMD ["node", "dist/main.js"]
