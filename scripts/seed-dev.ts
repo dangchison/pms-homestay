@@ -30,6 +30,9 @@ const DEMO_USERS = [
 
 const PROPERTY_NAME = 'Cơ sở Demo — Mỹ Khê';
 
+/** Tài khoản nhận tiền VietQR cho cơ sở demo (BIN NAPAS hợp lệ — MB Bank) → panel QR ở invoice/checkout hoạt động thay vì 422. */
+const DEMO_BANK = { bin: '970422', account: '0901234567', name: 'DEMO HOMESTAY DA NANG' } as const;
+
 /** Giá/đêm (VND) — total_amount_vnd của booking là snapshot, độc lập rate_plan. */
 const NIGHTLY_ROOM_VND = 700_000;
 const NIGHTLY_WHOLE_VND = 1_600_000;
@@ -466,6 +469,13 @@ async function main(): Promise<void> {
           [tenantId, PROPERTY_NAME],
         )
       ).rows[0]!.id;
+
+    // Tài khoản nhận tiền VietQR (idempotent — cả property mới lẫn đã tồn tại từ seed cũ)
+    // → endpoint GET /invoices/:id/qr-image không còn 422 BANK_ACCOUNT_NOT_CONFIGURED.
+    await client.query(
+      `UPDATE properties SET bank_bin = $2, bank_account_number = $3, bank_account_name = $4 WHERE id = $1`,
+      [propertyId, DEMO_BANK.bin, DEMO_BANK.account, DEMO_BANK.name],
+    );
 
     // 3) Tài khoản demo theo vai trò (cùng mật khẩu).
     const passwordHash = await argon2.hash(DEMO_PASSWORD, { type: argon2.argon2id });
