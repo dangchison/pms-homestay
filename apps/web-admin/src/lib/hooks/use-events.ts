@@ -13,7 +13,7 @@ export const useRealtimeStore = create<{ connected: boolean; setConnected: (b: b
 /** event_type → queryKey cần invalidate (REST là nguồn sự thật — docs/10 §4). */
 function invalidateForEvent(qc: QueryClient, eventType: string): void {
   const keys: string[][] = [];
-  if (eventType.startsWith('booking.')) keys.push(['bookings'], ['occupancy'], ['today']);
+  if (eventType.startsWith('booking.')) keys.push(['bookings'], ['occupancy'], ['today'], ['channels']);
   else if (eventType.startsWith('payment.')) keys.push(['payments'], ['invoices'], ['today']);
   else if (eventType.startsWith('invoice.')) keys.push(['invoices']);
   else if (eventType.startsWith('room.')) keys.push(['occupancy'], ['rooms']);

@@ -119,6 +119,27 @@ export class ChannelsService {
     return rows.map((c) => this.toChannelResponse(c));
   }
 
+  /**
+   * Tổng số xung đột OTA (overbooking) phát hiện gần đây trên các kênh của cơ sở
+   * — cho cảnh báo Dashboard (docs/11 §9). Cộng `sync_jobs.conflict_count` trong
+   * `days` ngày gần nhất (sync 5.2 ghi conflict_count + job PARTIAL khi trùng phòng).
+   */
+  async countRecentConflicts(propertyId: string, user: JwtClaims, days = 7): Promise<number> {
+    await this.permissionService.authorizeOnProperty(user, propertyId, 'channel.manage');
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const agg = await withTenant(
+      this.prisma,
+      user.tnt,
+      (tx) =>
+        tx.sync_jobs.aggregate({
+          _sum: { conflict_count: true },
+          where: { channels: { property_id: propertyId }, finished_at: { gte: since } },
+        }),
+      { readOnly: true },
+    );
+    return agg._sum.conflict_count ?? 0;
+  }
+
   async getChannel(id: string, user: JwtClaims): Promise<ChannelResponse> {
     const channel = await this.loadChannelOrThrow(id, user);
     await this.permissionService.authorizeOnProperty(user, channel.property_id, 'channel.manage');
