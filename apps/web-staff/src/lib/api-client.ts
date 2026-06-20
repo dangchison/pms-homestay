@@ -1,5 +1,6 @@
 import { type ApiError, type AuthTokensResponse } from '@pms/shared-types';
 import { useAuthStore } from '@/stores/auth.store';
+import { getQueryClient } from './query-client';
 import { getTenantSlug } from './tenant';
 
 /**
@@ -52,6 +53,7 @@ async function refreshSession(): Promise<boolean> {
   });
   if (!res.ok) {
     useAuthStore.getState().clear();
+    getQueryClient().clear(); // phiên hết hạn → xoá cache để người dùng kế không thấy dữ liệu cũ
     return false;
   }
   const { data } = (await res.json()) as { data: AuthTokensResponse };

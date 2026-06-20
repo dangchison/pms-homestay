@@ -12,3 +12,15 @@ export function makeQueryClient(): QueryClient {
     },
   });
 }
+
+let browserQueryClient: QueryClient | undefined;
+
+/**
+ * Trình duyệt dùng 1 singleton (để logout / refresh-fail gọi
+ * `getQueryClient().clear()` xoá cache — tránh người dùng kế trên cùng thiết bị
+ * thấy dữ liệu của phiên trước). Server luôn tạo client mới mỗi request.
+ */
+export function getQueryClient(): QueryClient {
+  if (typeof window === 'undefined') return makeQueryClient();
+  return (browserQueryClient ??= makeQueryClient());
+}

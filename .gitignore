@@ -19,3 +19,6 @@ coverage/
 # misc
 .DS_Store
 *.log
+
+# Playwright MCP browser-verify artifacts (snapshots/console logs)
+.playwright-mcp/

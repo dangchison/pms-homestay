@@ -1,13 +1,14 @@
-import { type AuthTokensResponse, type LoginRequest } from '@pms/shared-types';
+import { type AuthTokensResponse, type LoginRequest, type UserRole } from '@pms/shared-types';
 import { useAuthStore } from '@/stores/auth.store';
 import { apiClient, ensureRefreshed } from './api-client';
+import { getQueryClient } from './query-client';
 import { setTenantSlug } from './tenant';
 
 /**
  * Đăng nhập nhân viên (ui/02 #T1): lưu tenant slug vừa nhập (cho login + nhớ lần
  * sau) → lưu access/csrf/user in-memory (refresh cookie BE tự set, sống 30 ngày).
  */
-export async function login(tenantSlug: string, input: LoginRequest): Promise<void> {
+export async function login(tenantSlug: string, input: LoginRequest): Promise<UserRole> {
   setTenantSlug(tenantSlug);
   const { data } = await apiClient.post<{ data: AuthTokensResponse }>('/auth/login', input);
   useAuthStore.getState().setSession({
@@ -15,6 +16,12 @@ export async function login(tenantSlug: string, input: LoginRequest): Promise<vo
     csrfToken: data.csrf_token,
     user: data.user,
   });
+  return data.user.role;
+}
+
+/** Trang chủ theo vai: buồng phòng vào thẳng /cleaning (không có quyền xem bảng hôm nay). */
+export function landingPathForRole(role?: UserRole): string {
+  return role === 'HOUSEKEEPER' ? '/cleaning' : '/today';
 }
 
 /** Đăng xuất → thu hồi refresh token (CSRF double-submit) + xoá session in-memory. */
@@ -24,6 +31,7 @@ export async function logout(): Promise<void> {
     .post('/auth/logout', undefined, csrf ? { headers: { 'X-CSRF-Token': csrf } } : undefined)
     .catch(() => undefined); // best-effort: vẫn xoá local dù BE lỗi
   useAuthStore.getState().clear();
+  getQueryClient().clear(); // xoá cache REST → đổi vai trên thiết bị chung không thấy dữ liệu phiên trước
 }
 
 /**
