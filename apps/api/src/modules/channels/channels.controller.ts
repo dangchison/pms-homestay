@@ -47,6 +47,13 @@ export class ChannelsController {
     return { data: await this.channels.listChannels(query.property_id, user) };
   }
 
+  /** Số xung đột OTA gần đây (Dashboard alert). Khai BEFORE `:id` (Nest match theo thứ tự). */
+  @Get('conflict-count')
+  @RequirePermissions('channel.manage')
+  async conflictCount(@Query() query: ChannelListQueryDto, @CurrentUser() user: JwtClaims) {
+    return { data: { conflict_count: await this.channels.countRecentConflicts(query.property_id, user) } };
+  }
+
   @Get(':id')
   @RequirePermissions('channel.manage')
   async getById(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtClaims) {

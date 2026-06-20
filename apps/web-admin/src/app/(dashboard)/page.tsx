@@ -31,6 +31,7 @@ import {
 import type { TodayBookingCard } from '@pms/shared-types';
 import { vnd } from '@/lib/format';
 import { useBookingsCount } from '@/lib/hooks/use-bookings';
+import { useConflictCount } from '@/lib/hooks/use-conflicts';
 import { useInvoices } from '@/lib/hooks/use-invoices';
 import { useProperties } from '@/lib/hooks/use-properties';
 import { useRatePlans } from '@/lib/hooks/use-rate-plans';
@@ -94,6 +95,7 @@ export default function DashboardPage() {
   const { data: unmatched } = useUnmatched();
   const overdueQuery = useInvoices(propertyId, { status: 'OVERDUE' });
   const { data: roomsBoard } = useRoomsBoard(propertyId);
+  const { data: conflicts } = useConflictCount(propertyId);
 
   const arrivals = today?.arrivals ?? [];
   const departures = today?.departures ?? [];
@@ -125,6 +127,8 @@ export default function DashboardPage() {
   // Cảnh báo: chỉ hiện mục có nguồn dữ liệu (undefined = chưa tải/không quyền → ẩn).
   const dirtyCount = roomsBoard?.rooms.filter((r) => r.housekeeping_status === 'DIRTY').length;
   const alerts: { label: string; count: number; href: string }[] = [];
+  if (conflicts !== undefined)
+    alerts.push({ label: 'Xung đột lịch từ kênh OTA', count: conflicts, href: '/calendar' });
   if (unmatched !== undefined)
     alerts.push({ label: 'Giao dịch ngân hàng chưa khớp', count: unmatched.length, href: '/payments/unmatched' });
   if (overdueQuery.data)
