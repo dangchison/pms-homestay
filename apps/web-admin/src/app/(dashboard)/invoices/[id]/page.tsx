@@ -7,6 +7,7 @@ import {
   Dialog,
   DialogContent,
   DialogFooter,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   Input,
@@ -216,6 +217,7 @@ function RefundDialog({ payment, onClose }: { payment: PaymentResponse; onClose:
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Hoàn tiền</DialogTitle>
+          <DialogDescription>Ghi nhận khoản hoàn trả cho khách.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="grid gap-1.5">
@@ -262,7 +264,7 @@ function VoidDialog({ invoice, onClose }: { invoice: InvoiceResponse; onClose: (
         <DialogHeader>
           <DialogTitle>Hủy hoá đơn {invoice.invoice_number}</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">Hoá đơn vẫn giữ số (audit). Hành động không thể hoàn tác.</p>
+        <DialogDescription>Hoá đơn vẫn giữ số (audit). Hành động không thể hoàn tác.</DialogDescription>
         <div className="mt-2 grid gap-1.5">
           <Label htmlFor="vd-reason">Lý do hủy</Label>
           <Input id="vd-reason" value={reason} onChange={(e) => setReason(e.target.value)} />

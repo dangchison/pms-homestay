@@ -5,6 +5,7 @@ import {
   Button,
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   Form,
@@ -85,6 +86,7 @@ export function UserRolesDialog({ user, open, onOpenChange }: { user: UserRespon
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Phân quyền theo cơ sở · {user.full_name}</DialogTitle>
+          <DialogDescription>Gán vai trò theo từng cơ sở và tinh chỉnh quyền (grant/deny).</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3">

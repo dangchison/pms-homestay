@@ -6,6 +6,7 @@ import {
   Dialog,
   DialogContent,
   DialogFooter,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   Label,
@@ -133,7 +134,7 @@ function ResolveDialog({ unmatched, onClose }: { unmatched: UnmatchedPaymentResp
         <DialogHeader>
           <DialogTitle>Khớp giao dịch {vnd(unmatched.amount_vnd)}</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">{unmatched.content ?? 'Không có nội dung CK'}</p>
+        <DialogDescription>{unmatched.content ?? 'Không có nội dung CK'}</DialogDescription>
         {!propertyId ? (
           <p className="mt-2 text-sm text-muted-foreground">Chọn một cơ sở (TopBar) để liệt kê hoá đơn còn nợ.</p>
         ) : (

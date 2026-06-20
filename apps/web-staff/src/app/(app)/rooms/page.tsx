@@ -7,6 +7,7 @@ import {
   CardContent,
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   HousekeepingDot,
@@ -113,6 +114,7 @@ export default function RoomsBoardPage() {
             <>
               <DialogHeader>
                 <DialogTitle>Phòng {selected.room_number}</DialogTitle>
+                <DialogDescription>Cập nhật tình trạng dọn phòng.</DialogDescription>
               </DialogHeader>
               <div className="grid gap-3">
                 <div className="flex items-center justify-between text-sm">

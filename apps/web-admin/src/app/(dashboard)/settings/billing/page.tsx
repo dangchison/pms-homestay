@@ -8,6 +8,7 @@ import {
   CardContent,
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   Skeleton,
@@ -155,6 +156,7 @@ export default function BillingPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Thanh toán nâng cấp gói</DialogTitle>
+            <DialogDescription>Quét VietQR hoặc chuyển khoản theo thông tin bên dưới.</DialogDescription>
           </DialogHeader>
           {qr && (
             <div className="grid gap-3 text-sm">

@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogContent,
   DialogFooter,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   Form,
@@ -78,6 +79,7 @@ export function RecordPaymentDialog({ invoice, onClose }: { invoice: InvoiceResp
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Ghi nhận thanh toán</DialogTitle>
+          <DialogDescription>Ghi nhận khoản khách đã trả cho hoá đơn này.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3" noValidate>
