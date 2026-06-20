@@ -11,6 +11,7 @@ import {
   Dialog,
   DialogContent,
   DialogFooter,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   Input,
@@ -196,10 +197,10 @@ function GuestActions({ guest, onClear }: { guest: GuestResponse; onClear: () =>
           <DialogHeader>
             <DialogTitle>Ẩn danh dữ liệu khách?</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
+          <DialogDescription>
             Thao tác xoá/ẩn danh thông tin cá nhân theo NĐ13. Dữ liệu còn nghĩa vụ lưu trữ theo luật (hồ sơ công an,
             hoá đơn) sẽ được GIỮ tới hết hạn (legal-hold). Không thể hoàn tác.
-          </p>
+          </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmErase(false)}>Huỷ</Button>
             <Button className="text-destructive" disabled={erase.isPending} onClick={doErase}>
@@ -215,6 +216,7 @@ function GuestActions({ guest, onClear }: { guest: GuestResponse; onClear: () =>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Kết quả ẩn danh</DialogTitle>
+            <DialogDescription>Tóm tắt thao tác ẩn danh dữ liệu khách.</DialogDescription>
           </DialogHeader>
           {eraseResult && (
             <div className="grid gap-2 text-sm">

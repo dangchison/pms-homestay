@@ -6,6 +6,7 @@ import {
   Dialog,
   DialogContent,
   DialogFooter,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -68,6 +69,7 @@ export function InviteUserDialog() {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Mời người dùng</DialogTitle>
+          <DialogDescription>Gửi email mời và gán vai trò cho thành viên mới.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4" noValidate>

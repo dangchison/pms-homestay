@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogContent,
   DialogFooter,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   Form,
@@ -83,6 +84,7 @@ export function RecordCashDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Ghi nhận thanh toán</DialogTitle>
+          <DialogDescription>Thu tiền mặt / chuyển khoản cho hoá đơn này.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4" noValidate>
