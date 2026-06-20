@@ -89,9 +89,9 @@ describe('Channels conflict-count (Dashboard OTA alert)', () => {
     // sync_jobs: 2 job gần đây (conflict 2 + 1 = 3) + 1 job cũ ngoài 7 ngày (5, KHÔNG đếm).
     await admin.query(
       `INSERT INTO sync_jobs (tenant_id, channel_id, job_type, status, finished_at, conflict_count) VALUES
-         ($1, $2, 'PULL', 'PARTIAL', now() - interval '1 day', 2),
-         ($1, $2, 'PULL', 'PARTIAL', now() - interval '2 days', 1),
-         ($1, $2, 'PULL', 'PARTIAL', now() - interval '30 days', 5)`,
+         ($1, $2, 'PULL_ICAL', 'PARTIAL', now() - interval '1 day', 2),
+         ($1, $2, 'PULL_ICAL', 'PARTIAL', now() - interval '2 days', 1),
+         ($1, $2, 'PULL_ICAL', 'PARTIAL', now() - interval '30 days', 5)`,
       [tenantId, channelId],
     );
 
