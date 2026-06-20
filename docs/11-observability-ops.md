@@ -192,6 +192,12 @@ jobs:
 
 > Benchmark chạy **nightly trên runner cố định** (k6, dataset chuẩn) — KHÔNG fail PR theo benchmark trên shared runner (noise > signal); regression >30% → tạo issue tự động.
 
+**Triển khai (task 8.3):** k6 scripts ở [`infra/k6/`](../infra/k6/) — `load-test.js`
+(100 user duyệt + báo giá + 1000 booking, threshold theo bảng trên) + `sse-soak.js`
+(500 kết nối SSE). Chạy vào **staging** qua workflow
+[`.github/workflows/load-test.yml`](../.github/workflows/load-test.yml)
+(`workflow_dispatch`, gated secret `LOADTEST_TARGET_URL`). Xem [`infra/k6/README.md`](../infra/k6/README.md).
+
 ## 11. Bố trí VPS
 
 ```

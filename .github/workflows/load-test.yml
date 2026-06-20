@@ -1,0 +1,45 @@
+name: Load test (k6)
+
+# Load test API (task 8.3, docs/11 §10) vào TARGET_URL (staging). workflow_dispatch
+# để KHÔNG chạy vs localhost / không trigger trên PR. Bật nightly bằng cách bỏ
+# comment `schedule` sau khi đã có secret LOADTEST_* + môi trường staging ổn định.
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: Kịch bản k6
+        type: choice
+        default: load-test.js
+        options:
+          - load-test.js
+          - sse-soak.js
+  # schedule:
+  #   - cron: '0 18 * * *' # ~01:00 ICT hằng đêm
+
+jobs:
+  k6:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TARGET_URL: ${{ secrets.LOADTEST_TARGET_URL }}
+      TENANT_SLUG: ${{ secrets.LOADTEST_TENANT_SLUG }}
+      LOAD_EMAIL: ${{ secrets.LOADTEST_EMAIL }}
+      LOAD_PASSWORD: ${{ secrets.LOADTEST_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Kiểm tra secret TARGET_URL (load test cần staging thật)
+        run: |
+          if [ -z "$TARGET_URL" ]; then
+            echo "::error::Chưa cấu hình secret LOADTEST_TARGET_URL — load test cần môi trường staging (docs/11 §10)."
+            exit 1
+          fi
+
+      - name: Cài k6 (repo chính thức)
+        run: |
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update && sudo apt-get install -y k6
+
+      - name: Run k6 (${{ inputs.script }})
+        run: k6 run "infra/k6/${{ inputs.script }}"
