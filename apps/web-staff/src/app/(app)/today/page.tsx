@@ -1,10 +1,13 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Badge, Button, Card, CardContent, Skeleton } from '@pms/ui';
 import { BedDouble, CalendarCheck, LogIn, LogOut, RefreshCw } from 'lucide-react';
 import type { TodayBookingCard } from '@pms/shared-types';
 import { useSelectedProperty } from '@/lib/hooks/use-properties';
 import { useTodayBoard } from '@/lib/hooks/use-today';
+import { useAuthStore } from '@/stores/auth.store';
 import { PropertyPicker } from '@/components/PropertyPicker';
 import { TodayCard } from '@/components/today/TodayCard';
 
@@ -24,8 +27,17 @@ const SECTIONS = [
 ] as const;
 
 export default function TodayPage() {
+  const router = useRouter();
+  const isHousekeeper = useAuthStore((s) => s.user?.role) === 'HOUSEKEEPER';
   const { selectedId } = useSelectedProperty();
-  const { data, isLoading, isFetching, refetch } = useTodayBoard(selectedId);
+  const { data, isLoading, isFetching, refetch } = useTodayBoard(isHousekeeper ? null : selectedId);
+
+  // Buồng phòng không có quyền xem bảng hôm nay (GET /bookings/today → 403) → về /cleaning.
+  useEffect(() => {
+    if (isHousekeeper) router.replace('/cleaning');
+  }, [isHousekeeper, router]);
+
+  if (isHousekeeper) return null;
 
   return (
     <div className="grid gap-4">

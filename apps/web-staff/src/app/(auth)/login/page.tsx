@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button, Card, CardContent, Input, Label } from '@pms/ui';
 import { Download, Home, Loader2, PlayCircle, Smartphone } from 'lucide-react';
 import { ApiClientError } from '@/lib/api-client';
-import { login } from '@/lib/auth';
+import { landingPathForRole, login } from '@/lib/auth';
 import { rememberedTenantSlug } from '@/lib/tenant';
 import { DEMO_ACCOUNTS, DEMO_MODE, DEMO_PASSWORD, DEMO_TENANT } from '@/lib/demo';
 
@@ -41,8 +41,8 @@ export default function StaffLoginPage() {
     setError(null);
     setLoading(true);
     try {
-      await login(tenant, { email, password });
-      router.replace('/today');
+      const role = await login(tenant, { email, password });
+      router.replace(landingPathForRole(role));
     } catch (err) {
       setError(
         err instanceof ApiClientError && err.status === 401
@@ -57,8 +57,8 @@ export default function StaffLoginPage() {
     setError(null);
     setLoading(true);
     try {
-      await login(DEMO_TENANT, { email: demoEmail, password: DEMO_PASSWORD });
-      router.replace('/today');
+      const role = await login(DEMO_TENANT, { email: demoEmail, password: DEMO_PASSWORD });
+      router.replace(landingPathForRole(role));
     } catch {
       setError('Không vào được tài khoản demo — kiểm tra kết nối');
       setLoading(false);

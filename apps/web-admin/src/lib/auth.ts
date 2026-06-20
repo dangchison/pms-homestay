@@ -1,6 +1,7 @@
 import { type AuthTokensResponse, type LoginRequest } from '@pms/shared-types';
 import { useAuthStore } from '@/stores/auth.store';
 import { apiClient, ensureRefreshed } from './api-client';
+import { getQueryClient } from './query-client';
 
 /** Đăng nhập → lưu access/csrf/user in-memory (refresh cookie BE tự set). */
 export async function login(input: LoginRequest): Promise<void> {
@@ -19,6 +20,7 @@ export async function logout(): Promise<void> {
     .post('/auth/logout', undefined, csrf ? { headers: { 'X-CSRF-Token': csrf } } : undefined)
     .catch(() => undefined); // best-effort: vẫn xoá local dù BE lỗi
   useAuthStore.getState().clear();
+  getQueryClient().clear(); // xoá cache REST → đổi tài khoản trên cùng thiết bị không thấy dữ liệu phiên trước
 }
 
 /**
