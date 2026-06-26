@@ -9,7 +9,6 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  SectionHeader,
   Separator,
   StatCard,
   type StatTone,
@@ -29,6 +28,7 @@ import {
   Tags,
 } from 'lucide-react';
 import type { TodayBookingCard } from '@pms/shared-types';
+import { PageContainer, PageHeader } from '@/components/layout/page';
 import { vnd } from '@/lib/format';
 import { useBookingsCount } from '@/lib/hooks/use-bookings';
 import { useConflictCount } from '@/lib/hooks/use-conflicts';
@@ -137,11 +137,8 @@ export default function DashboardPage() {
   const hasIssue = alerts.some((a) => a.count > 0);
 
   return (
-    <div className="grid gap-6">
-      <SectionHeader
-        title={<span className="text-2xl">Tổng quan</span>}
-        description={<span className="capitalize">{todayLabel()}</span>}
-      />
+    <PageContainer>
+      <PageHeader title="Tổng quan" description={<span className="capitalize">{todayLabel()}</span>} />
 
       {/* KPI row — nối GET /bookings/today */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -300,7 +297,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageContainer>
   );
 }
 

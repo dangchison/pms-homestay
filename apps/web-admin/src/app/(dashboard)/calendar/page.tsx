@@ -7,6 +7,7 @@ import { addDays, startOfUtcDay } from '@/lib/calendar/calendar-utils';
 import { useCalendar } from '@/lib/hooks/use-calendar';
 import { useT } from '@/lib/i18n';
 import { usePropertyStore } from '@/stores/property.store';
+import { PageContainer, PageHeader } from '@/components/layout/page';
 import { CALENDAR_STATUSES, CalendarToolbar } from '@/components/calendar/CalendarToolbar';
 import { CalendarView } from '@/components/calendar/CalendarView';
 
@@ -36,12 +37,17 @@ export default function CalendarPage() {
   }
 
   if (!propertyId) {
-    return <div className="p-6 text-sm text-muted-foreground">{t('calendar.selectProperty')}</div>;
+    return (
+      <PageContainer>
+        <PageHeader title={t('calendar.title')} />
+        <p className="text-sm text-muted-foreground">{t('calendar.selectProperty')}</p>
+      </PageContainer>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <h1 className="text-lg font-semibold">{t('calendar.title')}</h1>
+    <PageContainer>
+      <PageHeader title={t('calendar.title')} />
 
       <CalendarToolbar
         rangeStart={rangeStart}
@@ -70,6 +76,6 @@ export default function CalendarPage() {
           queryKey={queryKey}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }
