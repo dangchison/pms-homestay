@@ -128,6 +128,8 @@ Hệ thống Property Management System (PMS) phục vụ chủ homestay, căn h
 | `14-roadmap-tasks.md` | Task list cho AI coding agent (mirror của docs) |
 | `15-sprint-plan.md` | Kế hoạch 6 sprint / 12 tuần |
 | `16-product-roadmap.md` | Đề xuất tính năng sau MVP (25 mục, 3 wave) — wish-list đã thẩm định, không phải cam kết |
+| `17-oncall-runbook.md` | Runbook on-call: xử lý sự cố theo kịch bản (thao tác) |
+| `18-phase2-backlog.md` | Backlog hoàn thiện/hardening sau khi roadmap 50/50 đóng (TODO hoãn + kích hoạt ops) |
 | `ui/` | **UI spec:** design system, inventory page admin/staff, key flows |
 | `adr/` | 7 Architecture Decision Records |
 | `CHANGELOG-2026-06-review.md` | Nhật ký audit: phát hiện → cách xử lý |

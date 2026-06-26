@@ -85,7 +85,7 @@ export class FptOcrService {
     // Bản ghi pháp lý gốc là ảnh scan trên storage tier VN.
     return {
       document_type: raw.type_new || raw.type,    // CCCD, PASSPORT, CMND
-      document_number: raw.id,                    // → mã hoá enc/hash/last4 khi save (03 §4.5)
+      document_number: raw.id,                    // → mã hoá mức field khi save (ADR-0007)
       full_name: raw.name,
       date_of_birth: this.parseVnDate(raw.dob),
       gender: raw.sex,
@@ -104,7 +104,7 @@ export class FptOcrService {
 2. Upload thẳng lên storage **tier VN** (pre-signed PUT, path `tenants/{tenant_id}/guests/{guest_id}/cccd_front.jpg`).
 3. POST `/api/v1/guests/scan-id` với storage key → service tải ảnh, gọi FPT.AI (ngoài tx), trả extracted data — **không ghi DB ở bước này**.
 4. UI prefill form, lễ tân verify/sửa.
-5. Save vào `guests`: số giấy tờ → `id_document_number_enc` + `_hash` + `_last4` (ADR-0007).
+5. Save vào `guests`: số giấy tờ được **mã hoá mức field** theo [ADR-0007](adr/0007-pii-field-encryption.md) (cơ chế enc + blind-index hash; không lưu plaintext).
 6. OCR fail → form nhập tay (fallback luôn sẵn).
 
 ### Lưu trữ ảnh

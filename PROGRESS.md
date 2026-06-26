@@ -1,6 +1,6 @@
 # 📊 Tiến độ triển khai — PMS Homestay
 
-> **Cập nhật:** 2026-06-14 · **Nguồn sự thật phạm vi:** [`docs/14-roadmap-tasks.md`](docs/14-roadmap-tasks.md) (task + acceptance) · [`docs/15-sprint-plan.md`](docs/15-sprint-plan.md) (kế hoạch 6 sprint).
+> **Cập nhật:** 2026-06-26 · **Nguồn sự thật phạm vi:** [`docs/14-roadmap-tasks.md`](docs/14-roadmap-tasks.md) (task + acceptance) · [`docs/15-sprint-plan.md`](docs/15-sprint-plan.md) (kế hoạch 6 sprint) · việc hoàn thiện sau MVP: [`docs/18-phase2-backlog.md`](docs/18-phase2-backlog.md).
 > File này là **bản theo dõi sống** — cập nhật sau mỗi task hoàn thành. Trạng thái lấy theo **commit thật**, không tính việc đang dở.
 
 **Chú thích:** ✅ xong (đã verify) · 🟡 đang làm / một phần · ⬜ chưa bắt đầu
@@ -11,11 +11,11 @@
 
 | Chỉ số | Trạng thái |
 |---|---|
-| **Sprint hoàn thành** | **1 / 6** · **EPIC 2 BE xong 8/8** · **EPIC 3 ✅ (8/8)** · **EPIC 4 ✅ (7/7)** · **EPIC 5 ✅ (3/3)** · **EPIC 7 ✅ (3/3)** |
-| **Task backend xong** | **37 / 50** (EPIC 1 + task 2.1–2.8 + 3.1–3.8 + 4.1–4.7 + 5.1–5.3 + 7.1–7.3) · ~74% |
-| **Nền tảng FE** | 🟡 **6.1 ✅ · 6.2 Calendar ✅ · 6.3 Booking form ✅ · 6.4 Invoice & Payment ✅ · 6.5 Reports ✅** (P&L breakdown + trend 6 tháng + break-even 3 kịch bản + occupancy heatmap + ADR/RevPAR, Recharts); còn 6.6 PWA / 6.7 settings |
+| **Roadmap** | **✅ 50 / 50 — toàn bộ EPIC 1–8 đóng** (chi tiết §3–§4). Phần còn lại = hoàn thiện/hardening sau MVP → [`docs/18-phase2-backlog.md`](docs/18-phase2-backlog.md) |
+| **Backend** | **✅ EPIC 1–5 + 7 + 8** (1.x + 2.1–2.8 + 3.1–3.8 + 4.1–4.7 + 5.1–5.3 + 7.1–7.3 + 8.1–8.6) |
+| **Frontend** | **✅ EPIC 6 (7/7)** — 6.1 API client · 6.2 Calendar · 6.3 Booking form · 6.4 Invoice & Payment · 6.5 Reports · 6.6 web-staff PWA · 6.7 Settings. _(Lưu ý: FE chưa có e2e runtime — xem docs/18 P2-A.)_ |
 | **Chạy được gì** | API (auth, property/room/resource/block + rate-plan/rule + guests + `POST /pricing/quote` + **booking đầy đủ vòng đời** + **hoá đơn cọc/STAY** + **thanh toán** (trigger `paid_vnd` + cọc đủ→CONFIRMED + hoàn tiền + VietQR PNG) + **đối soát webhook Casso/SePay** (HMAC + dedup + tự khớp mã/số tiền → auto-confirm; còn lại → unmatched cho đối soát tay)) + **tài sản & khấu hao** (CRUD + khấu hao đường thẳng: plug tháng cuối/pro-rate/thanh lý) + **chi phí vận hành** (CRUD + định kỳ + auto hoa hồng OTA khi check-out) + **billing thuê tháng** (chỉ số điện nước + invoice MONTHLY_RENT pro-rate /30) + **night-audit** (cron đêm: deposit-timeout/no-show/OVERDUE/rollup + chốt tháng) + **báo cáo P&L/break-even** (đọc rollup + live hôm nay) + **realtime** (Transactional Outbox v2 + SSE `GET /events/stream` — fan-out theo tenant + lọc permission; **mọi mutation booking/payment/invoice/room emit event trong tx**) + **thông báo** (queue `notifications` → in-app + email SMTP; SMS/ZNS stub) + **dọn phòng** (cleaning task auto-sinh khi check-out/đổi phòng; vòng đời PENDING→IN_PROGRESS→COMPLETED→VERIFIED + housekeeping DIRTY→CLEANING→INSPECTION→CLEAN; ảnh before/after qua pre-signed S3) + **vết kiểm toán** (audit_logs partition tháng + interceptor auto-log mutation redact PII + READ_PII + append-only) + **billing-lite SaaS** (vòng đời thuê bao TRIAL→SUSPENDED→CHURNED + guard chặn write khi treo + plan-limit guard + thu phí VietQR + platform confirm), pricing-engine, 2 web app (UI), DB + migrations + seed, CI |
-| **Chất lượng** | **227/227 test API** (41 file; +7 occupancy +6 invoice-list +4 reports-occupancy) + **21 pricing-engine** xanh · web-admin typecheck/lint/`next build` (20 routes) xanh · e2e `--no-file-parallelism` (đôi khi 1 flake contention vd `ical-pull`/`assets-depreciation` — pass khi chạy RIÊNG) · 3 theme |
+| **Chất lượng** | **265 test API** (gồm +3 audit-partition 8.5, +10 security-audit/2FA 8.4) + **21 pricing-engine** xanh · web-admin typecheck/lint/`next build` xanh · e2e `--no-file-parallelism` (đôi khi 1 flake contention vd `ical-pull`/`assets-depreciation` — pass khi chạy RIÊNG) · 3 theme · CI: gitleaks + Trivy + `pnpm audit --prod` |
 
 ### Demo được gì hôm nay
 - **Backend auth thật chạy:** đăng ký tenant + OWNER (trial 14 ngày), đăng nhập Argon2id + khoá tài khoản, refresh rotation + grace, 2FA TOTP, quên/đặt lại mật khẩu, RBAC theo role + property — qua `http://localhost:3001/api/v1/auth/*`.
@@ -146,7 +146,7 @@
 3. ✅ ~~**4.1 Cleaning** + **4.5 Audit log**~~ — **xong** (dọn phòng auto-sinh + vòng đời + ảnh S3; audit_logs partition tháng + interceptor redact PII + READ_PII + GET /audit-logs append-only).
 4. ✅ ~~**4.7 Billing-lite SaaS**~~ — **xong, ĐÓNG EPIC 4 (7/7)** (lifecycle TRIAL→SUSPENDED→CHURNED + TenantStatusGuard + plan-limit guard + billing API + VietQR charge + platform confirm).
 5. ✅ **EPIC 5 Channel Sync XONG (3/3)**: ~~5.1 channels~~ + ~~5.2 iCal pull worker~~ + ~~5.3 iCal push endpoint~~.
-6. ✅ **EPIC 7 Compliance VN XONG (3/3)**: ~~7.1 OCR CCCD~~ + ~~7.2 police report TT56~~ + ~~7.3 NĐ13 data-rights~~. Backend đóng EPIC 1–5 + 7 (37/50 task).
+6. ✅ **EPIC 7 Compliance VN XONG (3/3)**: ~~7.1 OCR CCCD~~ + ~~7.2 police report TT56~~ + ~~7.3 NĐ13 data-rights~~. _(Mốc khi đó: backend EPIC 1–5 + 7 = 37 task; sau đó EPIC 6 FE + EPIC 8 đóng nốt → **50/50**.)_
 7. ✅ **EPIC 6 Frontend XONG (7/7)**: ~~6.1 API client~~ + ~~6.2 Calendar~~ + ~~6.3 Booking form~~ + ~~6.4 Invoice & Payment~~ + ~~6.5 Reports~~ + ~~6.6 web-staff PWA~~ + ~~6.7 Settings~~.
 8. ✅ **EPIC 8 Production-readiness XONG (6/6)**: ~~8.5 partition~~ + ~~8.4 security audit~~ + ~~8.6 docs~~ + ~~8.2 monitoring/Sentry~~ + ~~8.1 backup~~ + ~~8.3 load-test k6~~. **🎉 Roadmap 50/50 — toàn bộ EPIC 1–8 đóng** (phần kích hoạt ops còn lại: Sentry DSN, R2 backup creds, staging cho load-test).
 
