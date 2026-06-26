@@ -325,7 +325,7 @@ README mỗi app/package; OpenAPI export commit; runbook on-call (restore, recla
 
 ## Checklist PR (tự review trước khi submit)
 
-- [ ] Bảng mới: RLS policy (template NULLIF) + **composite FK** + index có tenant_id đứng đầu + partial unique nếu soft-delete + **dòng retention** (matrix `03` §7).
+- [ ] Bảng mới: RLS policy (template NULLIF) + **composite FK** + index có tenant_id đứng đầu + partial unique nếu soft-delete + **dòng retention** (matrix `03` §7). _(CI tự kiểm: `test/integration/rls-coverage.spec.ts` — bảng có `tenant_id` thiếu FORCE RLS → đỏ; cross-tenant cố ý phải thêm vào NO_RLS_ALLOWLIST.)_
 - [ ] Mutation: `withTenant` unit-of-work; **không external I/O trong tx**; Idempotency-Key cho POST tạo entity; `version`/If-Match cho entity sửa đồng thời.
 - [ ] Booking/occupancy: mọi đường ghi qua `createBookingTx`/`OccupancyService` — không INSERT occupancy/booking chỗ khác.
 - [ ] Tiền: BIGINT + `roundVnd()`; không công thức paid tự chế (trigger ADR-0003 là chuẩn).
