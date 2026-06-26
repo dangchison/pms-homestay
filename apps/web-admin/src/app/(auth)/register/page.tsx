@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { RegisterTenantRequestSchema, type RegisterTenantRequest } from '@pms/shared-types';
 import { Button, Input, Label, toast } from '@pms/ui';
 import { useForm } from 'react-hook-form';
-import { AuthCard } from '@/components/auth/AuthCard';
+import { AuthSplitLayout } from '@/components/auth/AuthSplitLayout';
 import { ApiClientError, apiClient } from '@/lib/api-client';
 
 /** A2 /register (docs/ui/01): tạo tenant + OWNER, trial 14 ngày. */
@@ -43,7 +43,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <AuthCard
+    <AuthSplitLayout
       title="Đăng ký dùng thử"
       description="Tạo tài khoản chủ nhà — miễn phí 14 ngày, không cần thẻ"
       footer={
@@ -134,6 +134,6 @@ export default function RegisterPage() {
           Bằng việc đăng ký, bạn đồng ý với điều khoản dịch vụ & chính sách bảo mật (NĐ13).
         </p>
       </form>
-    </AuthCard>
+    </AuthSplitLayout>
   );
 }
