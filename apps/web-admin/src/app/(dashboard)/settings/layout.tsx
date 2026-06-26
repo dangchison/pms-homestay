@@ -21,7 +21,7 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
   const subLabel = subPath ? SUB_LABELS[subPath] : undefined;
 
   return (
-    <PageContainer className="mx-auto max-w-4xl">
+    <PageContainer>
       <PageHeader
         title={subLabel ?? 'Cài đặt'}
         breadcrumb={subLabel ? [{ label: 'Cài đặt', href: '/settings' }, { label: subLabel }] : undefined}
