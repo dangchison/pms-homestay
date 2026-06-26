@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ResetPasswordRequestSchema, type ResetPasswordRequest } from '@pms/shared-types';
 import { Button, Input, Label, toast } from '@pms/ui';
 import { useForm } from 'react-hook-form';
-import { AuthCard } from '@/components/auth/AuthCard';
+import { AuthSplitLayout } from '@/components/auth/AuthSplitLayout';
 import { ApiClientError, apiClient } from '@/lib/api-client';
 
 /** A4 /reset-password?token= (docs/ui/01): đặt mật khẩu mới (min 10). */
@@ -27,7 +27,7 @@ function ResetPasswordForm() {
 
   if (!token) {
     return (
-      <AuthCard
+      <AuthSplitLayout
         title="Link không hợp lệ"
         description="Thiếu mã đặt lại mật khẩu trong đường dẫn."
         footer={
@@ -42,7 +42,7 @@ function ResetPasswordForm() {
         <p className="text-sm text-muted-foreground">
           Hãy mở link đặt lại mật khẩu trực tiếp từ email, hoặc yêu cầu link mới.
         </p>
-      </AuthCard>
+      </AuthSplitLayout>
     );
   }
 
@@ -63,7 +63,7 @@ function ResetPasswordForm() {
   const mismatch = confirm.length > 0 && watch('new_password') !== confirm;
 
   return (
-    <AuthCard
+    <AuthSplitLayout
       title="Đặt lại mật khẩu"
       description="Chọn mật khẩu mới cho tài khoản của bạn"
       footer={
@@ -105,7 +105,7 @@ function ResetPasswordForm() {
           Đặt lại mật khẩu
         </Button>
       </form>
-    </AuthCard>
+    </AuthSplitLayout>
   );
 }
 

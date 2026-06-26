@@ -7,7 +7,7 @@ import { ForgotPasswordRequestSchema, type ForgotPasswordRequest } from '@pms/sh
 import { Button, Input, Label } from '@pms/ui';
 import { ArrowLeft, MailCheck } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { AuthCard } from '@/components/auth/AuthCard';
+import { AuthSplitLayout } from '@/components/auth/AuthSplitLayout';
 import { apiClient } from '@/lib/api-client';
 
 /** A3 /forgot-password (docs/ui/01): thông báo TRUNG TÍNH (không lộ email tồn tại). */
@@ -27,7 +27,7 @@ export default function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <AuthCard
+      <AuthSplitLayout
         title="Kiểm tra email"
         description="Nếu email tồn tại trong hệ thống, chúng tôi đã gửi link đặt lại mật khẩu."
         footer={
@@ -45,12 +45,12 @@ export default function ForgotPasswordPage() {
             Kiểm tra hộp thư rác hoặc thử lại sau ít phút.
           </p>
         </div>
-      </AuthCard>
+      </AuthSplitLayout>
     );
   }
 
   return (
-    <AuthCard
+    <AuthSplitLayout
       title="Quên mật khẩu"
       description="Nhập email tài khoản — chúng tôi sẽ gửi link đặt lại"
       footer={
@@ -80,6 +80,6 @@ export default function ForgotPasswordPage() {
           Gửi link đặt lại
         </Button>
       </form>
-    </AuthCard>
+    </AuthSplitLayout>
   );
 }
