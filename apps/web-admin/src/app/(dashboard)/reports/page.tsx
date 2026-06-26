@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { cn } from '@pms/ui';
+import { PageContainer, PageHeader } from '@/components/layout/page';
 import { currentMonth } from '@/lib/reports-period';
 import { useT } from '@/lib/i18n';
 import { usePropertyStore } from '@/stores/property.store';
@@ -24,20 +25,27 @@ export default function ReportsPage() {
   const [month, setMonth] = useState(() => currentMonth(new Date()));
 
   if (!propertyId) {
-    return <div className="p-6 text-sm text-muted-foreground">{t('calendar.selectProperty')}</div>;
+    return (
+      <PageContainer>
+        <PageHeader title="Báo cáo" />
+        <p className="text-sm text-muted-foreground">{t('calendar.selectProperty')}</p>
+      </PageContainer>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold">Báo cáo</h1>
-        <input
-          type="month"
-          value={month}
-          onChange={(e) => e.target.value && setMonth(e.target.value)}
-          className="h-9 rounded-md border border-border bg-surface px-2 text-sm outline-none"
-        />
-      </div>
+    <PageContainer>
+      <PageHeader
+        title="Báo cáo"
+        action={
+          <input
+            type="month"
+            value={month}
+            onChange={(e) => e.target.value && setMonth(e.target.value)}
+            className="h-9 rounded-md border border-border bg-surface px-2 text-sm outline-none"
+          />
+        }
+      />
 
       <div className="flex gap-1 border-b border-border">
         {TABS.map((tb) => (
@@ -60,6 +68,6 @@ export default function ReportsPage() {
       {tab === 'pnl' && <PnlReport propertyId={propertyId} month={month} />}
       {tab === 'break-even' && <BreakEvenReport propertyId={propertyId} period={month} />}
       {tab === 'occupancy' && <OccupancyReport propertyId={propertyId} month={month} />}
-    </div>
+    </PageContainer>
   );
 }

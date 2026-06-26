@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useT } from '@/lib/i18n';
 import { usePropertyStore } from '@/stores/property.store';
+import { PageContainer, PageHeader } from '@/components/layout/page';
 import { BookingForm } from '@/components/bookings/BookingForm';
 
 /** B2 /bookings/new (task 6.3, flow F1): form tạo + báo giá sống. Prefill resource_id/
@@ -31,11 +32,14 @@ function NewBookingInner() {
 
 export default function NewBookingPage() {
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <h1 className="text-lg font-semibold">Đặt phòng mới</h1>
+    <PageContainer>
+      <PageHeader
+        breadcrumb={[{ label: 'Đặt phòng', href: '/bookings' }, { label: 'Tạo mới' }]}
+        title="Đặt phòng mới"
+      />
       <Suspense fallback={<p className="text-sm text-muted-foreground">Đang tải…</p>}>
         <NewBookingInner />
       </Suspense>
-    </div>
+    </PageContainer>
   );
 }

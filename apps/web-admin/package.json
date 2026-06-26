@@ -21,6 +21,7 @@
     "@tanstack/react-virtual": "^3.14.2",
     "lucide-react": "^0.469.0",
     "next": "^15.1.0",
+    "nextjs-toploader": "^3.9.17",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.54.0",

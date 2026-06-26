@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import NextTopLoader from 'nextjs-toploader';
 import { Toaster, themeInitScript } from '@pms/ui';
 import { Providers } from './providers';
 import './globals.css';
@@ -21,6 +22,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="vi" data-theme="light" suppressHydrationWarning>
       <body className={`${inter.variable} min-h-screen font-sans antialiased`}>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        {/* Thanh progress đỉnh trang — phản hồi tức thì khi điều hướng (click Link) */}
+        <NextTopLoader
+          color="var(--primary)"
+          height={3}
+          shadow="0 0 8px var(--primary)"
+          showSpinner={false}
+          crawlSpeed={120}
+          speed={250}
+        />
         <Providers>{children}</Providers>
         <Toaster />
       </body>

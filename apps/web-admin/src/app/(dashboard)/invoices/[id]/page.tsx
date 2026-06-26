@@ -26,6 +26,7 @@ import {
   useRefundPayment,
   useVoidInvoice,
 } from '@/lib/hooks/use-invoices';
+import { PageContainer, PageHeader } from '@/components/layout/page';
 import { InvoiceKindBadge, InvoiceStatusBadge } from '@/components/invoices/badges';
 import { RecordPaymentDialog } from '@/components/invoices/RecordPaymentDialog';
 import { VietQrPanel } from '@/components/invoices/VietQrPanel';
@@ -45,29 +46,36 @@ export default function InvoiceDetailPage() {
 
   if (isLoading || !invoice) {
     return (
-      <div className="space-y-3 p-4">
+      <PageContainer>
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-40 w-full" />
-      </div>
+      </PageContainer>
     );
   }
 
   const payable = PAYABLE.has(invoice.status);
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <header className="flex flex-wrap items-center gap-3">
-        <h1 className="text-lg font-semibold">{invoice.invoice_number}</h1>
-        <InvoiceKindBadge kind={invoice.kind} />
-        <InvoiceStatusBadge status={invoice.status} />
-        <div className="ml-auto flex gap-2">
-          {invoice.status === 'DRAFT' && <IssueButton id={invoice.id} />}
-          {payable && <Button size="sm" onClick={() => setPaying(true)}>Thu tiền</Button>}
-          {invoice.status !== 'VOID' && (
-            <Button size="sm" variant="outline" onClick={() => setVoiding(true)}>Hủy hoá đơn</Button>
-          )}
-        </div>
-      </header>
+    <PageContainer>
+      <PageHeader
+        breadcrumb={[{ label: 'Hoá đơn', href: '/invoices' }, { label: invoice.invoice_number }]}
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            {invoice.invoice_number}
+            <InvoiceKindBadge kind={invoice.kind} />
+            <InvoiceStatusBadge status={invoice.status} />
+          </span>
+        }
+        action={
+          <div className="flex gap-2">
+            {invoice.status === 'DRAFT' && <IssueButton id={invoice.id} />}
+            {payable && <Button size="sm" onClick={() => setPaying(true)}>Thu tiền</Button>}
+            {invoice.status !== 'VOID' && (
+              <Button size="sm" variant="outline" onClick={() => setVoiding(true)}>Hủy hoá đơn</Button>
+            )}
+          </div>
+        }
+      />
 
       <div className="grid gap-6 md:grid-cols-[1fr_22rem]">
         <div className="space-y-4">
@@ -158,7 +166,7 @@ export default function InvoiceDetailPage() {
       {paying && <RecordPaymentDialog invoice={invoice} onClose={() => setPaying(false)} />}
       {refundTarget && <RefundDialog payment={refundTarget} onClose={() => setRefundTarget(null)} />}
       {voiding && <VoidDialog invoice={invoice} onClose={() => setVoiding(false)} />}
-    </div>
+    </PageContainer>
   );
 }
 

@@ -19,6 +19,7 @@ import {
   toast,
 } from '@pms/ui';
 import type { UnmatchedPaymentResponse } from '@pms/shared-types';
+import { PageContainer, PageHeader } from '@/components/layout/page';
 import { ApiClientError } from '@/lib/api-client';
 import { vnd } from '@/lib/format';
 import { useInvoices } from '@/lib/hooks/use-invoices';
@@ -36,11 +37,11 @@ export default function UnmatchedPage() {
   const [resolveTarget, setResolveTarget] = useState<UnmatchedPaymentResponse | null>(null);
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <div>
-        <h1 className="text-lg font-semibold">Đối soát thanh toán</h1>
-        <p className="text-sm text-muted-foreground">Biến động ngân hàng chưa tự khớp — match tay vào hoá đơn hoặc bỏ qua.</p>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title="Đối soát thanh toán"
+        description="Biến động ngân hàng chưa tự khớp — match tay vào hoá đơn hoặc bỏ qua."
+      />
 
       {isLoading ? (
         <Skeleton className="h-40 w-full" />
@@ -101,7 +102,7 @@ export default function UnmatchedPage() {
       )}
 
       {resolveTarget && <ResolveDialog unmatched={resolveTarget} onClose={() => setResolveTarget(null)} />}
-    </div>
+    </PageContainer>
   );
 }
 

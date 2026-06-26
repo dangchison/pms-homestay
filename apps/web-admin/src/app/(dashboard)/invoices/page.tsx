@@ -7,6 +7,7 @@ import { vnd } from '@/lib/format';
 import { type InvoiceFilters, useInvoices } from '@/lib/hooks/use-invoices';
 import { useT } from '@/lib/i18n';
 import { usePropertyStore } from '@/stores/property.store';
+import { PageContainer, PageHeader } from '@/components/layout/page';
 import { InvoiceKindBadge, InvoiceStatusBadge } from '@/components/invoices/badges';
 
 // 'ALL' = sentinel "mọi giá trị" (Radix Select không nhận value rỗng).
@@ -28,15 +29,20 @@ export default function InvoicesPage() {
   const { data, isLoading, isFetching } = useInvoices(propertyId, filters);
 
   if (!propertyId) {
-    return <div className="p-6 text-sm text-muted-foreground">{t('calendar.selectProperty')}</div>;
+    return (
+      <PageContainer>
+        <PageHeader title="Hoá đơn" />
+        <p className="text-sm text-muted-foreground">{t('calendar.selectProperty')}</p>
+      </PageContainer>
+    );
   }
 
   const invoices = data?.data ?? [];
   const pageInfo = data?.page_info;
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <h1 className="text-lg font-semibold">Hoá đơn</h1>
+    <PageContainer>
+      <PageHeader title="Hoá đơn" />
 
       <div className="flex flex-wrap items-center gap-2">
         <Select
@@ -134,6 +140,6 @@ export default function InvoicesPage() {
           </Button>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }
