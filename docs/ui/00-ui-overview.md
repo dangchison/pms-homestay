@@ -1,6 +1,6 @@
 # UI/00 — TỔNG QUAN UI & DESIGN SYSTEM
 
-> **Phiên bản 1.0 (2026-06-10).** Bộ UI spec gồm 4 file: file này (nguyên tắc + sitemap + đếm page) · [`01-web-admin-pages.md`](01-web-admin-pages.md) (35 page admin) · [`02-web-staff-pages.md`](02-web-staff-pages.md) (9 page PWA nhân viên) · [`03-key-flows.md`](03-key-flows.md) (8 flow nghiệp vụ xuyên màn hình). FE build theo đây — không tự chế route/luồng.
+> **Phiên bản 1.0 (2026-06-10).** Bộ UI spec gồm 4 file: file này (nguyên tắc + sitemap + đếm page) · [`01-web-admin-pages.md`](01-web-admin-pages.md) (35 page admin) · [`02-web-staff-pages.md`](02-web-staff-pages.md) (9 page PWA nhân viên) · [`03-key-flows.md`](03-key-flows.md) (8 flow nghiệp vụ xuyên màn hình). 4 file **phân tầng, không trùng lặp**: 00 = nguyên tắc/token/sitemap tổng → 01·02 = inventory từng page (admin/staff) → 03 = flow nối nhiều page (tham chiếu mã màn hình ở 01/02). FE build theo đây — không tự chế route/luồng.
 
 ## 1. Tổng số page (đếm theo route, không tính dialog/drawer)
 

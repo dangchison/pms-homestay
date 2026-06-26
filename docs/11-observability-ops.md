@@ -85,6 +85,8 @@ GET /health/startup    — init xong chưa (migration applied)
 
 ## 6. Backup & recovery
 
+> Đây là **chính sách/thiết kế** backup. Thao tác chạy/khôi phục cụ thể (lệnh, drill từng bước): xem [`17-oncall-runbook.md` §1](17-oncall-runbook.md).
+
 ### Chọn theo phương án hosting (chốt cùng ADR-0004)
 
 | | (A) Managed PG (provider VN/SG) | (B) Self-host trên VPS |
@@ -178,6 +180,8 @@ jobs:
 
 - Channels: Slack #alerts; critical → PagerDuty/phone on-call. Uptime: Better Stack probe 1' × 3 region + status page public.
 
+> Khi một alert nổ, quy trình xử lý theo kịch bản (outbox lag, overbooking, unmatched payment, night-audit, Postgres/Redis…): xem [`17-oncall-runbook.md`](17-oncall-runbook.md) §3–§7.
+
 ## 10. Performance budget
 
 | Endpoint | p95 target |
@@ -208,6 +212,8 @@ logs: container stdout → vector agent → Better Stack (không ghi file local)
 ```
 
 ## 12. Disaster recovery scenarios
+
+> Đây là **ma trận mục tiêu** RTO/RPO. Các bước thao tác khôi phục thực tế: xem [`17-oncall-runbook.md` §1](17-oncall-runbook.md) (restore) và §6 (Postgres/Redis sự cố).
 
 | Scenario | RTO | RPO | Plan |
 |----------|-----|-----|------|

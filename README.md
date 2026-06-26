@@ -5,8 +5,9 @@ Kiến trúc đầy đủ ở [`docs/`](docs/00-overview.md) — **đọc `00 �
 
 ## Trạng thái
 
-**Backend EPIC 1–5 + 7 đóng · Frontend EPIC 6 đóng · EPIC 8 (production-readiness) đang chạy.**
-Scope: [`docs/14-roadmap-tasks.md`](docs/14-roadmap-tasks.md) · tiến độ thực: [`PROGRESS.md`](PROGRESS.md).
+**✅ Roadmap MVP 50/50 — toàn bộ EPIC 1–8 đóng** (Backend 1–5/7/8 · Frontend 6 · Production-readiness 8).
+Scope + acceptance: [`docs/14-roadmap-tasks.md`](docs/14-roadmap-tasks.md) · tiến độ thực: [`PROGRESS.md`](PROGRESS.md) · việc hoàn thiện/hardening sau MVP: [`docs/18-phase2-backlog.md`](docs/18-phase2-backlog.md).
+Phần còn lại là **kích hoạt vận hành** (Sentry DSN, R2 backup, load-test staging) + hoàn thiện FE/e2e — xem docs/18.
 
 - **Nền tảng & IAM** (EPIC 1): monorepo, API skeleton (env zod fail-fast, pino redact, RFC 7807,
   health, OTel), SQL-first migrations + Prisma introspect, `withTenant` + **RLS chứng minh bằng
@@ -19,9 +20,10 @@ Scope: [`docs/14-roadmap-tasks.md`](docs/14-roadmap-tasks.md) · tiến độ th
   công an (TT56), quyền dữ liệu NĐ13 (export/erasure/consent).
 - **Giao diện** (EPIC 6): web-admin (lịch · đặt phòng · hoá đơn · báo cáo · settings) + web-staff
   PWA (today/rooms board · check-in 3 bước OCR · check-out).
-- **Production-readiness** (EPIC 8 — đang chạy): partition lifecycle (8.5) ✅ · security audit
-  IDOR/RLS/CSRF/2FA + scanner CI gitleaks/Trivy (8.4) ✅ · docs + runbook + OpenAPI (8.6) ✅ ·
-  **còn**: backup (8.1) · monitoring/Sentry (8.2) · load-test k6 (8.3).
+- **Production-readiness** (EPIC 8 — đóng 6/6): partition lifecycle (8.5) · security audit
+  IDOR/RLS/CSRF/2FA + scanner CI gitleaks/Trivy (8.4) · docs + runbook + OpenAPI (8.6) ·
+  backup R2 + restore-drill (8.1) · monitoring/Sentry gated env (8.2) · load-test k6 (8.3).
+  > Code sẵn; còn **kích hoạt ops** (Sentry DSN, R2 creds, staging cho load-test) — [`docs/18`](docs/18-phase2-backlog.md) P2-C.
 
 ## Quickstart
 
@@ -73,7 +75,7 @@ packages/  ui (shadcn — BẢN DUY NHẤT) · shared-types (Zod chung BE/FE)
            pricing-engine (pure fn + roundVnd) · eslint-config-pms · tsconfig
 infra/     docker (compose dev, Dockerfiles) · migrations-sql (NGUỒN SỰ THẬT schema)
 scripts/   seed-prod-required.ts · seed-dev.ts
-docs/      00–17 (gồm on-call runbook), openapi.json, ui/, adr/ — nguồn sự thật thiết kế
+docs/      00–18 (00 tổng quan · 17 on-call runbook · 18 Phase 2 backlog), openapi.json, ui/, adr/ — nguồn sự thật thiết kế
 ```
 
 ## Quy tắc bất di bất dịch (enforce bằng lint/CI — chi tiết: docs + ADR)
@@ -101,9 +103,14 @@ pnpm --filter @pms/pricing-engine test # roundVnd + timezone
 
 ## Tài liệu cốt lõi
 
-[Tổng quan](docs/00-overview.md) · [Tech stack](docs/01-tech-stack.md) · [Multi-tenancy](docs/02-multi-tenancy.md) ·
-[ERD 42 bảng](docs/03-database-erd.md) · [API conventions](docs/05-api-conventions.md) ·
-[Folder structure](docs/13-folder-structure.md) · [Roadmap tasks](docs/14-roadmap-tasks.md) · [Sprint plan](docs/15-sprint-plan.md) ·
-[Observability & ops](docs/11-observability-ops.md) · [On-call runbook](docs/17-oncall-runbook.md) · [OpenAPI](docs/openapi.json) · [ADR](docs/adr/README.md)
+> **Thứ tự ưu tiên khi xung đột** (docs/00 §7): `adr/` > docs domain `00–13` + `ui/` > `14`/`15`. Chi tiết kỹ thuật nằm ở ADR; docs domain trỏ tới ADR, không lặp lại.
+
+**Nền tảng:** [Tổng quan](docs/00-overview.md) · [Tech stack](docs/01-tech-stack.md) · [Multi-tenancy](docs/02-multi-tenancy.md) · [ERD](docs/03-database-erd.md) · [Auth & RBAC](docs/04-auth-rbac.md) · [API conventions](docs/05-api-conventions.md) · [Folder structure](docs/13-folder-structure.md)
+
+**Domain:** [Overbooking](docs/06-overbooking-prevention.md) · [Pricing](docs/07-pricing-engine.md) · [Channel sync](docs/08-channel-sync.md) · [Finance](docs/09-finance-accounting.md) · [Realtime](docs/10-realtime-events.md) · [Compliance VN](docs/12-vietnam-compliance.md)
+
+**Kế hoạch & vận hành:** [Roadmap tasks](docs/14-roadmap-tasks.md) · [Sprint plan](docs/15-sprint-plan.md) · [Product roadmap](docs/16-product-roadmap.md) · [Phase 2 backlog](docs/18-phase2-backlog.md) · [Observability & ops](docs/11-observability-ops.md) · [On-call runbook](docs/17-oncall-runbook.md)
+
+**Tham chiếu:** [UI spec](docs/ui/00-ui-overview.md) · [OpenAPI](docs/openapi.json) · [ADR](docs/adr/README.md) · [Tiến độ](PROGRESS.md)
 
 > README từng app/package: [`apps/api`](apps/api/README.md) · [`apps/web-admin`](apps/web-admin/README.md) · [`apps/web-staff`](apps/web-staff/README.md) · [`packages/*`](packages).

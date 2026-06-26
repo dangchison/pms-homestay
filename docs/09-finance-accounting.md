@@ -21,12 +21,7 @@ Night-audit (hằng đêm) ──→ no-show, PENDING hết hạn, OVERDUE, roll
 
 1. **Mọi tiền tệ là BIGINT VND.** Làm tròn duy nhất qua `roundVnd()` của `packages/pricing-engine` — cấm `Math.round` rải rác.
 2. **`invoices.total_vnd = SUM(invoice_items.amount_vnd)`** — enforce trigger; items chỉ sửa được khi DRAFT.
-3. **`invoices.paid_vnd`** — enforce trigger, đúng cả khi refund:
-   ```sql
-   paid_vnd = COALESCE(SUM(amount_vnd)          FILTER (WHERE status IN ('SUCCEEDED','PARTIALLY_REFUNDED')), 0)
-            - COALESCE(SUM(refunded_amount_vnd) FILTER (WHERE status IN ('SUCCEEDED','PARTIALLY_REFUNDED')), 0);
-   ```
-   `balance_vnd` là generated column `total_vnd - paid_vnd`.
+3. **`invoices.paid_vnd`** — enforce trigger, đúng cả khi refund; `balance_vnd` là generated column `total_vnd - paid_vnd`. Công thức refund-aware (FILTER theo status) là **nguồn chính tại** [ADR-0003 §Decision 1–2](adr/0003-financial-ledger.md) — không lặp lại ở đây để tránh lệch khi sửa.
 4. **Invoice đã ISSUED không sửa items.** Sai → VOID (giữ số, không gap — luật kế toán) + phát hành invoice mới / ADJUSTMENT.
 5. **Payment SUCCEEDED chỉ refund, không xoá. Booking không bao giờ xoá** (chỉ CANCELLED/NO_SHOW/CHECKED_OUT).
 6. **Cọc ≠ doanh thu:** cọc là **nợ phải trả (liability)** tới khi cấn vào STAY invoice lúc check-out (hoặc forfeit khi hủy). Doanh thu ghi nhận tại CHECKED_OUT.
@@ -132,7 +127,7 @@ Fallback luôn tồn tại: ghi nhận thủ công (cách 3 cũ). Webhook lỗi 
 
 ### Refund
 
-`POST /api/v1/payments/:id/refund` (reason bắt buộc, permission `payment.refund`): tăng `refunded_amount_vnd`, status `PARTIALLY_REFUNDED`/`REFUNDED`; trigger tự tính lại `paid_vnd` (công thức §2.3); audit log.
+`POST /api/v1/payments/:id/refund` (reason bắt buộc, permission `payment.refund`): tăng `refunded_amount_vnd`, status `PARTIALLY_REFUNDED`/`REFUNDED`; trigger tự tính lại `paid_vnd` (§2 quy tắc 3 — [ADR-0003](adr/0003-financial-ledger.md)); audit log.
 
 ## 6. Hoa hồng OTA — MỘT đường ghi
 
