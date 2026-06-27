@@ -144,8 +144,10 @@ jobs:
       - name: Migrations + seed (required + demo)
         run: pnpm db:migrate && pnpm db:seed:required && pnpm db:seed:dev
 
-      - name: Build api + web-admin
-        run: pnpm --filter @pms/api build && pnpm --filter @pms/web-admin build
+      # Dùng turbo (qua `pnpm build`) để build ĐÚNG THỨ TỰ phụ thuộc — @pms/shared-types
+      # /ui phải build TRƯỚC api/web (pnpm --filter đơn lẻ không build dep → TS2307).
+      - name: Build api + web-admin (kèm deps shared-types/ui)
+        run: pnpm exec turbo run build --filter=@pms/api --filter=@pms/web-admin
 
       - name: Cài Playwright browser (chromium)
         run: pnpm --filter @pms/web-admin exec playwright install --with-deps chromium
