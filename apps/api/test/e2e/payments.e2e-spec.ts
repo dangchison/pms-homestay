@@ -33,6 +33,7 @@ describe('Payments + VietQR (task 3.3)', () => {
   let admin: Client;
   let token: string;
   let resDeposit: string;
+  let propertyId: string;
 
   const auth = () => ({ Authorization: `Bearer ${token}` });
 
@@ -86,7 +87,7 @@ describe('Payments + VietQR (task 3.3)', () => {
         .expect(200)
     ).body.data.access_token;
 
-    const propertyId = (
+    propertyId = (
       await request(http)
         .post('/api/v1/properties')
         .set(auth())
@@ -264,5 +265,48 @@ describe('Payments + VietQR (task 3.3)', () => {
       .expect(200);
     expect(qr.headers['content-type']).toMatch(/image\/png/);
     expect(qr.body.subarray(0, 4).toString('hex')).toBe('89504e47'); // PNG magic bytes
+  });
+
+  // ── A3 F3: sổ thanh toán theo cơ sở (GET /payments?property_id) ──
+
+  it('★ GET /payments?property_id → sổ thanh toán (data + page_info), payment đã ghi xuất hiện', async () => {
+    // booking → DEPOSIT invoice → trả → payment gắn property qua bookings
+    const ci = '2027-08-10T07:00:00.000Z';
+    const co = '2027-08-12T05:00:00.000Z';
+    const q = (
+      await request(http)
+        .post('/api/v1/pricing/quote')
+        .set(auth())
+        .send({ resource_id: resDeposit, mode: 'DAILY', check_in: ci, check_out: co })
+        .expect(200)
+    ).body.data.quote_id;
+    const bookingId = (
+      await request(http)
+        .post('/api/v1/bookings')
+        .set({ ...auth(), 'Idempotency-Key': randomUUID() })
+        .send({ resource_id: resDeposit, quote_id: q, mode: 'DAILY', check_in: ci, check_out: co })
+        .expect(201)
+    ).body.data.id;
+    const deposit = (
+      await request(http).get(`/api/v1/invoices?booking_id=${bookingId}`).set(auth()).expect(200)
+    ).body.data[0];
+    const paid = await pay(deposit.id, deposit.balance_vnd).expect(201);
+
+    const res = await request(http)
+      .get(`/api/v1/payments?property_id=${propertyId}&page=1`)
+      .set(auth())
+      .expect(200);
+    expect(res.body.page_info).toMatchObject({
+      page: 1,
+      page_size: expect.any(Number),
+      total_items: expect.any(Number),
+      total_pages: expect.any(Number),
+    });
+    expect(res.body.page_info.total_items).toBeGreaterThanOrEqual(1);
+    expect(res.body.data.map((p: { id: string }) => p.id)).toContain(paid.body.data.id);
+  });
+
+  it('GET /payments thiếu cả invoice_id lẫn property_id → 400', async () => {
+    await request(http).get('/api/v1/payments').set(auth()).expect(400);
   });
 });

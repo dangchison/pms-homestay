@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   type CreatePaymentRequest,
   type JwtClaims,
+  type OffsetPageInfo,
   type PaymentEventPayload,
   type PaymentResponse,
   type RefundPaymentRequest,
@@ -67,6 +68,68 @@ export class PaymentsService {
       { readOnly: true },
     );
     return rows.map(toPaymentResponse);
+  }
+
+  /**
+   * Sổ thanh toán theo cơ sở (A3 F3): JOIN payments → invoices → bookings.property_id,
+   * filter status/method/khoảng ngày + phân trang. Chỉ đọc.
+   */
+  async listByProperty(
+    query: {
+      property_id?: string;
+      status?: PaymentResponse['status'];
+      method?: PaymentResponse['method'];
+      from?: string;
+      to?: string;
+      page: number;
+      page_size: number;
+    },
+    user: JwtClaims,
+  ): Promise<{ data: PaymentResponse[]; page_info: OffsetPageInfo }> {
+    const propertyId = query.property_id;
+    if (!propertyId) {
+      throw new AppException({ code: 'VALIDATION', title: 'Cần property_id', status: 400 });
+    }
+    await this.permissionService.authorizeOnProperty(user, propertyId, 'invoice.read');
+    const where: Prisma.paymentsWhereInput = {
+      invoices: { bookings: { property_id: propertyId } },
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.method ? { method: query.method } : {}),
+      ...(query.from || query.to
+        ? {
+            created_at: {
+              ...(query.from ? { gte: new Date(query.from) } : {}),
+              ...(query.to ? { lte: new Date(`${query.to}T23:59:59.999Z`) } : {}),
+            },
+          }
+        : {}),
+    };
+    const { page, page_size } = query;
+    return withTenant(
+      this.prisma,
+      user.tnt,
+      async (tx) => {
+        const [rows, total] = await Promise.all([
+          tx.payments.findMany({
+            where,
+            orderBy: { created_at: 'desc' },
+            skip: (page - 1) * page_size,
+            take: page_size,
+          }),
+          tx.payments.count({ where }),
+        ]);
+        return {
+          data: rows.map(toPaymentResponse),
+          page_info: {
+            page,
+            page_size,
+            total_items: total,
+            total_pages: Math.max(1, Math.ceil(total / page_size)),
+          },
+        };
+      },
+      { readOnly: true },
+    );
   }
 
   async record(

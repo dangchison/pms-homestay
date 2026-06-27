@@ -48,6 +48,29 @@ export function usePaymentsByInvoice(invoiceId: string) {
   });
 }
 
+export interface PaymentFilters {
+  status?: string;
+  method?: string;
+  page?: number;
+}
+
+/** F3 — sổ thanh toán theo cơ sở + filter (A3). Key `['payments', ...]` → SSE invalidate. */
+export function usePaymentsByProperty(propertyId: string | null, filters: PaymentFilters) {
+  return useQuery({
+    queryKey: ['payments', 'list', propertyId ?? '', filters],
+    queryFn: () => {
+      const p = new URLSearchParams({ property_id: propertyId!, page: String(filters.page ?? 1) });
+      if (filters.status) p.set('status', filters.status);
+      if (filters.method) p.set('method', filters.method);
+      return apiClient.get<{ data: PaymentResponse[]; page_info: OffsetPageInfo }>(
+        `/payments?${p.toString()}`,
+      );
+    },
+    enabled: !!propertyId,
+    placeholderData: keepPreviousData,
+  });
+}
+
 export function useRecordPayment() {
   const qc = useQueryClient();
   return useMutation({

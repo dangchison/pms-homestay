@@ -16,6 +16,7 @@ import {
   Share2,
   Sparkles,
   Users,
+  Wallet,
 } from 'lucide-react';
 
 /** Menu theo role matrix docs/ui/00 §5 — render đủ cho OWNER ở scaffold. */
@@ -38,7 +39,8 @@ const SECTIONS = [
   {
     label: 'Tài chính',
     items: [
-      { href: '/invoices', label: 'Hoá đơn & Thanh toán', icon: ReceiptText },
+      { href: '/invoices', label: 'Hoá đơn', icon: ReceiptText },
+      { href: '/payments', label: 'Thanh toán', icon: Wallet },
       { href: '/payments/unmatched', label: 'Đối soát', icon: ArrowLeftRight },
       { href: '/reports', label: 'Báo cáo', icon: BarChart3 },
     ],
@@ -53,8 +55,21 @@ const SECTIONS = [
   },
 ] as const;
 
+// href đang active = href dài nhất là tiền tố của pathname (đúng cả /payments vs
+// /payments/unmatched — chọn cái cụ thể hơn). '/' chỉ active đúng tại '/'.
+const ALL_HREFS = SECTIONS.flatMap((s) => s.items.map((i) => i.href));
+function activeHrefFor(pathname: string): string {
+  if (pathname === '/') return '/';
+  return (
+    ALL_HREFS.filter((h) => h !== '/' && (pathname === h || pathname.startsWith(`${h}/`))).sort(
+      (a, b) => b.length - a.length,
+    )[0] ?? ''
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
+  const activeHref = activeHrefFor(pathname);
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface md:flex">
@@ -78,7 +93,7 @@ export function Sidebar() {
             )}
             <div className="grid gap-0.5">
               {section.items.map(({ href, label, icon: Icon }) => {
-                const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
+                const active = href === activeHref;
                 return (
                   <Link
                     key={href}
