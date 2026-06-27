@@ -12,7 +12,7 @@
 
 | # | Mục | Mô tả | Nguồn | Acceptance | Ưu tiên |
 |---|-----|-------|-------|-----------|:---:|
-| A1 | E2E luồng chính FE | Playwright phủ login → đặt phòng → hoá đơn → thanh toán → báo cáo (FE hiện chỉ verify `next build` + typecheck) | PROGRESS 6.1 "FE chưa có e2e kiểu BE" | CI chạy Playwright xanh cho ≥1 happy-path mỗi app | **P0** |
+| A1 ✅ | E2E web-admin (Playwright) | Smoke điều hướng (login demo + dashboard/calendar/invoices/reports/settings) + flow ghi (thu tiền hoá đơn → còn lại 0₫). webServer tự khởi động api+web; job CI `e2e-web`. | [apps/web-admin/e2e](../apps/web-admin/e2e) · [ci.yml](../.github/workflows/ci.yml) | ✅ **Done** [PR#42] — 3/3 xanh local; CI chạy mỗi PR. _(web-staff E2E = A2)_ | **P0** |
 | A2 | web-staff PWA hoàn thiện | Workbox/offline cache, camera + OCR check-in, nối API đầy đủ (hiện 6.6 mới shell + trang tĩnh) | PROGRESS 6.6 | Offline shell hoạt động; check-in OCR end-to-end trên thiết bị | P1 |
 | A3 | Trang/luồng FE hoãn | Ledger `/payments` theo property (F3), export PDF/Excel ở Reports, chế độ giờ HOURLY + kéo mép đổi ngày ở Calendar | PROGRESS 6.4/6.5/6.2 | Mỗi trang có dữ liệu thật + thao tác chính chạy | P1 |
 
