@@ -92,6 +92,75 @@ jobs:
       - name: Build
         run: pnpm build
 
+  # E2E web-admin (docs/18 P2-A1): dựng stack thật → seed demo → Playwright
+  # (smoke điều hướng + thu tiền hoá đơn). Playwright tự khởi động api+web.
+  e2e-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ENABLE_SCHEDULERS: 'false'
+      # NEXT_PUBLIC_* bake lúc build web-admin (nút demo + tenant slug cho login).
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NEXT_PUBLIC_DEFAULT_TENANT_SLUG: demo
+      NEXT_PUBLIC_DEMO_MODE: '1'
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pms
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d pms"
+          --health-interval 3s --health-timeout 3s --health-retries 15
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s --health-timeout 3s --health-retries 15
+      mailpit:
+        image: axllent/mailpit:latest
+        ports: ['1025:1025', '8025:8025']
+        options: >-
+          --health-cmd "/mailpit readyz"
+          --health-interval 3s --health-timeout 3s --health-retries 15
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Tạo app_user (non-superuser — RLS có hiệu lực thật)
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -d pms -f infra/docker/initdb/01-app-user.sql
+
+      - name: Migrations + seed (required + demo)
+        run: pnpm db:migrate && pnpm db:seed:required && pnpm db:seed:dev
+
+      - name: Build api + web-admin
+        run: pnpm --filter @pms/api build && pnpm --filter @pms/web-admin build
+
+      - name: Cài Playwright browser (chromium)
+        run: pnpm --filter @pms/web-admin exec playwright install --with-deps chromium
+
+      - name: E2E (Playwright tự khởi động api + web)
+        run: pnpm --filter @pms/web-admin test:e2e
+
+      - name: Upload báo cáo Playwright (khi lỗi)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web-admin/playwright-report
+          retention-days: 7
+
   security:
     runs-on: ubuntu-latest
     timeout-minutes: 10

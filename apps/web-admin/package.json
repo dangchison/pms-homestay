@@ -9,7 +9,9 @@
     "start": "next start --port 3000",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"@pms/web-admin: no tests yet\""
+    "test": "echo \"@pms/web-admin: no unit tests (xem test:e2e)\"",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -30,6 +32,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@pms/eslint-config": "workspace:*",
     "@pms/tsconfig": "workspace:*",
     "@tailwindcss/postcss": "^4.0.0",
