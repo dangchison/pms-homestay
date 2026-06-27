@@ -1,19 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ConsentResponse, DataErasureResponse } from '@pms/shared-types';
 import { apiClient } from '@/lib/api-client';
-
-/** Tải Blob có auth → kích hoạt download trình duyệt với tên file gợi ý. */
-async function downloadBlob(path: string, filename: string): Promise<void> {
-  const blob = await apiClient.getBlob(path);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
+import { downloadBlob } from '@/lib/download';
 
 /** S6 — báo cáo lưu trú TT56 (xlsx). */
 export function useDownloadPoliceReport() {

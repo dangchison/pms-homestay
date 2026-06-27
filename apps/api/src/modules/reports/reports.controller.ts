@@ -1,9 +1,12 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, Res } from '@nestjs/common';
 import { type JwtClaims } from '@pms/shared-types';
+import { type Response } from 'express';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
 import { BreakEvenQueryDto, OccupancyReportQueryDto, PnlQueryDto } from './dto';
 import { ReportsService } from './reports.service';
+
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 /**
  * /api/v1/reports — báo cáo tài chính (task 3.7, docs/09 §8/§10). Property-scoped:
@@ -30,5 +33,20 @@ export class ReportsController {
   @RequirePermissions('report.financial')
   async occupancy(@Query() query: OccupancyReportQueryDto, @CurrentUser() user: JwtClaims) {
     return { data: await this.reports.getOccupancy(query, user) };
+  }
+
+  /** Xuất Excel (P&L + lấp đầy theo ngày) cho [from,to] — binary qua `@Res`. */
+  @Get('export')
+  @RequirePermissions('report.financial')
+  async exportXlsx(
+    @Query() query: OccupancyReportQueryDto,
+    @CurrentUser() user: JwtClaims,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { buffer, filename } = await this.reports.exportXlsx(query, user);
+    res.setHeader('Content-Type', XLSX_MIME);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(buffer);
   }
 }

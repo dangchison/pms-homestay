@@ -15,6 +15,7 @@ import { PermissionService } from '@core/auth/permission.service';
 import { AppException } from '@core/http/exceptions/app.exception';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { withTenant } from '@core/tenancy/with-tenant';
+import { buildReportsWorkbook } from './reports-export.builder';
 
 type Tx = Prisma.TransactionClient;
 
@@ -341,6 +342,41 @@ export class ReportsService {
       room_revenue_vnd: Number(r.room_revenue_vnd),
     }));
     return { property_id: query.property_id, from: query.from, to: query.to, days };
+  }
+
+  /**
+   * Xuất Excel báo cáo (A3 F3 — phần 2): gộp P&L + occupancy của [from,to] vào 1
+   * workbook. Tái dùng getPnl/getOccupancy (đã authorize + đọc rollup) → builder
+   * thuần. Trả buffer + tên file gợi ý cho Content-Disposition. [[reports-export.builder]]
+   */
+  async exportXlsx(
+    query: OccupancyReportQuery,
+    user: JwtClaims,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    const [pnl, occupancy, propertyName] = await Promise.all([
+      this.getPnl(query, user),
+      this.getOccupancy(query, user),
+      this.getPropertyName(query.property_id, user),
+    ]);
+    const buffer = await buildReportsWorkbook({
+      property_name: propertyName,
+      from: query.from,
+      to: query.to,
+      pnl,
+      occupancy,
+    });
+    return { buffer, filename: `bao-cao-${query.from}_${query.to}.xlsx` };
+  }
+
+  /** Tên cơ sở (đã authorize qua getPnl/getOccupancy) — cho tiêu đề file. */
+  private async getPropertyName(propertyId: string, user: JwtClaims): Promise<string> {
+    const prop = await withTenant(
+      this.prisma,
+      user.tnt,
+      (tx) => tx.properties.findFirst({ where: { id: propertyId }, select: { name: true } }),
+      { readOnly: true },
+    );
+    return prop?.name ?? 'Cơ sở';
   }
 
   private async assertPropertyExists(propertyId: string, user: JwtClaims): Promise<void> {

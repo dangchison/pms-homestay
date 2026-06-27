@@ -10,3 +10,23 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/* In PDF (nút "PDF" gọi window.print): ẩn khung app (sidebar/topbar), bỏ giới hạn
+   chiều cao/overflow để nội dung báo cáo trải hết trang. Charts/recharts in nền trắng. */
+@media print {
+  aside,
+  header {
+    display: none !important;
+  }
+  /* layout dashboard dùng h-dvh + overflow-hidden/auto → mở khoá cho in */
+  .h-dvh {
+    height: auto !important;
+  }
+  .overflow-hidden,
+  .overflow-y-auto {
+    overflow: visible !important;
+  }
+  body {
+    background: #fff;
+  }
+}
