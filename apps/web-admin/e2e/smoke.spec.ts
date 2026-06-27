@@ -36,4 +36,18 @@ test.describe('web-admin smoke', () => {
     await expect(page).toHaveURL(/\/settings$/);
     await expect(page.getByRole('heading', { name: 'Cài đặt' })).toBeVisible();
   });
+
+  test('báo cáo → nút Excel tải file .xlsx (A3 F3 phần 2)', async ({ page }) => {
+    await loginDemo(page);
+    await page.getByRole('link', { name: 'Báo cáo', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Báo cáo' })).toBeVisible();
+
+    // Nút export hiển thị; bấm Excel → tải file đặt tên theo kỳ.
+    await expect(page.getByRole('button', { name: 'PDF' })).toBeVisible();
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Excel' }).click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/^bao-cao-\d{4}-\d{2}-\d{2}_\d{4}-\d{2}-\d{2}\.xlsx$/);
+  });
 });

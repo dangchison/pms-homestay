@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
 import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import ExcelJS from 'exceljs';
 import { Client } from 'pg';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -120,5 +121,43 @@ describe('Occupancy report — GET /reports/occupancy (task 6.5)', () => {
       .set(auth())
       .expect(404);
     expect(res.body.error.code).toBe('PROPERTY_NOT_FOUND');
+  });
+
+  it('★ GET /reports/export → file .xlsx 2 sheet (Tổng quan + Lấp đầy theo ngày)', async () => {
+    const res = await request(http)
+      .get(`/api/v1/reports/export?property_id=${propertyId}&from=2026-08-01&to=2026-08-31`)
+      .set(auth())
+      .responseType('blob')
+      .expect(200);
+
+    expect(res.headers['content-type']).toContain('spreadsheetml.sheet');
+    expect(res.headers['content-disposition']).toContain('bao-cao-2026-08-01_2026-08-31.xlsx');
+
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(res.body as ArrayBuffer);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['Tổng quan', 'Lấp đầy theo ngày']);
+
+    // Sheet "Lấp đầy theo ngày": header + 2 ngày đã seed.
+    const occ = wb.getWorksheet('Lấp đầy theo ngày')!;
+    const dates: string[] = [];
+    occ.eachRow((row, n) => {
+      if (n > 1) dates.push(String(row.getCell(1).value));
+    });
+    expect(dates).toEqual(['2026-08-01', '2026-08-02']);
+
+    // Sheet "Tổng quan": có doanh thu phòng (3.5tr + 2.5tr = 6tr).
+    const overview = wb.getWorksheet('Tổng quan')!;
+    let text = '';
+    overview.eachRow((row) => row.eachCell((c) => (text += `${String(c.value ?? '')}|`)));
+    expect(text).toContain('Tổng doanh thu');
+    expect(text).toContain('Doanh thu phòng');
+  });
+
+  it('export property không tồn tại → 404', async () => {
+    await request(http)
+      .get(`/api/v1/reports/export?property_id=${randomUUID()}&from=2026-08-01&to=2026-08-31`)
+      .set(auth())
+      .responseType('blob')
+      .expect(404);
   });
 });

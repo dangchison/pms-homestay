@@ -1,6 +1,7 @@
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery } from '@tanstack/react-query';
 import type { BreakEvenResponse, OccupancyReportResponse, PnlResponse } from '@pms/shared-types';
 import { apiClient } from '@/lib/api-client';
+import { downloadBlob } from '@/lib/download';
 
 /** R1 — P&L cho [from,to] (task 6.5). */
 export function usePnl(propertyId: string | null, from: string, to: string) {
@@ -49,5 +50,16 @@ export function useOccupancyReport(propertyId: string | null, from: string, to: 
         .get<{ data: OccupancyReportResponse }>(`/reports/occupancy?property_id=${propertyId}&from=${from}&to=${to}`)
         .then((r) => r.data),
     enabled: !!propertyId,
+  });
+}
+
+/** Xuất Excel (P&L + lấp đầy theo ngày) cho [from,to] — tải file có auth. */
+export function useExportReportsXlsx() {
+  return useMutation({
+    mutationFn: ({ propertyId, from, to }: { propertyId: string; from: string; to: string }) =>
+      downloadBlob(
+        `/reports/export?property_id=${propertyId}&from=${from}&to=${to}`,
+        `bao-cao-${from}_${to}.xlsx`,
+      ),
   });
 }
