@@ -20,9 +20,13 @@ test.describe('web-admin smoke', () => {
     await expect(page).toHaveURL(/\/calendar$/);
     await expect(page.getByRole('heading', { name: 'Lịch phòng' })).toBeVisible();
 
-    await page.getByRole('link', { name: 'Hoá đơn & Thanh toán', exact: true }).click();
+    await page.getByRole('link', { name: 'Hoá đơn', exact: true }).click();
     await expect(page).toHaveURL(/\/invoices$/);
     await expect(page.getByRole('heading', { name: 'Hoá đơn' })).toBeVisible();
+
+    await page.getByRole('link', { name: 'Thanh toán', exact: true }).click();
+    await expect(page).toHaveURL(/\/payments$/);
+    await expect(page.getByRole('heading', { name: 'Sổ thanh toán' })).toBeVisible();
 
     await page.getByRole('link', { name: 'Báo cáo', exact: true }).click();
     await expect(page).toHaveURL(/\/reports$/);

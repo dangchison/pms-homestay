@@ -9,7 +9,7 @@ import { loginDemo } from './helpers';
 test('thu tiền một hoá đơn còn nợ → còn lại về 0₫', async ({ page }) => {
   await loginDemo(page);
 
-  await page.getByRole('link', { name: 'Hoá đơn & Thanh toán' }).click();
+  await page.getByRole('link', { name: 'Hoá đơn', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Hoá đơn' })).toBeVisible();
 
   // Tìm dòng có cột "Còn lại" (ô cuối) khác "0₫".

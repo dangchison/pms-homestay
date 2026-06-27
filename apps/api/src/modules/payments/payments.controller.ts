@@ -2,7 +2,12 @@ import { Body, Controller, Get, Headers, HttpCode, Param, ParseUUIDPipe, Post, Q
 import { type JwtClaims } from '@pms/shared-types';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
-import { CreatePaymentDto, RefundPaymentDto, ResolveUnmatchedDto } from './dto';
+import {
+  CreatePaymentDto,
+  PaymentsListQueryDto,
+  RefundPaymentDto,
+  ResolveUnmatchedDto,
+} from './dto';
 import { PaymentsService } from './payments.service';
 import { ReconciliationService } from './reconciliation.service';
 
@@ -40,14 +45,19 @@ export class PaymentsController {
     return { data: await this.reconciliation.ignore(id, user) };
   }
 
-  /** Liệt kê payment của 1 hoá đơn (task 6.4, F2) — `?invoice_id=`. */
+  /**
+   * GET /payments — 2 chế độ (task 6.4 F2 + A3 F3):
+   *  - `?invoice_id=` → payment của 1 hoá đơn → `{ data }`.
+   *  - `?property_id=` + filter (status/method/from/to + page) → sổ thanh toán
+   *    theo cơ sở → `{ data, page_info }`.
+   */
   @Get()
   @RequirePermissions('invoice.read')
-  async listByInvoice(
-    @Query('invoice_id', ParseUUIDPipe) invoiceId: string,
-    @CurrentUser() user: JwtClaims,
-  ) {
-    return { data: await this.payments.listByInvoice(invoiceId, user) };
+  async list(@Query() query: PaymentsListQueryDto, @CurrentUser() user: JwtClaims) {
+    if (query.invoice_id) {
+      return { data: await this.payments.listByInvoice(query.invoice_id, user) };
+    }
+    return this.payments.listByProperty(query, user); // { data, page_info }
   }
 
   @Post()
