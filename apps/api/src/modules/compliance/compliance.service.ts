@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { type JwtClaims, type PoliceReportQuery } from '@pms/shared-types';
+import {
+  type JwtClaims,
+  type PoliceReportQuery,
+  type SubmitPoliceReportRequest,
+  type SubmitPoliceReportResponse,
+} from '@pms/shared-types';
 import { AuditService } from '@modules/audit/audit.service';
 import { PermissionService } from '@core/auth/permission.service';
 import { EncryptionService } from '@core/crypto/encryption.service';
@@ -116,6 +121,78 @@ export class ComplianceService {
       to: query.to,
     });
     return { buffer, filename: `police-report-${query.from}_${query.to}.xlsx`, count: rows.length };
+  }
+
+  /**
+   * "Gửi" khai báo lưu trú (B6, docs/12 §2 Phase 2) — chuyển police_report_status
+   * của khách đã lưu trú trong [from,to] sang SUBMITTED. Đã SUBMITTED → bỏ qua
+   * (idempotent). STUB API quận/huyện: chưa có hợp đồng/endpoint thật nên quy ước
+   * thiếu số giấy tờ (PII) → không thể khai báo → FAILED; có → SUBMITTED. Khi có
+   * tích hợp thật: thay nhánh stub bằng POST dịch vụ công (NGOÀI withTenant — I/O).
+   */
+  async submitPoliceReport(
+    dto: SubmitPoliceReportRequest,
+    user: JwtClaims,
+  ): Promise<SubmitPoliceReportResponse> {
+    await this.assertPropertyExists(dto.property_id, user);
+    await this.permissionService.authorizeOnProperty(user, dto.property_id, 'guest.pii.read');
+
+    const fromStart = new Date(`${dto.from}T00:00:00.000Z`);
+    const toEnd = new Date(`${dto.to}T23:59:59.999Z`);
+
+    const result = await withTenant(this.prisma, user.tnt, async (tx) => {
+      const bookings = await tx.bookings.findMany({
+        where: {
+          property_id: dto.property_id,
+          status: { in: ['CHECKED_IN', 'CHECKED_OUT'] },
+          check_in: { gte: fromStart, lte: toEnd },
+          guest_id: { not: null },
+        },
+        select: {
+          id: true,
+          police_report_status: true,
+          guests: { select: { id_document_number_enc: true } },
+        },
+      });
+
+      let submitted = 0;
+      let failed = 0;
+      let skipped = 0;
+      for (const b of bookings) {
+        if (b.police_report_status === 'SUBMITTED') {
+          skipped++;
+          continue;
+        }
+        // STUB gửi dịch vụ công: thiếu số giấy tờ → FAILED, có → SUBMITTED.
+        const hasIdDocument = b.guests?.id_document_number_enc != null;
+        await tx.bookings.update({
+          where: { id: b.id },
+          data: hasIdDocument
+            ? { police_report_status: 'SUBMITTED', police_report_submitted_at: new Date() }
+            : { police_report_status: 'FAILED' },
+        });
+        if (hasIdDocument) submitted++;
+        else failed++;
+      }
+      return { total: bookings.length, submitted, failed, skipped };
+    });
+
+    // Vết kiểm toán hành động gửi (đẩy PII ra ngoài) — scope police-report-submit.
+    await this.audit.record({
+      tenantId: user.tnt,
+      userId: user.sub,
+      action: 'STATE_CHANGE',
+      entityType: 'police-report',
+      entityId: dto.property_id,
+      afterData: {
+        scope: 'police-report-submit',
+        property_id: dto.property_id,
+        from: dto.from,
+        to: dto.to,
+        ...result,
+      },
+    });
+    return result;
   }
 
   private async assertPropertyExists(propertyId: string, user: JwtClaims): Promise<void> {
