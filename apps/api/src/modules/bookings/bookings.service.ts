@@ -3,9 +3,11 @@ import {
   type BookingEventPayload,
   type BookingResponse,
   type BookingStatus,
+  type BookingSurchargeResponse,
   type CancelBookingRequest,
   type ConfirmBookingRequest,
   type CreateBookingRequest,
+  type CreateBookingSurchargeRequest,
   type EventType,
   type JwtClaims,
   type OffsetPageInfo,
@@ -17,7 +19,8 @@ import {
   type TodayBookingCard,
   type UpdateBookingRequest,
 } from '@pms/shared-types';
-import { Prisma, type bookings } from '@prisma/client';
+import { roundVnd } from '@pms/pricing-engine';
+import { Prisma, type bookings, type booking_surcharges } from '@prisma/client';
 import { PermissionService } from '@core/auth/permission.service';
 import { DocumentCounterService, periodOf } from '@core/counters/document-counter.service';
 import { AppException } from '@core/http/exceptions/app.exception';
@@ -937,6 +940,86 @@ export class BookingsService {
       return tx.bookings.findFirstOrThrow({ where: { id } });
     });
     return toBookingResponse(updated);
+  }
+
+  // ── Phụ thu STAY (B5, docs/09 §4.3) ────────────────────────────────────────
+
+  private toSurchargeResponse(s: booking_surcharges): BookingSurchargeResponse {
+    return {
+      id: s.id,
+      booking_id: s.booking_id,
+      item_type: s.item_type as BookingSurchargeResponse['item_type'],
+      description: s.description,
+      quantity: Number(s.quantity),
+      unit_price_vnd: Number(s.unit_price_vnd),
+      amount_vnd: Number(s.amount_vnd),
+      created_at: s.created_at.toISOString(),
+    };
+  }
+
+  /** Ghi phụ thu (minibar/dịch vụ/điện nước) lên booking — gộp vào STAY lúc check-out. */
+  async addSurcharge(
+    id: string,
+    dto: CreateBookingSurchargeRequest,
+    user: JwtClaims,
+  ): Promise<BookingSurchargeResponse> {
+    const booking = await this.loadOrThrow(id, user);
+    await this.permissionService.authorizeOnProperty(user, booking.property_id, 'booking.update');
+    if (isTerminal(booking.status)) {
+      throw new AppException({
+        code: 'BOOKING_INVALID_STATUS',
+        title: `Booking ${booking.status} đã chốt — không thêm phụ thu (dùng ADJUSTMENT)`,
+        status: 422,
+      });
+    }
+    const amount = roundVnd(dto.quantity * dto.unit_price_vnd);
+    const created = await withTenant(this.prisma, user.tnt, (tx) =>
+      tx.booking_surcharges.create({
+        data: {
+          tenant_id: user.tnt,
+          booking_id: id,
+          item_type: dto.item_type,
+          description: dto.description,
+          quantity: dto.quantity,
+          unit_price_vnd: dto.unit_price_vnd,
+          amount_vnd: amount,
+          created_by: user.sub,
+        },
+      }),
+    );
+    return this.toSurchargeResponse(created);
+  }
+
+  /** Liệt kê phụ thu của booking. */
+  async listSurcharges(id: string, user: JwtClaims): Promise<BookingSurchargeResponse[]> {
+    const booking = await this.loadOrThrow(id, user);
+    await this.permissionService.authorizeOnProperty(user, booking.property_id, 'booking.read');
+    const rows = await withTenant(
+      this.prisma,
+      user.tnt,
+      (tx) => tx.booking_surcharges.findMany({ where: { booking_id: id }, orderBy: { created_at: 'asc' } }),
+      { readOnly: true },
+    );
+    return rows.map((s) => this.toSurchargeResponse(s));
+  }
+
+  /** Xoá phụ thu (chỉ khi booking CHƯA chốt — STAY chưa phát hành). */
+  async removeSurcharge(id: string, surchargeId: string, user: JwtClaims): Promise<void> {
+    const booking = await this.loadOrThrow(id, user);
+    await this.permissionService.authorizeOnProperty(user, booking.property_id, 'booking.update');
+    if (isTerminal(booking.status)) {
+      throw new AppException({
+        code: 'BOOKING_INVALID_STATUS',
+        title: `Booking ${booking.status} đã chốt — không sửa phụ thu`,
+        status: 422,
+      });
+    }
+    await withTenant(this.prisma, user.tnt, async (tx) => {
+      const res = await tx.booking_surcharges.deleteMany({ where: { id: surchargeId, booking_id: id } });
+      if (res.count === 0) {
+        throw new AppException({ code: 'SURCHARGE_NOT_FOUND', title: 'Phụ thu không tồn tại', status: 404 });
+      }
+    });
   }
 
   /**

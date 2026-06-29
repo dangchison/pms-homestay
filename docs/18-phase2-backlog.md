@@ -24,7 +24,7 @@
 | B2 | Notifications nâng cấp | Template MJML/Handlebars; **SMS/ZNS provider thật** (đang stub); e2e đầu-cuối qua queue | PROGRESS 4.4 TODO | Email render template; SMS/ZNS gửi thật ở staging | P1 |
 | B3 | Audit mở rộng | Ghi LOGIN/LOGOUT/EXPORT; archive partition cũ (>12 tháng) ra S3 | PROGRESS 4.5 TODO | e2e: login ghi audit; partition cũ DETACH + upload S3 | P2 |
 | B4 | Billing SaaS hoàn chỉnh | Cổng thanh toán tự động (thay confirm thủ công); **platform-auth module** (thay `PLATFORM_ADMIN_SECRET` header) | PROGRESS 4.7 TODO | Thanh toán thuê bao tự kích hoạt ACTIVE; platform admin đăng nhập module riêng | P1 |
-| B5 | STAY phụ thu | Surcharge/phụ thu phát sinh trên STAY invoice (minibar/dịch vụ) | PROGRESS 3.2 TODO | e2e: thêm phụ thu → total/balance đúng | P2 |
+| B5 ✅ | STAY phụ thu | Surcharge/phụ thu phát sinh trên STAY invoice (minibar/dịch vụ) | PROGRESS 3.2 TODO | ✅ **Done** — bảng `booking_surcharges` (0027, RLS); POST/GET/DELETE `/bookings/:id/surcharges` (chặn khi terminal → ADJUSTMENT); check-out gộp vào STAY (SURCHARGE/AMENITY/UTILITY) → total/balance đúng. e2e: minibar→STAY 1.1M + xoá + 422 sau checkout | P2 |
 | B6 | Police report Phase 2 | `police_report_status` trên booking + nối API quận/huyện (hiện manual export Excel) | PROGRESS 7.2 / docs/12 §2 | Trạng thái PENDING→SUBMITTED; gửi API thành công | P2 |
 
 ## P2-C — Kích hoạt vận hành (ops — code sẵn, chưa bật)

@@ -146,10 +146,13 @@ describe('Invoices — deposit/stay/adjustment (task 3.2)', () => {
   afterAll(async () => {
     if (admin) {
       const tid = `(SELECT id FROM tenants WHERE slug = '${tenantSlug}')`;
+      // outbox TRƯỚC để dev OutboxDispatcher (nếu pnpm dev chạy) hết event → không sinh
+      // thêm notifications; notifications xoá NGAY trước users (cuối) thu hẹp race FK.
       await admin.query(`DELETE FROM outbox_events WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM cleaning_tasks WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM payment_attempts WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM payments WHERE tenant_id IN ${tid}`);
+      await admin.query(`DELETE FROM booking_surcharges WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM invoice_items WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM invoices WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM room_occupancy WHERE tenant_id IN ${tid}`);
@@ -164,6 +167,7 @@ describe('Invoices — deposit/stay/adjustment (task 3.2)', () => {
       await admin.query(`DELETE FROM document_counters WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM user_property_roles WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM properties WHERE tenant_id IN ${tid}`);
+      await admin.query(`DELETE FROM notifications WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM refresh_tokens WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM users WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM tenants WHERE slug = $1`, [tenantSlug]);
@@ -266,5 +270,52 @@ describe('Invoices — deposit/stay/adjustment (task 3.2)', () => {
     const again = await request(http).post(`/api/v1/invoices/${inv.id}/void`).set(auth()).send({ reason: 'x' });
     expect(again.status).toBe(422);
     expect(again.body.error.code).toBe('INVOICE_INVALID_STATUS');
+  });
+
+  // ── B5: phụ thu STAY ───────────────────────────────────────────────────────
+  it('★ phụ thu STAY (B5): thêm minibar trước checkout → STAY gồm SURCHARGE, total đúng; xoá + 422 sau checkout', async () => {
+    const ci = '2027-04-01T07:00:00.000Z';
+    const co = '2027-04-03T05:00:00.000Z'; // 2 đêm × 500k = 1,000,000 (tránh overlap test NONE 03/2027)
+    const bookingId = await book(resNone, ci, co); // NONE → PENDING (không cọc)
+    await request(http).post(`/api/v1/bookings/${bookingId}/confirm`).set(auth()).send({ force: true }).expect(200);
+    await request(http).post(`/api/v1/bookings/${bookingId}/check-in`).set(auth()).expect(200);
+
+    // amount = quantity × unit_price (server) — minibar 2×50k = 100k
+    const s1 = (
+      await request(http)
+        .post(`/api/v1/bookings/${bookingId}/surcharges`)
+        .set(auth())
+        .send({ item_type: 'AMENITY', description: 'Minibar', quantity: 2, unit_price_vnd: 50_000 })
+        .expect(201)
+    ).body.data as { id: string; amount_vnd: number };
+    expect(s1.amount_vnd).toBe(100_000);
+    await request(http)
+      .post(`/api/v1/bookings/${bookingId}/surcharges`)
+      .set(auth())
+      .send({ item_type: 'SURCHARGE', description: 'Giặt là', quantity: 1, unit_price_vnd: 80_000 })
+      .expect(201);
+
+    const list = (await request(http).get(`/api/v1/bookings/${bookingId}/surcharges`).set(auth()).expect(200)).body
+      .data as Array<{ id: string; description: string }>;
+    expect(list).toHaveLength(2);
+
+    // xoá "Giặt là" TRƯỚC checkout → STAY chỉ còn minibar
+    const giatLa = list.find((x) => x.description === 'Giặt là')!;
+    await request(http).delete(`/api/v1/bookings/${bookingId}/surcharges/${giatLa.id}`).set(auth()).expect(204);
+
+    await request(http).post(`/api/v1/bookings/${bookingId}/check-out`).set(auth()).expect(200);
+    const stay = (await invoicesOf(bookingId)).find((i) => i.kind === 'STAY')!;
+    expect(stay.items.some((it) => it.item_type === 'AMENITY' && it.amount_vnd === 100_000)).toBe(true);
+    expect(stay.items.some((it) => it.item_type === 'SURCHARGE')).toBe(false); // đã xoá
+    expect(stay.total_vnd).toBe(1_100_000); // phòng 1,000,000 + minibar 100,000
+    expect(stay.balance_vnd).toBe(1_100_000); // NONE deposit → chưa trả
+
+    // sau checkout (terminal) → thêm phụ thu 422 (dùng ADJUSTMENT thay thế)
+    const late = await request(http)
+      .post(`/api/v1/bookings/${bookingId}/surcharges`)
+      .set(auth())
+      .send({ item_type: 'SURCHARGE', description: 'Muộn', quantity: 1, unit_price_vnd: 50_000 });
+    expect(late.status).toBe(422);
+    expect(late.body.error.code).toBe('BOOKING_INVALID_STATUS');
   });
 });
