@@ -126,9 +126,10 @@ export class ComplianceService {
   /**
    * "Gửi" khai báo lưu trú (B6, docs/12 §2 Phase 2) — chuyển police_report_status
    * của khách đã lưu trú trong [from,to] sang SUBMITTED. Đã SUBMITTED → bỏ qua
-   * (idempotent). STUB API quận/huyện: chưa có hợp đồng/endpoint thật nên quy ước
-   * thiếu số giấy tờ (PII) → không thể khai báo → FAILED; có → SUBMITTED. Khi có
-   * tích hợp thật: thay nhánh stub bằng POST dịch vụ công (NGOÀI withTenant — I/O).
+   * (idempotent). STUB API dịch vụ công cư trú (cấp xã): chưa có hợp đồng/endpoint
+   * thật nên quy ước thiếu số giấy tờ (PII) → không thể khai báo → FAILED; có →
+   * SUBMITTED. Khi có tích hợp thật: thay nhánh stub bằng POST dịch vụ công cư trú
+   * (NGOÀI withTenant — I/O); sau cải cách 2025 khai báo ở cấp xã, cần mã ĐVHC.
    */
   async submitPoliceReport(
     dto: SubmitPoliceReportRequest,

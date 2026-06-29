@@ -26,13 +26,15 @@ Hiện tại Bộ Công an có cổng [https://dichvucong.dancuquocgia.gov.vn/](
 ### Implementation MVP
 
 Phase 1 — Manual export:
-- Sinh file Excel template chuẩn theo định dạng công an quận/huyện (mỗi nơi có thể yêu cầu khác nhau).
+- Sinh file Excel template chuẩn theo định dạng công an phường/xã (mỗi nơi có thể yêu cầu khác nhau).
 - OWNER download file, upload vào cổng khai báo thủ công.
 - Endpoint: `GET /api/v1/compliance/police-report?property_id=...&date=...`
 
 Phase 2 — API tích hợp (khi có hợp đồng):
-- POST trực tiếp lên API quận/huyện.
-- Lưu `police_report_status` (PENDING, SUBMITTED, FAILED) trên booking.
+- POST trực tiếp lên API dịch vụ công cư trú (`dichvucong.dancuquocgia.gov.vn`) — khai báo tại **cấp xã (phường/xã)**.
+- Lưu `police_report_status` (PENDING, SUBMITTED, FAILED) trên booking. ✅ **Đã làm (B6)** — cột + `POST /compliance/police-report/submit` (STUB dịch vụ công); xem [docs/18](18-phase2-backlog.md).
+
+> **Cải cách hành chính 2025 (hiệu lực 01/7/2025):** bỏ cấp huyện → mô hình **2 cấp** (tỉnh/thành → phường/xã); khai báo lưu trú do **công an cấp xã** tiếp nhận. Khi nối API thật cần **mã đơn vị hành chính (ĐVHC)** chuẩn — nguồn: [Tổng cục Thống kê — Danh mục ĐVHC](https://www.nso.gov.vn/phuong-phap-luan-thong-ke/danh-muc/don-vi-hanh-chinh/) — cho (a) phường/xã của cơ sở, (b) thường trú của khách. Hiện `properties.province` / `guests.address` là **free text** → cân nhắc bảng tham chiếu `administrative_units` (code/name/level/parent, seed từ NSO) + dropdown đổ dần để chuẩn hoá khi triển khai tích hợp.
 
 ### Dữ liệu cần thiết
 

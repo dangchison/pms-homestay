@@ -4,7 +4,7 @@
 -- Thêm police_report_status trên bookings để theo dõi vòng đời khai báo lưu trú
 -- (Thông tư 56): PENDING (chưa khai) → SUBMITTED (đã gửi) | FAILED (gửi lỗi/thiếu
 -- dữ liệu). Phase 1 = export Excel thủ công (task 7.2, vẫn dùng); Phase 2 = nút
--- "Gửi" → POST API quận/huyện (hiện STUB — chưa có hợp đồng/endpoint thật).
+-- "Gửi" → POST API dịch vụ công cư trú cấp xã (hiện STUB — chưa có hợp đồng/endpoint thật).
 -- Chỉ có ý nghĩa với booking đã lưu trú (CHECKED_IN/CHECKED_OUT); booking khác giữ
 -- mặc định PENDING vô hại (luồng submit chỉ chạm booking đã lưu trú). Không cột PII.
 -- bookings đã RLS sẵn — thêm cột thường, không đổi policy.

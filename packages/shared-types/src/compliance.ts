@@ -16,7 +16,7 @@ export type PoliceReportQuery = z.infer<typeof PoliceReportQuerySchema>;
 /**
  * POST /compliance/police-report/submit (B6, docs/12 §2 Phase 2) — "Gửi" khai báo
  * lưu trú lên dịch vụ công cho khách đã lưu trú trong [from, to]. Phase 2 thật =
- * POST API quận/huyện (hiện STUB: thiếu số giấy tờ → FAILED, có → SUBMITTED).
+ * POST API dịch vụ công cư trú cấp xã (hiện STUB: thiếu số giấy tờ → FAILED, có → SUBMITTED).
  */
 export const SubmitPoliceReportRequestSchema = z
   .object({
