@@ -23,3 +23,4 @@ export * from './audit-log';
 export * from './subscription';
 export * from './channel';
 export * from './compliance';
+export * from './platform';

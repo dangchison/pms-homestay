@@ -1,8 +1,7 @@
 import 'reflect-metadata';
-// PHẢI set trước loadEnv() (beforeAll) — confirm endpoint cần secret, thiếu → 503.
-process.env.PLATFORM_ADMIN_SECRET ??= 'test-platform-secret-0123456789';
 import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import * as argon2 from 'argon2';
 import { Client } from 'pg';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -24,18 +23,21 @@ const RUN = `${process.pid}${Date.now() % 100000}`;
 const PASSWORD = 'S3cure!Passw0rd-dev';
 const tenantSlug = `billing-${RUN}`;
 const ownerEmail = `owner-${RUN}@e2e.test`;
-const PLATFORM_SECRET = process.env.PLATFORM_ADMIN_SECRET as string;
+const platformEmail = `padmin-billing-${RUN}@platform.test`;
 
 describe('Billing-lite SaaS (task 4.7)', () => {
   let app: INestApplication;
   let http: ReturnType<INestApplication['getHttpServer']>;
   let admin: Client;
   let token: string;
+  let platformToken: string;
   let tenantId: string;
   let propertyId: string;
   let starterPaymentId: string;
 
   const auth = () => ({ Authorization: `Bearer ${token}` });
+  // B4: confirm thuê bao bảo vệ bằng platform-auth (thay PLATFORM_ADMIN_SECRET).
+  const platformAuth = () => ({ Authorization: `Bearer ${platformToken}` });
   const subscription = () => app.get(SubscriptionService);
   const tenantStatus = () => app.get(TenantStatusService);
 
@@ -79,6 +81,19 @@ describe('Billing-lite SaaS (task 4.7)', () => {
         .send({ email: ownerEmail, password: PASSWORD })
         .expect(200)
     ).body.data.access_token;
+
+    // Platform admin (B4) — seed platform_users + đăng nhập để confirm thuê bao.
+    const phash = await argon2.hash(PASSWORD, { type: argon2.argon2id });
+    await admin.query(
+      `INSERT INTO platform_users (email, password_hash, full_name, is_active) VALUES ($1,$2,'Billing Admin',true)`,
+      [platformEmail, phash],
+    );
+    platformToken = (
+      await request(http)
+        .post('/api/v1/platform/auth/login')
+        .send({ email: platformEmail, password: PASSWORD })
+        .expect(200)
+    ).body.data.access_token;
   });
 
   afterAll(async () => {
@@ -92,6 +107,8 @@ describe('Billing-lite SaaS (task 4.7)', () => {
       await admin.query(`DELETE FROM properties WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM refresh_tokens WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM users WHERE tenant_id IN ${tid}`);
+      // platform_users là bảng global (không tenant) → xoá tường minh theo email.
+      await admin.query(`DELETE FROM platform_users WHERE email = $1`, [platformEmail]);
       // subscription_payments + audit_logs tự cascade khi xoá tenant (FK ON DELETE CASCADE).
       await admin.query(`DELETE FROM tenants WHERE slug = $1`, [tenantSlug]);
       await admin.end();
@@ -148,15 +165,14 @@ describe('Billing-lite SaaS (task 4.7)', () => {
     expect(found?.status).toBe('PENDING');
   });
 
-  it('platform confirm: sai secret → 401; đúng secret → ACTIVE + plan STARTER + nâng giới hạn', async () => {
+  it('platform confirm: không token → 401; token platform → ACTIVE + plan STARTER + nâng giới hạn', async () => {
     await request(http)
       .post(`/api/v1/platform/subscription-payments/${starterPaymentId}/confirm`)
-      .set({ 'X-Platform-Secret': 'sai-secret' })
       .expect(401);
 
     const ok = await request(http)
       .post(`/api/v1/platform/subscription-payments/${starterPaymentId}/confirm`)
-      .set({ 'X-Platform-Secret': PLATFORM_SECRET })
+      .set(platformAuth())
       .expect(200);
     expect(ok.body.data.status).toBe('CONFIRMED');
 
@@ -193,7 +209,7 @@ describe('Billing-lite SaaS (task 4.7)', () => {
       .expect(200);
     await request(http)
       .post(`/api/v1/platform/subscription-payments/${charge.body.data.payment.id}/confirm`)
-      .set({ 'X-Platform-Secret': PLATFORM_SECRET })
+      .set(platformAuth())
       .expect(200);
     expect(await tenantStatusInDb()).toBe('ACTIVE');
     await request(http).post('/api/v1/guests').set(auth()).send({ full_name: 'Khách B' }).expect(201);

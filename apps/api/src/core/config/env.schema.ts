@@ -30,9 +30,9 @@ export const envSchema = z.object({
   PAYMENT_WEBHOOK_SECRET: z.string().min(16).optional(),
 
   /**
-   * Billing-lite SaaS (task 4.7). Secret để platform admin xác nhận thanh toán
-   * thuê bao (header X-Platform-Secret) — thiếu → endpoint confirm trả 503.
-   * Tài khoản nhận phí nền tảng cho VietQR động (mặc định dev: MB BIN 970422).
+   * @deprecated B4 — thay bằng platform-auth module (JWT_PLATFORM_SECRET + đăng nhập
+   * platform_users). Không còn dùng để bảo vệ endpoint confirm; giữ lại tạm để không
+   * vỡ env cũ. Tài khoản nhận phí nền tảng cho VietQR động (mặc định dev: MB BIN 970422).
    */
   PLATFORM_ADMIN_SECRET: z.string().min(16).optional(),
   PLATFORM_BANK_BIN: z.string().default('970422'),
@@ -40,6 +40,12 @@ export const envSchema = z.object({
 
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
+  /**
+   * Platform-auth (B4) — secret ký JWT cho admin nền tảng (bảng platform_users).
+   * TÁCH biệt JWT_ACCESS_SECRET (token tenant) để không dùng chéo. Thiếu → endpoint
+   * platform (login + confirm thuê bao) trả 503 PLATFORM_AUTH_NOT_CONFIGURED.
+   */
+  JWT_PLATFORM_SECRET: z.string().min(32).optional(),
 
   /**
    * Bắt buộc 2FA cho vai trò đặc quyền OWNER/ACCOUNTANT (task 8.4, docs/04 §3).

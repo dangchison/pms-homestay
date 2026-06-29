@@ -22,6 +22,7 @@ process.env.REDIS_URL ??= 'redis://localhost:6379/0';
 }
 process.env.JWT_ACCESS_SECRET ??= 'test-access-secret-0123456789-0123456789';
 process.env.JWT_REFRESH_SECRET ??= 'test-refresh-secret-0123456789-012345678';
+process.env.JWT_PLATFORM_SECRET ??= 'test-platform-secret-0123456789-0123456789';
 process.env.PII_ENC_KEY_CURRENT ??= 'k1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 process.env.PII_HMAC_KEY ??= 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 process.env.S3_ENDPOINT ??= 'http://localhost:9000';
