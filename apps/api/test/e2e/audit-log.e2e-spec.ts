@@ -3,7 +3,7 @@ import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 import { Client } from 'pg';
-import request from 'supertest';
+import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '@/app.module';
 import { configureApp } from '@/app.setup';
@@ -35,6 +35,24 @@ interface AuditRow {
   ip_address: string | null;
   request_id: string | null;
   created_at: string;
+}
+
+/** Cookie jar từ Set-Cookie (refresh_token + csrf_token) cho luồng logout. */
+function cookiesOf(res: Response): Record<string, string> {
+  const raw = (res.headers['set-cookie'] ?? []) as unknown as string[];
+  const jar: Record<string, string> = {};
+  for (const line of raw) {
+    const [pair] = line.split(';');
+    const eq = pair!.indexOf('=');
+    jar[pair!.slice(0, eq)] = pair!.slice(eq + 1);
+  }
+  return jar;
+}
+
+function cookieHeader(jar: Record<string, string>): string {
+  return Object.entries(jar)
+    .map(([k, v]) => `${k}=${v}`)
+    .join('; ');
 }
 
 describe('Audit log (task 4.5)', () => {
@@ -179,6 +197,63 @@ describe('Audit log (task 4.5)', () => {
     expect(rows[0]!.entity_type).toBe('guests');
     expect(rows[0]!.user_id).toBe(ownerId);
     expect(rows[0]!.after_data).toEqual({ field: 'id_document_number' });
+  });
+
+  // ── B3 (docs/18): action LOGIN / LOGOUT / EXPORT ────────────────────────────
+
+  it('action LOGIN: POST /auth/login ghi audit LOGIN (entity auth + ip)', async () => {
+    await request(http)
+      .post('/api/v1/auth/login')
+      .set('X-Tenant-Slug', tenantSlug)
+      .send({ email: ownerEmail, password: PASSWORD })
+      .expect(200);
+
+    const rows = await auditList(`action=LOGIN&user_id=${ownerId}`);
+    expect(rows.length).toBeGreaterThanOrEqual(1); // beforeAll đã login owner ≥1 lần
+    expect(rows[0]!.entity_type).toBe('auth');
+    expect(rows[0]!.entity_id).toBe(ownerId);
+    expect(rows[0]!.ip_address).toBeTruthy();
+  });
+
+  it('action LOGOUT: POST /auth/logout (cookie + CSRF) ghi audit LOGOUT', async () => {
+    const loginRes = await request(http)
+      .post('/api/v1/auth/login')
+      .set('X-Tenant-Slug', tenantSlug)
+      .send({ email: ownerEmail, password: PASSWORD })
+      .expect(200);
+    const jar = cookiesOf(loginRes);
+
+    await request(http)
+      .post('/api/v1/auth/logout')
+      .set('Cookie', cookieHeader(jar))
+      .set('X-CSRF-Token', loginRes.body.data.csrf_token)
+      .expect(204);
+
+    const rows = await auditList(`action=LOGOUT&user_id=${ownerId}`);
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    expect(rows[0]!.entity_type).toBe('auth');
+    expect(rows[0]!.entity_id).toBe(ownerId);
+  });
+
+  it('action EXPORT: GET /reports/export (@AuditExport) ghi EXPORT — after_data = bộ lọc', async () => {
+    await request(http)
+      .get(`/api/v1/reports/export?property_id=${propertyId}&from=2026-08-01&to=2026-08-31`)
+      .set(ownerAuth())
+      .responseType('blob')
+      .expect(200);
+
+    const rows = await auditList('action=EXPORT');
+    expect(rows.length).toBe(1); // chỉ 1 lần export trong spec này
+    const row = rows[0]!;
+    expect(row.action).toBe('EXPORT');
+    expect(row.entity_type).toBe('reports');
+    expect(row.user_id).toBe(ownerId);
+    expect(row.entity_id).toBeNull(); // export không gắn entity_id
+    expect(row.request_id).toBeTruthy();
+    // after_data = query đã xuất (bộ lọc, KHÔNG có PII).
+    expect(row.after_data?.from).toBe('2026-08-01');
+    expect(row.after_data?.to).toBe('2026-08-31');
+    expect(row.after_data?.property_id).toBe(propertyId);
   });
 
   it('auto-log UPDATE: PATCH /guests/:id ghi action UPDATE', async () => {
