@@ -17,6 +17,7 @@ import { AppException } from '@core/http/exceptions/app.exception';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { REDIS } from '@core/redis/redis.module';
 import { withTenant } from '@core/tenancy/with-tenant';
+import { AuditService } from '@modules/audit/audit.service';
 import { COMMON_PASSWORDS } from './assets/common-passwords';
 import { MailerService } from './mailer.service';
 import {
@@ -88,6 +89,7 @@ export class AuthService {
     private readonly throttle: ThrottleService,
     private readonly twoFactor: TwoFactorService,
     private readonly mailer: MailerService,
+    private readonly audit: AuditService,
     @Inject(REDIS) private readonly redis: Redis,
     @Inject(ENV) private readonly env: Env,
   ) {}
@@ -256,6 +258,17 @@ export class AuthService {
       });
     });
 
+    // Vết kiểm toán LOGIN (B3, docs/18) — ghi SAU khi phiên đã lưu; best-effort.
+    await this.audit.record({
+      tenantId,
+      userId: user.id,
+      action: 'LOGIN',
+      entityType: 'auth',
+      entityId: user.id,
+      ip: ctx.ip,
+      userAgent: ctx.userAgent,
+    });
+
     return this.issueTokens(user, refreshPlain);
   }
 
@@ -361,12 +374,29 @@ export class AuthService {
     const tenantId = refreshCookie && tenantFromRefreshPlain(refreshCookie);
     if (!refreshCookie || !tenantId) return; // idempotent
     const hash = sha256Hex(refreshCookie);
-    await withTenant(this.prisma, tenantId, (tx) =>
-      tx.refresh_tokens.updateMany({
+    // Lấy user_id của phiên ĐANG active rồi mới revoke — chỉ audit khi thực sự thu hồi.
+    const userId = await withTenant(this.prisma, tenantId, async (tx) => {
+      const row = await tx.refresh_tokens.findFirst({
+        where: { token_hash: hash, revoked_at: null },
+        select: { user_id: true },
+      });
+      if (!row) return null;
+      await tx.refresh_tokens.updateMany({
         where: { token_hash: hash, revoked_at: null },
         data: { revoked_at: new Date() },
-      }),
-    );
+      });
+      return row.user_id;
+    });
+    if (userId) {
+      // Vết kiểm toán LOGOUT (B3, docs/18) — best-effort.
+      await this.audit.record({
+        tenantId,
+        userId,
+        action: 'LOGOUT',
+        entityType: 'auth',
+        entityId: userId,
+      });
+    }
   }
 
   async logoutAll(user: JwtClaims): Promise<void> {
@@ -376,6 +406,14 @@ export class AuthService {
         data: { revoked_at: new Date() },
       }),
     );
+    // Vết kiểm toán LOGOUT (B3, docs/18) — thu hồi MỌI phiên; best-effort.
+    await this.audit.record({
+      tenantId: user.tnt,
+      userId: user.sub,
+      action: 'LOGOUT',
+      entityType: 'auth',
+      entityId: user.sub,
+    });
   }
 
   // ── Forgot / reset password (docs/04: link 30') ────────────────────────────

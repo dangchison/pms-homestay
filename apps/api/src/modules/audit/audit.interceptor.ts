@@ -8,6 +8,7 @@ import { Reflector } from '@nestjs/core';
 import { type AuditAction, type JwtClaims } from '@pms/shared-types';
 import { type Request } from 'express';
 import { type Observable, concatMap } from 'rxjs';
+import { AUDIT_EXPORT_KEY } from '@core/http/decorators/audit-export.decorator';
 import { SKIP_AUDIT_KEY } from '@core/http/decorators/skip-audit.decorator';
 import { AuditService } from './audit.service';
 
@@ -55,11 +56,12 @@ function extractResponseId(body: unknown): string | undefined {
 /**
  * AuditInterceptor (task 4.5, docs/03 §audit_logs) — global APP_INTERCEPTOR. Tự
  * ghi audit_logs cho MỌI mutation HTTP (POST/PATCH/PUT/DELETE) THÀNH CÔNG của
- * user đã xác thực. Bỏ qua: GET/HEAD, route public (thiếu tenant/user), @SkipAudit().
+ * user đã xác thực, **và** GET có @AuditExport() → action EXPORT (B3, docs/18).
+ * Bỏ qua: GET/HEAD thường, route public (thiếu tenant/user), @SkipAudit().
  * Ghi SAU handler (response đã có id) và AWAIT (deterministic + audit tin cậy);
  * record() best-effort nên không bao giờ làm fail request đã commit. before_data
  * để trống ở tầng interceptor (service tự ghi before/after khi cần); after_data =
- * body request (đã redact PII trong AuditService).
+ * body request (mutation) hoặc query (export) — đã redact PII trong AuditService.
  */
 @Injectable()
 export class AuditInterceptor implements NestInterceptor {
@@ -80,21 +82,49 @@ export class AuditInterceptor implements NestInterceptor {
       context.getHandler(),
       context.getClass(),
     ]);
-    if (skip || !AUDITED_METHODS.has(method) || !req.tenantId || !req.user) {
+    const isExport =
+      this.reflector.getAllAndOverride<boolean>(AUDIT_EXPORT_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]) ?? false;
+    const isMutation = AUDITED_METHODS.has(method);
+    // Audit khi: mutation HTTP, HOẶC GET đánh dấu @AuditExport. Cả hai cần tenant+user.
+    if (skip || !req.tenantId || !req.user || (!isMutation && !isExport)) {
       return next.handle();
     }
 
     const tenantId = req.tenantId;
     const user = req.user;
     const entityType = extractEntityType(req);
-    const paramId = typeof req.params?.id === 'string' ? req.params.id : undefined;
-    const action = resolveAction(method, paramId !== undefined);
-    const body = req.body as unknown;
     const ip = req.ip ?? null;
     const userAgent = headerStr(req.headers['user-agent']);
     const requestId =
       (typeof req.id === 'string' ? req.id : undefined) ?? headerStr(req.headers['x-request-id']);
 
+    // EXPORT (GET @AuditExport): after_data = query (bộ lọc xuất, không PII); không có entity_id.
+    if (isExport && !isMutation) {
+      const query = req.query as unknown;
+      return next.handle().pipe(
+        concatMap(async (responseBody) => {
+          await this.audit.record({
+            tenantId,
+            userId: user.sub,
+            action: 'EXPORT',
+            entityType,
+            afterData: query,
+            ip,
+            userAgent,
+            requestId,
+          });
+          return responseBody;
+        }),
+      );
+    }
+
+    // Mutation (POST/PATCH/PUT/DELETE).
+    const paramId = typeof req.params?.id === 'string' ? req.params.id : undefined;
+    const action = resolveAction(method, paramId !== undefined);
+    const body = req.body as unknown;
     return next.handle().pipe(
       concatMap(async (responseBody) => {
         await this.audit.record({

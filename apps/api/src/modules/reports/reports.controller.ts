@@ -1,6 +1,7 @@
 import { Controller, Get, Query, Res } from '@nestjs/common';
 import { type JwtClaims } from '@pms/shared-types';
 import { type Response } from 'express';
+import { AuditExport } from '@core/http/decorators/audit-export.decorator';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
 import { BreakEvenQueryDto, OccupancyReportQueryDto, PnlQueryDto } from './dto';
@@ -38,6 +39,7 @@ export class ReportsController {
   /** Xuất Excel (P&L + lấp đầy theo ngày) cho [from,to] — binary qua `@Res`. */
   @Get('export')
   @RequirePermissions('report.financial')
+  @AuditExport() // B3: GET không tự audit → đánh dấu để ghi action EXPORT (docs/18).
   async exportXlsx(
     @Query() query: OccupancyReportQueryDto,
     @CurrentUser() user: JwtClaims,
