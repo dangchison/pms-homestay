@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   HttpCode,
@@ -22,6 +23,7 @@ import {
   CancelBookingDto,
   ConfirmBookingDto,
   CreateBookingDto,
+  CreateBookingSurchargeDto,
   RescheduleBookingDto,
   SwitchResourceDto,
   TodayBoardQueryDto,
@@ -128,5 +130,34 @@ export class BookingsController {
     @CurrentUser() user: JwtClaims,
   ) {
     return { data: await this.bookings.reschedule(id, dto, user) };
+  }
+
+  /** Phụ thu STAY (B5): ghi minibar/dịch vụ trong lúc ở → gộp vào STAY khi check-out. */
+  @Post(':id/surcharges')
+  @RequirePermissions('booking.update')
+  @HttpCode(201)
+  async addSurcharge(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateBookingSurchargeDto,
+    @CurrentUser() user: JwtClaims,
+  ) {
+    return { data: await this.bookings.addSurcharge(id, dto, user) };
+  }
+
+  @Get(':id/surcharges')
+  @RequirePermissions('booking.read')
+  async listSurcharges(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtClaims) {
+    return { data: await this.bookings.listSurcharges(id, user) };
+  }
+
+  @Delete(':id/surcharges/:surchargeId')
+  @RequirePermissions('booking.update')
+  @HttpCode(204)
+  async removeSurcharge(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('surchargeId', ParseUUIDPipe) surchargeId: string,
+    @CurrentUser() user: JwtClaims,
+  ) {
+    await this.bookings.removeSurcharge(id, surchargeId, user);
   }
 }

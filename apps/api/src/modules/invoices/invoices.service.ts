@@ -224,6 +224,26 @@ export class InvoicesService {
       });
     }
 
+    // Phụ thu phát sinh trong lúc lưu trú (B5, docs/09 §4.3): minibar/dịch vụ/điện nước
+    const surcharges = await tx.booking_surcharges.findMany({
+      where: { booking_id: booking.id },
+      orderBy: { created_at: 'asc' },
+    });
+    for (const s of surcharges) {
+      await tx.invoice_items.create({
+        data: {
+          tenant_id: booking.tenant_id,
+          invoice_id: inv.id,
+          item_type: s.item_type,
+          description: s.description,
+          quantity: s.quantity,
+          unit_price_vnd: s.unit_price_vnd,
+          amount_vnd: s.amount_vnd,
+          display_order: order++,
+        },
+      });
+    }
+
     // Cấn cọc đã thu (theo paid_vnd của DEPOSIT invoice — phần thực thu)
     const deposit = await tx.invoices.findFirst({
       where: { booking_id: booking.id, kind: 'DEPOSIT', status: { not: 'VOID' } },

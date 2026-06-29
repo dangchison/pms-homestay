@@ -90,6 +90,34 @@ export const RescheduleBookingRequestSchema = z
   });
 export type RescheduleBookingRequest = z.infer<typeof RescheduleBookingRequestSchema>;
 
+/** Loại phụ thu STAY (B5) — minibar/dịch vụ/điện nước phát sinh trong lúc lưu trú. */
+export const BookingSurchargeItemTypeSchema = z.enum(['SURCHARGE', 'AMENITY', 'UTILITY']);
+export type BookingSurchargeItemType = z.infer<typeof BookingSurchargeItemTypeSchema>;
+
+/**
+ * POST /bookings/:id/surcharges (B5, docs/09 §4.3) — ghi phụ thu trên booking khi
+ * còn lưu trú; check-out gộp vào STAY invoice. amount = quantity × unit_price (server).
+ */
+export const CreateBookingSurchargeRequestSchema = z.object({
+  item_type: BookingSurchargeItemTypeSchema.default('SURCHARGE'),
+  description: z.string().min(1).max(500),
+  quantity: z.number().positive().default(1),
+  unit_price_vnd: z.number().int(),
+});
+export type CreateBookingSurchargeRequest = z.infer<typeof CreateBookingSurchargeRequestSchema>;
+
+export const BookingSurchargeResponseSchema = z.object({
+  id: z.uuid(),
+  booking_id: z.uuid(),
+  item_type: BookingSurchargeItemTypeSchema,
+  description: z.string(),
+  quantity: z.number(),
+  unit_price_vnd: z.number().int(),
+  amount_vnd: z.number().int(),
+  created_at: z.iso.datetime(),
+});
+export type BookingSurchargeResponse = z.infer<typeof BookingSurchargeResponseSchema>;
+
 /**
  * Bảng "Hôm nay" cho web-staff (task 6.6, ui/02 #T2). 3 nhóm theo NGÀY ở timezone
  * cơ sở: đến (chờ check-in), đi (đang ở, trả hôm nay), đang ở (ở qua hôm nay).
