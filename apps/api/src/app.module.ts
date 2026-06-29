@@ -34,6 +34,7 @@ import { InvoicesModule } from '@modules/invoices/invoices.module';
 import { NightAuditModule } from '@modules/night-audit/night-audit.module';
 import { NotificationsModule } from '@modules/notifications/notifications.module';
 import { PaymentsModule } from '@modules/payments/payments.module';
+import { PlatformAuthModule } from '@modules/platform-auth/platform-auth.module';
 import { PricingModule } from '@modules/pricing/pricing.module';
 import { PropertiesModule } from '@modules/properties/properties.module';
 import { RatePlansModule } from '@modules/rate-plans/rate-plans.module';
@@ -86,6 +87,7 @@ export class AppModule implements NestModule {
         EventsModule,
         NotificationsModule,
         AuditModule,
+        PlatformAuthModule,
         SubscriptionModule,
         ChannelsModule,
         ComplianceModule,
