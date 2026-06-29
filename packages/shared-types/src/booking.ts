@@ -160,6 +160,14 @@ export const TodayBoardResponseSchema = z.object({
 });
 export type TodayBoardResponse = z.infer<typeof TodayBoardResponseSchema>;
 
+/**
+ * Trạng thái khai báo lưu trú công an trên booking (B6, docs/12 §2 Phase 2).
+ * PENDING (chưa khai) → SUBMITTED (đã gửi) | FAILED (gửi lỗi/thiếu dữ liệu).
+ * Chỉ có ý nghĩa với booking đã lưu trú (CHECKED_IN/CHECKED_OUT).
+ */
+export const PoliceReportStatusSchema = z.enum(['PENDING', 'SUBMITTED', 'FAILED']);
+export type PoliceReportStatus = z.infer<typeof PoliceReportStatusSchema>;
+
 export const BookingResponseSchema = z.object({
   id: z.uuid(),
   property_id: z.uuid(),
@@ -168,6 +176,8 @@ export const BookingResponseSchema = z.object({
   booking_code: z.string(),
   source: z.string(),
   status: BookingStatusSchema,
+  police_report_status: PoliceReportStatusSchema,
+  police_report_submitted_at: z.iso.datetime().nullable(),
   mode: BookingModeSchema,
   rate_plan_id: z.uuid().nullable(),
   quote_id: z.uuid().nullable(),

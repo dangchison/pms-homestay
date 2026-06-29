@@ -69,6 +69,10 @@ function toBookingResponse(b: bookings): BookingResponse {
     booking_code: b.booking_code,
     source: b.source,
     status: b.status,
+    police_report_status: b.police_report_status as BookingResponse['police_report_status'],
+    police_report_submitted_at: b.police_report_submitted_at
+      ? b.police_report_submitted_at.toISOString()
+      : null,
     mode: b.mode,
     rate_plan_id: b.rate_plan_id,
     quote_id: b.quote_id,

@@ -44,6 +44,7 @@ describe('Police report export (task 7.2)', () => {
   let tenantId: string;
   let propertyId: string;
   let resourceId: string;
+  let bStayedId: string;
 
   const auth = () => ({ Authorization: `Bearer ${token}` });
 
@@ -118,8 +119,8 @@ describe('Police report export (task 7.2)', () => {
         id_document_type: 'CCCD', id_document_number: ID_NUMBER, id_document_issue_date: '2021-01-20', id_document_issue_place: 'Cục CS', address: 'Hải Châu, Đà Nẵng',
       }).expect(201)
     ).body.data.id;
-    const bStayed = await book(guestStayed, '2026-09-10T07:00:00.000Z', '2026-09-12T05:00:00.000Z');
-    await admin.query(`UPDATE bookings SET status='CHECKED_IN', actual_check_in=now() WHERE id=$1`, [bStayed]);
+    bStayedId = await book(guestStayed, '2026-09-10T07:00:00.000Z', '2026-09-12T05:00:00.000Z');
+    await admin.query(`UPDATE bookings SET status='CHECKED_IN', actual_check_in=now() WHERE id=$1`, [bStayedId]);
 
     // Guest mới đặt (PENDING, trong tháng 9) — KHÔNG lưu trú → bị loại.
     const guestPending = (
@@ -146,6 +147,9 @@ describe('Police report export (task 7.2)', () => {
       await admin.query(`DELETE FROM user_property_roles WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM properties WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM refresh_tokens WHERE tenant_id IN ${tid}`);
+      // outbox_events đã xoá ở trên; dọn notifications NGAY trước users để robust với
+      // dev-server đang chạy (OutboxDispatcher có thể đã tạo notifications từ booking.created).
+      await admin.query(`DELETE FROM notifications WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM users WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM tenants WHERE slug = $1`, [tenantSlug]); // cascade audit_logs (4.5)
       await admin.end();
@@ -191,5 +195,77 @@ describe('Police report export (task 7.2)', () => {
 
   it('from > to → 400 VALIDATION_FAILED', async () => {
     await report('2026-09-30', '2026-09-01').expect(400);
+  });
+
+  // ── B6 (docs/12 §2 Phase 2): submit khai báo lưu trú PENDING→SUBMITTED ───────
+
+  const submit = (from: string, to: string, tok = token) =>
+    request(http)
+      .post('/api/v1/compliance/police-report/submit')
+      .set({ Authorization: `Bearer ${tok}` })
+      .send({ property_id: propertyId, from, to });
+
+  it('B6: submit → PENDING→SUBMITTED (chỉ khách đã lưu trú; khách PENDING bị loại)', async () => {
+    // Mặc định booking đã lưu trú có police_report_status = PENDING.
+    const before = await admin.query(`SELECT police_report_status FROM bookings WHERE id=$1`, [bStayedId]);
+    expect(before.rows[0].police_report_status).toBe('PENDING');
+
+    const res = await submit('2026-09-01', '2026-09-30').expect(200);
+    // Chỉ 1 khách đã lưu trú trong kỳ (Trần Văn Chưa Đến là PENDING → không tính).
+    expect(res.body.data).toMatchObject({ total: 1, submitted: 1, failed: 0, skipped: 0 });
+
+    const after = await admin.query(
+      `SELECT police_report_status, police_report_submitted_at FROM bookings WHERE id=$1`,
+      [bStayedId],
+    );
+    expect(after.rows[0].police_report_status).toBe('SUBMITTED');
+    expect(after.rows[0].police_report_submitted_at).not.toBeNull();
+  });
+
+  it('B6: submit ghi audit STATE_CHANGE scope police-report-submit (kèm số liệu)', async () => {
+    const row = await admin.query(
+      `SELECT after_data FROM audit_logs
+       WHERE tenant_id=$1 AND action='STATE_CHANGE' AND entity_type='police-report'
+       ORDER BY created_at DESC LIMIT 1`,
+      [tenantId],
+    );
+    expect(row.rows[0].after_data.scope).toBe('police-report-submit');
+    expect(row.rows[0].after_data.submitted).toBe(1);
+  });
+
+  it('B6: submit lần 2 cùng kỳ → skipped (idempotent, không gửi lại)', async () => {
+    const res = await submit('2026-09-01', '2026-09-30').expect(200);
+    expect(res.body.data).toMatchObject({ total: 1, submitted: 0, failed: 0, skipped: 1 });
+  });
+
+  it('B6: thiếu số giấy tờ → FAILED (stub không thể khai báo)', async () => {
+    const g = (
+      await request(http)
+        .post('/api/v1/guests')
+        .set(auth())
+        .send({ full_name: 'Lê Văn Không Giấy', nationality: 'VN' })
+        .expect(201)
+    ).body.data.id;
+    const b = await book(g, '2026-11-05T07:00:00.000Z', '2026-11-07T05:00:00.000Z');
+    await admin.query(`UPDATE bookings SET status='CHECKED_IN', actual_check_in=now() WHERE id=$1`, [b]);
+
+    const res = await submit('2026-11-01', '2026-11-30').expect(200);
+    expect(res.body.data).toMatchObject({ total: 1, submitted: 0, failed: 1, skipped: 0 });
+    const row = await admin.query(`SELECT police_report_status FROM bookings WHERE id=$1`, [b]);
+    expect(row.rows[0].police_report_status).toBe('FAILED');
+  });
+
+  it('B6: HOUSEKEEPER (không guest.pii.read) → 403 khi submit', async () => {
+    await submit('2026-09-01', '2026-09-30', hkToken).expect(403);
+  });
+
+  it('B6: from > to → 400 VALIDATION_FAILED', async () => {
+    await submit('2026-09-30', '2026-09-01').expect(400);
+  });
+
+  it('B6: police_report_status hiển thị trong BookingResponse (GET /bookings/:id)', async () => {
+    const res = await request(http).get(`/api/v1/bookings/${bStayedId}`).set(auth()).expect(200);
+    expect(res.body.data.police_report_status).toBe('SUBMITTED');
+    expect(res.body.data.police_report_submitted_at).toBeTruthy();
   });
 });

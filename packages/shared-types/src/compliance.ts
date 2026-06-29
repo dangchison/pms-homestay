@@ -13,6 +13,28 @@ export const PoliceReportQuerySchema = z
   .refine((q) => q.from <= q.to, { message: 'from phải ≤ to' });
 export type PoliceReportQuery = z.infer<typeof PoliceReportQuerySchema>;
 
+/**
+ * POST /compliance/police-report/submit (B6, docs/12 §2 Phase 2) — "Gửi" khai báo
+ * lưu trú lên dịch vụ công cho khách đã lưu trú trong [from, to]. Phase 2 thật =
+ * POST API dịch vụ công cư trú cấp xã (hiện STUB: thiếu số giấy tờ → FAILED, có → SUBMITTED).
+ */
+export const SubmitPoliceReportRequestSchema = z
+  .object({
+    property_id: z.uuid(),
+    from: z.iso.date(),
+    to: z.iso.date(),
+  })
+  .refine((q) => q.from <= q.to, { message: 'from phải ≤ to' });
+export type SubmitPoliceReportRequest = z.infer<typeof SubmitPoliceReportRequestSchema>;
+
+export const SubmitPoliceReportResponseSchema = z.object({
+  total: z.number().int(), // số booking đã lưu trú trong kỳ
+  submitted: z.number().int(), // chuyển sang SUBMITTED lần này
+  failed: z.number().int(), // thiếu PII (số giấy tờ) → FAILED
+  skipped: z.number().int(), // đã SUBMITTED trước đó → bỏ qua
+});
+export type SubmitPoliceReportResponse = z.infer<typeof SubmitPoliceReportResponseSchema>;
+
 // ── Nghị định 13 — quyền chủ thể dữ liệu (task 7.3, docs/12 §4) ──────────────
 
 export const ConsentTypeSchema = z.enum(['BOOKING_PROCESS', 'MARKETING', 'ANALYTICS']);

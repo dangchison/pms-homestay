@@ -496,50 +496,52 @@ model booking_status_history {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model bookings {
-  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id              String                   @db.Uuid
-  property_id            String                   @db.Uuid
-  resource_id            String                   @db.Uuid
-  guest_id               String?                  @db.Uuid
-  booking_code           String                   @db.VarChar(20)
-  source                 String                   @default("DIRECT") @db.VarChar(32)
-  external_id            String?                  @db.VarChar(255)
-  external_uid           String?                  @db.VarChar(255)
-  channel_mapping_id     String?                  @db.Uuid
-  status                 booking_status           @default(PENDING)
-  mode                   booking_mode
-  rate_plan_id           String?                  @db.Uuid
-  quote_id               String?                  @db.Uuid
-  check_in               DateTime                 @db.Timestamptz(6)
-  check_out              DateTime                 @db.Timestamptz(6)
-  actual_check_in        DateTime?                @db.Timestamptz(6)
-  actual_check_out       DateTime?                @db.Timestamptz(6)
-  adults                 Int                      @default(1)
-  children               Int                      @default(0)
-  total_amount_vnd       BigInt
-  commission_vnd         BigInt                   @default(0)
-  notes                  String?
-  cancellation_reason    String?
-  cancelled_at           DateTime?                @db.Timestamptz(6)
-  cancelled_by           String?                  @db.Uuid
-  created_by             String?                  @db.Uuid
-  expires_at             DateTime?                @db.Timestamptz(6)
-  missing_sync_count     Int                      @default(0)
-  version                Int                      @default(0)
-  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
-  updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
-  booking_status_history booking_status_history[]
-  booking_surcharges     booking_surcharges[]
-  tenants                tenants                  @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  guests                 guests?                  @relation(fields: [tenant_id, guest_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
-  properties             properties               @relation(fields: [tenant_id, property_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
-  rate_plans             rate_plans?              @relation(fields: [tenant_id, rate_plan_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
-  bookable_resources     bookable_resources       @relation(fields: [tenant_id, resource_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
-  cleaning_tasks         cleaning_tasks[]
-  invoices               invoices[]
-  monthly_meter_readings monthly_meter_readings[]
-  operational_expenses   operational_expenses[]
-  room_occupancy         room_occupancy[]
+  id                         String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                  String                   @db.Uuid
+  property_id                String                   @db.Uuid
+  resource_id                String                   @db.Uuid
+  guest_id                   String?                  @db.Uuid
+  booking_code               String                   @db.VarChar(20)
+  source                     String                   @default("DIRECT") @db.VarChar(32)
+  external_id                String?                  @db.VarChar(255)
+  external_uid               String?                  @db.VarChar(255)
+  channel_mapping_id         String?                  @db.Uuid
+  status                     booking_status           @default(PENDING)
+  mode                       booking_mode
+  rate_plan_id               String?                  @db.Uuid
+  quote_id                   String?                  @db.Uuid
+  check_in                   DateTime                 @db.Timestamptz(6)
+  check_out                  DateTime                 @db.Timestamptz(6)
+  actual_check_in            DateTime?                @db.Timestamptz(6)
+  actual_check_out           DateTime?                @db.Timestamptz(6)
+  adults                     Int                      @default(1)
+  children                   Int                      @default(0)
+  total_amount_vnd           BigInt
+  commission_vnd             BigInt                   @default(0)
+  notes                      String?
+  cancellation_reason        String?
+  cancelled_at               DateTime?                @db.Timestamptz(6)
+  cancelled_by               String?                  @db.Uuid
+  created_by                 String?                  @db.Uuid
+  expires_at                 DateTime?                @db.Timestamptz(6)
+  missing_sync_count         Int                      @default(0)
+  version                    Int                      @default(0)
+  created_at                 DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime                 @default(now()) @db.Timestamptz(6)
+  police_report_status       String                   @default("PENDING") @db.VarChar(16)
+  police_report_submitted_at DateTime?                @db.Timestamptz(6)
+  booking_status_history     booking_status_history[]
+  booking_surcharges         booking_surcharges[]
+  tenants                    tenants                  @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  guests                     guests?                  @relation(fields: [tenant_id, guest_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  properties                 properties               @relation(fields: [tenant_id, property_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  rate_plans                 rate_plans?              @relation(fields: [tenant_id, rate_plan_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  bookable_resources         bookable_resources       @relation(fields: [tenant_id, resource_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  cleaning_tasks             cleaning_tasks[]
+  invoices                   invoices[]
+  monthly_meter_readings     monthly_meter_readings[]
+  operational_expenses       operational_expenses[]
+  room_occupancy             room_occupancy[]
 
   @@unique([tenant_id, booking_code])
   @@unique([tenant_id, id])
