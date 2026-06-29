@@ -31,7 +31,7 @@
 
 | # | Mục | Mô tả | Nguồn | Acceptance | Ưu tiên |
 |---|-----|-------|-------|-----------|:---:|
-| C1 | Sentry | Set `SENTRY_DSN` (BE + FE) + dashboards + source-map token CI | PROGRESS 8.2 "Kích hoạt (ops)" | Lỗi 5xx hiện trên Sentry kèm request_id/tenant_id | **P0** |
+| C1 🟡 | Sentry | Set `SENTRY_DSN` (BE + FE) + dashboards + source-map token CI | PROGRESS 8.2 "Kích hoạt (ops)" | 🟡 **Đã kích hoạt + verify (2026-06-29)** — 3 project riêng (`pms-api`/`pms-web-admin`/`pms-web-staff`); DSN trong env **gitignored** (không commit); BE bắn event thật lên dashboard kèm `request_id`/`tenant_id`; FE build nhúng DSN vào client bundle. **Còn:** source-map upload CI → hoãn đến deploy (xem Ghi chú ↓) | **P0** |
 | C2 | Backup R2 | R2 bucket + creds + lifecycle (30d/12w) + cron 02:00 ICT thật; PITR provider | PROGRESS 8.1 / docs/11 §6 · docs/17 §1 | Backup chạy hằng đêm; restore-drill đo RTO/RPO | **P0** |
 | C3 | Load-test staging | Chạy k6 trên **staging** (book scenario GHI dữ liệu — không prod) | PROGRESS 8.3 / infra/k6 | Threshold p95 đạt budget docs/11 §10 | P1 |
 | C4 | Object storage prod | MinIO/S3 tier VN cho ảnh phòng/CCCD/dọn phòng (ADR-0004) | docs/12 §3 · ADR-0004 | Upload/presign hoạt động ở môi trường thật | P1 |
@@ -47,5 +47,6 @@
 
 ## Ghi chú
 
+- **C1 Sentry — source-map CI (hoãn đến deploy):** SDK đã wire (task 8.2) + DSN đã set + verify (2026-06-29, 3 project riêng). Upload source-map chỉ có giá trị cho bundle **minified đã DEPLOY** nên làm lúc deploy: (a) thêm GitHub repo secrets `SENTRY_AUTH_TOKEN` (secret thật) + `SENTRY_ORG`; (b) vì **3 project riêng**, build mỗi FE app với `SENTRY_PROJECT` riêng (`pms-web-admin` / `pms-web-staff`) — sửa `.github/workflows/ci.yml` truyền env per-app vào bước build; (c) set `SENTRY_RELEASE` (vd git SHA) cho BE+FE để gắn version. `next.config.ts` đã đọc sẵn `SENTRY_ORG/PROJECT/AUTH_TOKEN`; thiếu → bỏ qua upload (build vẫn xanh). "Dashboards" = Sentry tự tạo issue stream mỗi project; tuỳ biến trên UI, không cần code.
 - **Không phải EPIC mới** — đây là lớp hoàn thiện/hardening sau MVP. Khi go-live tới gần (docs/16 ~09/2026), ưu tiên P0 trước (E2E happy-path, Sentry, backup R2, CI guard RLS).
 - Wish-list tính năng *mới* sau MVP (không phải hoàn thiện cái đã có) nằm ở [`16-product-roadmap.md`](16-product-roadmap.md) — đừng trộn hai danh sách.
