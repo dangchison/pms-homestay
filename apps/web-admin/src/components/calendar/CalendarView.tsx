@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   DndContext,
@@ -25,8 +25,11 @@ import {
   dayHeaders,
   startOfUtcDay,
 } from '@/lib/calendar/calendar-utils';
-import { useSwitchResource } from '@/lib/hooks/use-calendar';
+import { useRescheduleBooking, useSwitchResource } from '@/lib/hooks/use-calendar';
 import { BookingBar, BookingBarGhost } from './BookingBar';
+
+/** Trạng thái còn cho đổi lịch (kéo mép): chưa nhận phòng & chưa kết thúc. */
+const RESCHEDULABLE = new Set(['HOLD', 'PENDING', 'CONFIRMED']);
 import { BookingDetailDialog } from './BookingDetailDialog';
 
 type OccKey = readonly ['occupancy', string, string, string];
@@ -54,6 +57,13 @@ export function CalendarView({ data, isLoading, rangeStart, days, now, statusFil
   const [detail, setDetail] = useState<CalendarBooking | null>(null);
   const [quick, setQuick] = useState<QuickSelect | null>(null);
   const switcher = useSwitchResource(queryKey);
+  const rescheduler = useRescheduleBooking(queryKey);
+
+  const onReschedule = useCallback(
+    (booking: CalendarBooking, checkIn: string, checkOut: string) =>
+      rescheduler.mutate({ booking, checkIn, checkOut }),
+    [rescheduler],
+  );
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -172,6 +182,7 @@ export function CalendarView({ data, isLoading, rangeStart, days, now, statusFil
                       days={days}
                       top={vi.start - virtualizer.options.scrollMargin}
                       onBookingClick={setDetail}
+                      onReschedule={onReschedule}
                       onQuickCreate={(startIdx, endIdx) => setQuick({ resource, startIdx, endIdx })}
                     />
                   );
@@ -233,10 +244,11 @@ interface RowProps {
   days: number;
   top: number;
   onBookingClick: (b: CalendarBooking) => void;
+  onReschedule: (booking: CalendarBooking, checkIn: string, checkOut: string) => void;
   onQuickCreate: (startIdx: number, endIdx: number) => void;
 }
 
-function CalendarRow({ resource, bookings, blocks, rangeStart, days, top, onBookingClick, onQuickCreate }: RowProps) {
+function CalendarRow({ resource, bookings, blocks, rangeStart, days, top, onBookingClick, onReschedule, onQuickCreate }: RowProps) {
   const { setNodeRef, isOver } = useDroppable({ id: resource.id });
   const [sel, setSel] = useState<{ a: number; b: number } | null>(null);
 
@@ -304,7 +316,14 @@ function CalendarRow({ resource, bookings, blocks, rangeStart, days, top, onBook
           );
         })}
         {bookings.map((b) => (
-          <BookingBar key={b.id} booking={b} rangeStart={rangeStart} days={days} onClick={onBookingClick} />
+          <BookingBar
+            key={b.id}
+            booking={b}
+            rangeStart={rangeStart}
+            days={days}
+            onClick={onBookingClick}
+            onReschedule={RESCHEDULABLE.has(b.status) ? onReschedule : undefined}
+          />
         ))}
       </div>
     </div>

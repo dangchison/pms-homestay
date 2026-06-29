@@ -120,8 +120,13 @@ describe('Booking core — createBookingTx (task 2.6)', () => {
   });
 
   afterAll(async () => {
+    // Đóng app TRƯỚC khi dọn DB: dừng OutboxDispatcher/worker để nó không sinh thêm
+    // notifications (FK → users) trong lúc cleanup → tránh race FK lúc DELETE users.
+    await app?.close();
     if (admin) {
       const tid = `(SELECT id FROM tenants WHERE slug = '${tenantSlug}')`;
+      // notifications (FK → users) do OutboxDispatcher sinh từ booking.created/cancelled — xoá trước users
+      await admin.query(`DELETE FROM notifications WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM outbox_events WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM invoice_items WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM invoices WHERE tenant_id IN ${tid}`);
@@ -142,7 +147,6 @@ describe('Booking core — createBookingTx (task 2.6)', () => {
       await admin.query(`DELETE FROM tenants WHERE slug = $1`, [tenantSlug]);
       await admin.end();
     }
-    await app?.close();
   });
 
   it('tạo booking PENDING (2 đêm) → 201, booking_code BK-, total 2×500k', async () => {
@@ -240,5 +244,60 @@ describe('Booking core — createBookingTx (task 2.6)', () => {
       [resA, ci],
     );
     expect(rows[0].n).toBe(1); // chỉ 1 booking
+  });
+
+  // ── Reschedule (A3 F3 — kéo mép calendar) ──────────────────────────────────
+  it('★ reschedule 2 đêm → 3 đêm: 200, ngày mới + total tính lại 3×500k', async () => {
+    const ci = '2026-11-01T07:00:00.000Z';
+    const co = '2026-11-03T05:00:00.000Z';
+    const created = await book(resA, await quote(resA, ci, co), ci, co).expect(201);
+    expect(created.body.data.total_amount_vnd).toBe(1_000_000);
+
+    const newCo = '2026-11-04T05:00:00.000Z';
+    const res = await request(http)
+      .post(`/api/v1/bookings/${created.body.data.id}/reschedule`)
+      .set(auth())
+      .send({ check_in: ci, check_out: newCo, reason: 'khách ở thêm 1 đêm' })
+      .expect(200);
+    expect(res.body.data.check_out).toBe(newCo);
+    expect(res.body.data.total_amount_vnd).toBe(1_500_000); // 3 đêm × 500k
+    expect(res.body.data.resource_id).toBe(resA); // giữ nguyên phòng
+  });
+
+  it('reschedule lên khoảng đã có booking khác → 409 BOOKING_OVERLAP (rollback giữ chỗ cũ)', async () => {
+    const aCi = '2026-11-10T07:00:00.000Z';
+    const aCo = '2026-11-12T05:00:00.000Z';
+    await book(resA, await quote(resA, aCi, aCo), aCi, aCo).expect(201);
+    const bCi = '2026-11-20T07:00:00.000Z';
+    const bCo = '2026-11-22T05:00:00.000Z';
+    const b2 = await book(resA, await quote(resA, bCi, bCo), bCi, bCo).expect(201);
+
+    const res = await request(http)
+      .post(`/api/v1/bookings/${b2.body.data.id}/reschedule`)
+      .set(auth())
+      .send({ check_in: aCi, check_out: aCo, reason: 'thử dời chồng lịch' });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('BOOKING_OVERLAP');
+
+    // b2 vẫn giữ occupancy cũ (tx rollback) → reschedule sang khoảng trống OK
+    const free = '2026-11-25T07:00:00.000Z';
+    const freeCo = '2026-11-27T05:00:00.000Z';
+    await request(http)
+      .post(`/api/v1/bookings/${b2.body.data.id}/reschedule`)
+      .set(auth())
+      .send({ check_in: free, check_out: freeCo, reason: 'dời sang khoảng trống' })
+      .expect(200);
+  });
+
+  it('reschedule trùng lịch cũ → 422 BOOKING_SAME_DATES', async () => {
+    const ci = '2026-12-01T07:00:00.000Z';
+    const co = '2026-12-03T05:00:00.000Z';
+    const created = await book(resA, await quote(resA, ci, co), ci, co).expect(201);
+    const res = await request(http)
+      .post(`/api/v1/bookings/${created.body.data.id}/reschedule`)
+      .set(auth())
+      .send({ check_in: ci, check_out: co, reason: 'không đổi' });
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe('BOOKING_SAME_DATES');
   });
 });

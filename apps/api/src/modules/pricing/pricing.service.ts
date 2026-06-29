@@ -170,6 +170,29 @@ export class PricingService {
     return quote;
   }
 
+  /**
+   * Tính lại tổng tiền cho khoảng ngày mới của một booking (A3 F3 — reschedule).
+   * Gọi TRONG tx booking: load rate_plan + chạy engine với check_in/out mới. Dùng
+   * khi kéo mép lịch đổi số đêm → giá đổi theo. Plan không còn → 422.
+   */
+  async recomputeTotal(
+    tx: Tx,
+    ratePlanId: string,
+    timezone: string,
+    params: { mode: QuoteRequest['mode']; checkIn: Date; checkOut: Date; adults: number; children: number },
+  ): Promise<number> {
+    const plan = await tx.rate_plans.findFirst({ where: { id: ratePlanId } });
+    if (!plan) {
+      throw new AppException({
+        code: 'RATE_PLAN_NOT_FOUND',
+        title: 'Gói giá không còn — không tính lại được giá',
+        status: 422,
+      });
+    }
+    const recalculated = await this.computeForPlan(tx, plan, timezone, params);
+    return recalculated.totalVnd;
+  }
+
   // ── Helpers ──────────────────────────────────────────────────────────────
 
   /** Load rules + holidays cho plan rồi chạy engine (dùng chung quote + verify). */

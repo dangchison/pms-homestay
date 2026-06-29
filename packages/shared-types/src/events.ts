@@ -13,6 +13,7 @@ export const EVENT_TYPES = [
   'booking.checked_in',
   'booking.checked_out',
   'booking.resource_switched',
+  'booking.rescheduled',
   'booking.overbooking_detected',
   'room.housekeeping_changed',
   'room.blocked',
