@@ -14,7 +14,7 @@
 |---|-----|-------|-------|-----------|:---:|
 | A1 ✅ | E2E web-admin (Playwright) | Smoke điều hướng (login demo + dashboard/calendar/invoices/reports/settings) + flow ghi (thu tiền hoá đơn → còn lại 0₫). webServer tự khởi động api+web; job CI `e2e-web`. | [apps/web-admin/e2e](../apps/web-admin/e2e) · [ci.yml](../.github/workflows/ci.yml) | ✅ **Done** [PR#42] — 3/3 xanh local; CI chạy mỗi PR. _(web-staff E2E = A2)_ | **P0** |
 | A2 | web-staff PWA hoàn thiện | Workbox/offline cache, camera + OCR check-in, nối API đầy đủ (hiện 6.6 mới shell + trang tĩnh) | PROGRESS 6.6 | Offline shell hoạt động; check-in OCR end-to-end trên thiết bị | P1 |
-| A3 | Trang/luồng FE hoãn | Ledger `/payments` theo property (F3), export PDF/Excel ở Reports, chế độ giờ HOURLY + kéo mép đổi ngày ở Calendar | PROGRESS 6.4/6.5/6.2 | Mỗi trang có dữ liệu thật + thao tác chính chạy | P1 |
+| A3 ✅ | Trang/luồng FE hoãn | Ledger `/payments` theo property (F3), export PDF/Excel ở Reports, chế độ giờ HOURLY + kéo mép đổi ngày ở Calendar | PROGRESS 6.4/6.5/6.2 | ✅ **Done** — payments ledger [#43] · reports export Excel/PDF [#44] · calendar kéo mép đổi ngày [#45] · **chế độ giờ HOURLY**: toggle Ngày/Giờ → view 1 ngày × 24 cột giờ, booking HOURLY đặt đúng khung giờ + bấm xem chi tiết (định vị UTC như lưới ngày). Đặt-nhanh & kéo-mép theo giờ = follow-up. e2e smoke toggle Giờ + verify browser (booking 09:00–11:00). | P1 |
 
 ## P2-B — Tính năng hoãn (BE)
 

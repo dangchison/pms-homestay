@@ -37,6 +37,25 @@ test.describe('web-admin smoke', () => {
     await expect(page.getByRole('heading', { name: 'Cài đặt' })).toBeVisible();
   });
 
+  test('lịch: chuyển chế độ Giờ → lưới 24 cột giờ + quay lại Ngày (A3 HOURLY)', async ({ page }) => {
+    await loginDemo(page);
+    await page.getByRole('link', { name: 'Lịch phòng', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Lịch phòng' })).toBeVisible();
+
+    // Mặc định chế độ Ngày.
+    await expect(page.getByRole('button', { name: 'Ngày', exact: true })).toHaveAttribute('aria-pressed', 'true');
+
+    // Chuyển sang Giờ → header giờ 00:00..23:00 hiện.
+    await page.getByRole('button', { name: 'Giờ' }).click();
+    await expect(page.getByRole('button', { name: 'Giờ' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByText('00:00', { exact: true })).toBeVisible();
+    await expect(page.getByText('23:00', { exact: true })).toBeVisible();
+
+    // Quay lại Ngày.
+    await page.getByRole('button', { name: 'Ngày', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Ngày', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   test('báo cáo → nút Excel tải file .xlsx (A3 F3 phần 2)', async ({ page }) => {
     await loginDemo(page);
     await page.getByRole('link', { name: 'Báo cáo', exact: true }).click();

@@ -10,6 +10,8 @@ export const LABEL_WIDTH = 224; // px — cột nhãn resource (frozen trái)
 export const COL_WIDTH = 72; // px — bề rộng 1 ngày
 export const ROW_HEIGHT = 44; // px — chiều cao 1 hàng resource
 export const HEADER_HEIGHT = 52; // px — hàng ngày (frozen trên)
+export const HOUR_COL_WIDTH = 56; // px — bề rộng 1 giờ (chế độ HOURLY, A3)
+export const HOURS_PER_DAY = 24;
 
 const DAY_MS = 86_400_000;
 const VI_WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'] as const;
@@ -95,4 +97,56 @@ export function rangeLabel(from: Date, days: number): string {
 /** YYYY-MM-DD (UTC) cho query param / so sánh. */
 export function ymdUtc(d: Date): string {
   return startOfUtcDay(d).toISOString().slice(0, 10);
+}
+
+// ── Chế độ giờ (HOURLY view, A3) ─────────────────────────────────────────────
+// Định vị theo UTC nhất quán với lưới ngày (TZ cơ sở tinh chỉnh sau — như comment đầu file).
+const HOUR_MS = 3_600_000;
+
+/** Offset (đơn vị "giờ", phân số) của mốc thời gian so với đầu NGÀY (UTC). */
+export function hourOffset(at: Date, day: Date): number {
+  return (at.getTime() - startOfUtcDay(day).getTime()) / HOUR_MS;
+}
+
+export interface HourHeader {
+  hour: number; // 0..23
+  label: string; // "07:00"
+  isNow: boolean;
+}
+
+/** 24 cột giờ cho 1 ngày; isNow = giờ hiện tại nếu `now` rơi vào ngày này (UTC). */
+export function hourHeaders(day: Date, now: Date): HourHeader[] {
+  const sameDay = startOfUtcDay(day).getTime() === startOfUtcDay(now).getTime();
+  const nowHour = now.getUTCHours();
+  return Array.from({ length: HOURS_PER_DAY }, (_, h) => ({
+    hour: h,
+    label: `${String(h).padStart(2, '0')}:00`,
+    isNow: sameDay && h === nowHour,
+  }));
+}
+
+/** Bar rect (px) trong track giờ, kẹp [0, 24] (booking qua đêm bị cắt ở mép ngày). */
+export function hourBarRect(startISO: string, endISO: string, day: Date): BarRect {
+  const rawStart = hourOffset(new Date(startISO), day);
+  const rawEnd = hourOffset(new Date(endISO), day);
+  const start = Math.max(0, Math.min(HOURS_PER_DAY, rawStart));
+  const end = Math.max(0, Math.min(HOURS_PER_DAY, rawEnd));
+  return {
+    left: start * HOUR_COL_WIDTH,
+    width: Math.max(HOUR_COL_WIDTH * 0.4, (end - start) * HOUR_COL_WIDTH),
+  };
+}
+
+/** Giờ:phút (UTC) — nhãn thời gian trên bar giờ. */
+export function hhmmUtc(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+}
+
+/** Nhãn 1 ngày cho toolbar chế độ giờ: "T4 10/06". */
+export function dayLabel(d: Date): string {
+  const day = startOfUtcDay(d);
+  const dd = String(day.getUTCDate()).padStart(2, '0');
+  const mm = String(day.getUTCMonth() + 1).padStart(2, '0');
+  return `${VI_WEEKDAYS[day.getUTCDay()]} ${dd}/${mm}`;
 }
