@@ -39,6 +39,7 @@
     "cookie-parser": "^1.4.7",
     "dotenv": "^16.4.5",
     "exceljs": "^4.4.0",
+    "handlebars": "^4.7.9",
     "ioredis": "^5.4.0",
     "jszip": "^3.10.1",
     "nestjs-pino": "^4.2.0",
