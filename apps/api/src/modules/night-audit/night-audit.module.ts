@@ -5,6 +5,7 @@ import { AssetsModule } from '@modules/assets/assets.module';
 import { BillingModule } from '@modules/billing/billing.module';
 import { ComplianceModule } from '@modules/compliance/compliance.module';
 import { ExpensesModule } from '@modules/expenses/expenses.module';
+import { InvoicesModule } from '@modules/invoices/invoices.module';
 import { OccupancyModule } from '@modules/occupancy/occupancy.module';
 import { SubscriptionModule } from '@modules/subscription/subscription.module';
 import { MaintenanceService } from './maintenance.service';
@@ -22,6 +23,7 @@ import { NightAuditService } from './night-audit.service';
     AssetsModule,
     ExpensesModule,
     BillingModule,
+    InvoicesModule,
     SubscriptionModule,
     ComplianceModule,
     BullModule.registerQueue({ name: QUEUE_NIGHT_AUDIT }),

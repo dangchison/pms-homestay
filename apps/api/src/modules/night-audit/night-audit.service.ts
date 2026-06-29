@@ -7,11 +7,17 @@ import { withTenant } from '@core/tenancy/with-tenant';
 import { AssetsService } from '@modules/assets/assets.service';
 import { BillingService } from '@modules/billing/billing.service';
 import { ExpensesService } from '@modules/expenses/expenses.service';
+import { InvoicesService } from '@modules/invoices/invoices.service';
 import { OccupancyService } from '@modules/occupancy/occupancy.service';
 
 type Tx = Prisma.TransactionClient;
 
-const QUOTE_RETENTION_DAYS = 7; // docs/03 §7: quote hết hạn giữ 7 ngày rồi purge
+// docs/03 §7 — retention matrix (giữ nóng trong PG rồi cron delete)
+const QUOTE_RETENTION_DAYS = 7; // quote hết hạn giữ 7 ngày
+const SYNC_LOGS_RETENTION_DAYS = 30;
+const SYNC_JOBS_RETENTION_DAYS = 90;
+const NOTIFICATIONS_RETENTION_DAYS = 365; // 12 tháng
+const PAYMENT_ATTEMPTS_RETENTION_DAYS = 365; // 12 tháng
 
 function startOfUtcDay(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -25,9 +31,11 @@ function addDays(d: Date, n: number): Date {
 export interface NightAuditSummary {
   deposit_timeouts: number;
   no_shows: number;
+  deposits_forfeited: number;
   overdue_invoices: number;
   stats_rows: number;
   quotes_purged: number;
+  retention_deleted: number;
   monthly: {
     period: string;
     depreciation_entries: number;
@@ -42,9 +50,11 @@ export interface NightAuditSummary {
  * (mỗi cái mở withTenant riêng). Cron: night-audit.cron.ts. Test gọi runForTenant
  * trực tiếp (như sweepExpiredHolds).
  *
- * TODO(forfeit cọc NO_SHOW): hiện chỉ chuyển trạng thái + giải phóng phòng; cấn/
- * tịch thu cọc theo chính sách → ADJUSTMENT invoice (mở rộng sau). Retention mới
- * phủ quote hết hạn; matrix đầy đủ (docs/03 §7) bổ sung dần.
+ * Forfeit cọc NO_SHOW (B1): khi CONFIRMED → NO_SHOW, nếu DEPOSIT đã thu thì sinh
+ * ADJUSTMENT ghi nhận doanh thu tịch thu (DEPOSIT giữ PAID — docs/09 §4). No-show
+ * tính theo timezone TỪNG cơ sở (không còn 1 mốc UTC). Retention dọn theo matrix
+ * docs/03 §7: quote/sync_logs/sync_jobs/notifications/payment_attempts/idempotency_keys
+ * per-tenant ở đây + outbox PROCESSED/FAILED cross-tenant ở MaintenanceService.
  */
 @Injectable()
 export class NightAuditService {
@@ -56,6 +66,7 @@ export class NightAuditService {
     private readonly assets: AssetsService,
     private readonly expenses: ExpensesService,
     private readonly billing: BillingService,
+    private readonly invoices: InvoicesService,
     private readonly outbox: OutboxService,
   ) {}
 
@@ -79,11 +90,20 @@ export class NightAuditService {
 
     const summary = await withTenant(this.prisma, tenantId, async (tx) => {
       const deposit_timeouts = await this.cancelDepositTimeouts(tx, tenantId, now);
-      const no_shows = await this.markNoShows(tx, tenantId, today);
+      const ns = await this.markNoShows(tx, tenantId, now);
       const overdue_invoices = await this.markOverdueInvoices(tx, today);
       const stats_rows = await this.rollupDailyStats(tx, tenantId, yesterday);
       const quotes_purged = await this.purgeExpiredQuotes(tx, now);
-      return { deposit_timeouts, no_shows, overdue_invoices, stats_rows, quotes_purged };
+      const retention_deleted = await this.cleanupRetention(tx, now);
+      return {
+        deposit_timeouts,
+        no_shows: ns.no_shows,
+        deposits_forfeited: ns.deposits_forfeited,
+        overdue_invoices,
+        stats_rows,
+        quotes_purged,
+        retention_deleted,
+      };
     });
 
     // Bước tháng (ngày 1) — chốt THÁNG VỪA KẾT THÚC (M-1). Mỗi service mở tx riêng.
@@ -105,7 +125,7 @@ export class NightAuditService {
 
     const result: NightAuditSummary = { ...summary, monthly };
     this.logger.log(
-      `Night-audit tenant ${tenantId}: timeout=${result.deposit_timeouts} no_show=${result.no_shows} overdue=${result.overdue_invoices} stats=${result.stats_rows} quotes_purged=${result.quotes_purged}${monthly ? ` monthly[${monthly.period}]=dep:${monthly.depreciation_entries}/exp:${monthly.recurring_expenses}/inv:${monthly.monthly_invoices}` : ''}`,
+      `Night-audit tenant ${tenantId}: timeout=${result.deposit_timeouts} no_show=${result.no_shows} forfeited=${result.deposits_forfeited} overdue=${result.overdue_invoices} stats=${result.stats_rows} quotes_purged=${result.quotes_purged} retention=${result.retention_deleted}${monthly ? ` monthly[${monthly.period}]=dep:${monthly.depreciation_entries}/exp:${monthly.recurring_expenses}/inv:${monthly.monthly_invoices}` : ''}`,
     );
     return result;
   }
@@ -151,13 +171,22 @@ export class NightAuditService {
     return expired.length;
   }
 
-  // ── ① CONFIRMED quá ngày check-in mà chưa đến → NO_SHOW + giải phóng phòng ──
-  private async markNoShows(tx: Tx, tenantId: string, today: Date): Promise<number> {
-    // check_in trước 00:00 hôm nay (ngày nhận phòng đã trôi qua) mà vẫn CONFIRMED
-    const noShows = await tx.bookings.findMany({
-      where: { status: 'CONFIRMED', check_in: { lt: today } },
-      select: { id: true, property_id: true },
-    });
+  // ── ① CONFIRMED quá ngày check-in (theo TZ cơ sở) chưa đến → NO_SHOW + giải phóng + forfeit cọc ──
+  private async markNoShows(
+    tx: Tx,
+    tenantId: string,
+    now: Date,
+  ): Promise<{ no_shows: number; deposits_forfeited: number }> {
+    // Ngày nhận (LOCAL theo timezone TỪNG cơ sở) đã trôi qua so với "hôm nay" LOCAL
+    // mà vẫn CONFIRMED → no-show. Per-property TZ thay cho 1 mốc UTC (docs/09 §8).
+    const noShows = await tx.$queryRaw<{ id: string; property_id: string; booking_code: string }[]>`
+      SELECT b.id, b.property_id, b.booking_code
+      FROM bookings b
+      JOIN properties p ON p.id = b.property_id
+      WHERE b.status = 'CONFIRMED'
+        AND (b.check_in AT TIME ZONE p.timezone)::date
+            < (${now}::timestamptz AT TIME ZONE p.timezone)::date`;
+    let deposits_forfeited = 0;
     for (const b of noShows) {
       await tx.bookings.update({
         where: { id: b.id },
@@ -174,6 +203,13 @@ export class NightAuditService {
           reason: 'NO_SHOW',
         },
       });
+      // Forfeit cọc đã thu → ADJUSTMENT (docs/09 §4); 0 nếu booking không có cọc.
+      const forfeited = await this.invoices.forfeitDepositForBooking(tx, {
+        id: b.id,
+        tenant_id: tenantId,
+        booking_code: b.booking_code,
+      });
+      if (forfeited > 0) deposits_forfeited++;
       await this.outbox.publish(tx, {
         event_type: 'booking.no_show',
         aggregate_type: 'booking',
@@ -181,7 +217,7 @@ export class NightAuditService {
         payload: { booking_id: b.id, property_id: b.property_id } satisfies BookingEventPayload,
       });
     }
-    return noShows.length;
+    return { no_shows: noShows.length, deposits_forfeited };
   }
 
   // ── ③ Invoice ISSUED/PARTIALLY_PAID quá due_date còn nợ → OVERDUE ──────────
@@ -285,5 +321,27 @@ export class NightAuditService {
     const cutoff = addDays(now, -QUOTE_RETENTION_DAYS);
     const res = await tx.quotes.deleteMany({ where: { expires_at: { lt: cutoff } } });
     return res.count;
+  }
+
+  // ── ⑦ Retention matrix per-tenant (docs/03 §7) — bảng RLS, dọn TRONG tx tenant ──
+  // (outbox_events PROCESSED/FAILED là bảng global → MaintenanceService.runOutboxRetention)
+  private async cleanupRetention(tx: Tx, now: Date): Promise<number> {
+    const cutoff = (days: number): Date => addDays(now, -days);
+    let total = 0;
+    total += (await tx.idempotency_keys.deleteMany({ where: { expires_at: { lt: now } } })).count;
+    // sync_logs TRƯỚC sync_jobs (FK sync_logs → sync_jobs)
+    total += (await tx.sync_logs.deleteMany({ where: { created_at: { lt: cutoff(SYNC_LOGS_RETENTION_DAYS) } } }))
+      .count;
+    total += (await tx.sync_jobs.deleteMany({ where: { started_at: { lt: cutoff(SYNC_JOBS_RETENTION_DAYS) } } }))
+      .count;
+    total += (
+      await tx.notifications.deleteMany({ where: { created_at: { lt: cutoff(NOTIFICATIONS_RETENTION_DAYS) } } })
+    ).count;
+    total += (
+      await tx.payment_attempts.deleteMany({
+        where: { created_at: { lt: cutoff(PAYMENT_ATTEMPTS_RETENTION_DAYS) } },
+      })
+    ).count;
+    return total;
   }
 }
