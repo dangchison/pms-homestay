@@ -9,6 +9,8 @@ import {
   type EventType,
   type JwtClaims,
   type OffsetPageInfo,
+  type QuoteRequest,
+  type RescheduleBookingRequest,
   type SwitchResourceRequest,
   type TodayBoardQuery,
   type TodayBoardResponse,
@@ -827,6 +829,111 @@ export class BookingsService {
         bookingId: id,
         roomIds: oldMembers.map((m) => m.room_id),
       });
+      return tx.bookings.findFirstOrThrow({ where: { id } });
+    });
+    return toBookingResponse(updated);
+  }
+
+  /**
+   * ★ Đổi lịch (A3 F3 — kéo mép calendar): đổi check_in/out GIỮ NGUYÊN resource.
+   * Cùng choke-point occupancy như switch-resource: lock member rooms → xoá occupancy
+   * cũ → pre-check chồng lấn ở ngày MỚI (EXCLUDE chốt chặn) → sinh lại occupancy +
+   * tính lại giá theo rate_plan. Không đổi status. Chặn CHECKED_IN/terminal (đã/đang ở).
+   */
+  async reschedule(
+    id: string,
+    dto: RescheduleBookingRequest,
+    user: JwtClaims,
+  ): Promise<BookingResponse> {
+    const booking = await this.loadOrThrow(id, user);
+    await this.permissionService.authorizeOnProperty(user, booking.property_id, 'booking.update');
+    if (isTerminal(booking.status) || booking.status === 'CHECKED_IN') {
+      throw new AppException({
+        code: 'BOOKING_INVALID_STATUS',
+        title: `Booking ${booking.status} không thể đổi lịch`,
+        status: 422,
+      });
+    }
+    const newCheckIn = new Date(dto.check_in);
+    const newCheckOut = new Date(dto.check_out);
+    if (
+      newCheckIn.getTime() === booking.check_in.getTime() &&
+      newCheckOut.getTime() === booking.check_out.getTime()
+    ) {
+      throw new AppException({
+        code: 'BOOKING_SAME_DATES',
+        title: 'Lịch mới trùng lịch hiện tại',
+        status: 422,
+      });
+    }
+
+    const updated = await withTenant(this.prisma, user.tnt, async (tx) => {
+      const members = await this.occupancy.memberRooms(tx, booking.resource_id);
+      await this.occupancy.lockRooms(tx, members.map((m) => m.room_id));
+
+      // nhả occupancy cũ TRƯỚC → pre-check ngày mới không tự đụng chính booking này
+      await this.occupancy.deleteForBooking(tx, id);
+      const conflicts = await this.occupancy.findOverlaps(
+        tx,
+        members.map((m) => m.room_id),
+        newCheckIn,
+        newCheckOut,
+      );
+      if (conflicts.length > 0) {
+        throw new AppException({
+          code: 'BOOKING_OVERLAP',
+          title: 'Đã có khách đặt/chặn trong khoảng ngày mới',
+          status: 409,
+          detail: `${conflicts.length} khoảng chồng lấn`,
+        });
+      }
+      // EXCLUDE là chốt chặn cuối (23P01 → 409 nếu race vượt pre-check)
+      await this.occupancy.insertForBooking(tx, {
+        tenantId: user.tnt,
+        bookingId: id,
+        members,
+        checkIn: newCheckIn,
+        checkOut: newCheckOut,
+      });
+
+      // Tính lại giá theo số đêm mới (chỉ khi có rate_plan — OTA/iCal có thể null → giữ giá)
+      let totalAmount = booking.total_amount_vnd;
+      if (booking.rate_plan_id) {
+        const property = await tx.properties.findFirstOrThrow({
+          where: { id: booking.property_id },
+          select: { timezone: true },
+        });
+        totalAmount = BigInt(
+          await this.pricing.recomputeTotal(tx, booking.rate_plan_id, property.timezone, {
+            mode: booking.mode as QuoteRequest['mode'],
+            checkIn: newCheckIn,
+            checkOut: newCheckOut,
+            adults: booking.adults,
+            children: booking.children,
+          }),
+        );
+      }
+
+      await tx.bookings.update({
+        where: { id },
+        data: {
+          check_in: newCheckIn,
+          check_out: newCheckOut,
+          total_amount_vnd: totalAmount,
+          version: { increment: 1 },
+        },
+      });
+      await tx.booking_status_history.create({
+        data: {
+          tenant_id: user.tnt,
+          booking_id: id,
+          from_status: booking.status,
+          to_status: booking.status,
+          changed_by: user.sub,
+          reason: `Đổi lịch ${booking.check_in.toISOString()}…${booking.check_out.toISOString()} → ${newCheckIn.toISOString()}…${newCheckOut.toISOString()}: ${dto.reason}`,
+        },
+      });
+      await this.emitBooking(tx, 'booking.rescheduled', id, booking.property_id);
       return tx.bookings.findFirstOrThrow({ where: { id } });
     });
     return toBookingResponse(updated);

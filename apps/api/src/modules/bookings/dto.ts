@@ -4,6 +4,7 @@ import {
   ConfirmBookingRequestSchema,
   CreateBookingRequestSchema,
   OffsetPaginationQuerySchema,
+  RescheduleBookingRequestSchema,
   SwitchResourceRequestSchema,
   TodayBoardQuerySchema,
   UpdateBookingRequestSchema,
@@ -16,6 +17,7 @@ export class UpdateBookingDto extends createZodDto(UpdateBookingRequestSchema) {
 export class CancelBookingDto extends createZodDto(CancelBookingRequestSchema) {}
 export class ConfirmBookingDto extends createZodDto(ConfirmBookingRequestSchema) {}
 export class SwitchResourceDto extends createZodDto(SwitchResourceRequestSchema) {}
+export class RescheduleBookingDto extends createZodDto(RescheduleBookingRequestSchema) {}
 
 const BookingListQuerySchema = OffsetPaginationQuerySchema.extend({
   property_id: z.uuid().optional(),

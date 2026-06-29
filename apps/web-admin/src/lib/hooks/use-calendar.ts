@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@pms/ui';
-import type { CalendarOccupancyResponse } from '@pms/shared-types';
+import type { CalendarBooking, CalendarOccupancyResponse } from '@pms/shared-types';
 import { ApiClientError, apiClient } from '@/lib/api-client';
 
 type OccKey = readonly ['occupancy', string, string, string];
@@ -66,6 +66,63 @@ export function useSwitchResource(queryKey: OccKey) {
       );
     },
     onSuccess: () => toast.success('Đã đổi phòng'),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ['occupancy'] }),
+  });
+}
+
+interface RescheduleVars {
+  booking: CalendarBooking;
+  checkIn: string; // ISO UTC
+  checkOut: string; // ISO UTC
+}
+
+const shiftIso = (iso: string, ms: number): string => new Date(new Date(iso).getTime() + ms).toISOString();
+
+/**
+ * Đổi lịch bằng kéo MÉP bar (A3 F3 — phần 3): POST /bookings/:id/reschedule. Optimistic
+ * (đổi check_in/out + dịch occupancy theo cùng delta) + revert khi lỗi. 409 BOOKING_OVERLAP
+ * → toast "ngày mới đã bận". onSettled refetch để đồng bộ buffer/giá thật (BE tính lại total).
+ */
+export function useRescheduleBooking(queryKey: OccKey) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ booking, checkIn, checkOut }: RescheduleVars) =>
+      apiClient.post(`/bookings/${booking.id}/reschedule`, {
+        check_in: checkIn,
+        check_out: checkOut,
+        reason: 'Đổi lịch trên calendar',
+      }),
+    onMutate: async ({ booking, checkIn, checkOut }) => {
+      await qc.cancelQueries({ queryKey });
+      const prev = qc.getQueryData<CalendarOccupancyResponse>(queryKey);
+      if (prev) {
+        const dCi = new Date(checkIn).getTime() - new Date(booking.check_in).getTime();
+        const dCo = new Date(checkOut).getTime() - new Date(booking.check_out).getTime();
+        qc.setQueryData<CalendarOccupancyResponse>(queryKey, {
+          ...prev,
+          bookings: prev.bookings.map((b) =>
+            b.id === booking.id
+              ? {
+                  ...b,
+                  check_in: checkIn,
+                  check_out: checkOut,
+                  occupancy_start: shiftIso(b.occupancy_start, dCi),
+                  occupancy_end: shiftIso(b.occupancy_end, dCo),
+                }
+              : b,
+          ),
+        });
+      }
+      return { prev };
+    },
+    onError: (err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(queryKey, ctx.prev);
+      const overlap = err instanceof ApiClientError && err.body?.code === 'BOOKING_OVERLAP';
+      toast.error(
+        overlap ? 'Khoảng ngày mới đã có khách/đặt' : 'Đổi lịch thất bại — đã hoàn tác',
+      );
+    },
+    onSuccess: () => toast.success('Đã đổi lịch'),
     onSettled: () => void qc.invalidateQueries({ queryKey: ['occupancy'] }),
   });
 }

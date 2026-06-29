@@ -22,6 +22,7 @@ import {
   CancelBookingDto,
   ConfirmBookingDto,
   CreateBookingDto,
+  RescheduleBookingDto,
   SwitchResourceDto,
   TodayBoardQueryDto,
   UpdateBookingDto,
@@ -115,5 +116,17 @@ export class BookingsController {
     @CurrentUser() user: JwtClaims,
   ) {
     return { data: await this.bookings.switchResource(id, dto, user) };
+  }
+
+  /** Đổi lịch (kéo mép calendar) — đổi check_in/out giữ nguyên resource, tính lại giá. */
+  @Post(':id/reschedule')
+  @RequirePermissions('booking.update')
+  @HttpCode(200)
+  async reschedule(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RescheduleBookingDto,
+    @CurrentUser() user: JwtClaims,
+  ) {
+    return { data: await this.bookings.reschedule(id, dto, user) };
   }
 }

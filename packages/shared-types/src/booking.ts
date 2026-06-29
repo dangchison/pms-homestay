@@ -74,6 +74,23 @@ export const SwitchResourceRequestSchema = z.object({
 export type SwitchResourceRequest = z.infer<typeof SwitchResourceRequestSchema>;
 
 /**
+ * POST /bookings/:id/reschedule (A3 F3 — phần 3, kéo mép lịch) — đổi check_in/out
+ * GIỮ NGUYÊN resource: tx delete+reinsert occupancy ở ngày mới (EXCLUDE chặn nếu
+ * bận) + tính lại giá theo rate_plan. Không đổi status. Không áp cho CHECKED_IN/terminal.
+ */
+export const RescheduleBookingRequestSchema = z
+  .object({
+    check_in: z.iso.datetime(),
+    check_out: z.iso.datetime(),
+    reason: z.string().min(1).max(500),
+  })
+  .refine((d) => new Date(d.check_out) > new Date(d.check_in), {
+    message: 'check_out phải sau check_in',
+    path: ['check_out'],
+  });
+export type RescheduleBookingRequest = z.infer<typeof RescheduleBookingRequestSchema>;
+
+/**
  * Bảng "Hôm nay" cho web-staff (task 6.6, ui/02 #T2). 3 nhóm theo NGÀY ở timezone
  * cơ sở: đến (chờ check-in), đi (đang ở, trả hôm nay), đang ở (ở qua hôm nay).
  * `date` mặc định = hôm nay (server tính theo properties.timezone).
