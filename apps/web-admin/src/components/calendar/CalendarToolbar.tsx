@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarDays, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Clock, Plus } from 'lucide-react';
 import {
   BOOKING_STYLE,
   type BookingStatus,
@@ -13,20 +13,24 @@ import {
   SelectValue,
 } from '@pms/ui';
 import { useT } from '@/lib/i18n';
-import { rangeLabel } from '@/lib/calendar/calendar-utils';
+import { dayLabel, rangeLabel } from '@/lib/calendar/calendar-utils';
 
 /** Trạng thái có occupancy → hiện trên lịch (HOLD/PENDING/CONFIRMED/CHECKED_IN). */
 export const CALENDAR_STATUSES: BookingStatus[] = ['HOLD', 'PENDING', 'CONFIRMED', 'CHECKED_IN'];
 const RANGE_OPTIONS = [7, 14, 30];
 
+export type CalendarView = 'day' | 'hour';
+
 interface Props {
   rangeStart: Date;
   days: number;
+  view: CalendarView;
   statusFilter: ReadonlySet<string>;
   onPrev: () => void;
   onNext: () => void;
   onToday: () => void;
   onDaysChange: (days: number) => void;
+  onViewChange: (view: CalendarView) => void;
   onToggleStatus: (status: BookingStatus) => void;
   onNewBooking: () => void;
 }
@@ -34,11 +38,13 @@ interface Props {
 export function CalendarToolbar({
   rangeStart,
   days,
+  view,
   statusFilter,
   onPrev,
   onNext,
   onToday,
   onDaysChange,
+  onViewChange,
   onToggleStatus,
   onNewBooking,
 }: Props) {
@@ -49,7 +55,9 @@ export function CalendarToolbar({
         <Button variant="outline" size="icon" aria-label={t('calendar.prev')} onClick={onPrev}>
           <ChevronLeft />
         </Button>
-        <span className="min-w-[8.5rem] text-center text-sm font-semibold">{rangeLabel(rangeStart, days)}</span>
+        <span className="min-w-[8.5rem] text-center text-sm font-semibold">
+          {view === 'hour' ? dayLabel(rangeStart) : rangeLabel(rangeStart, days)}
+        </span>
         <Button variant="outline" size="icon" aria-label={t('calendar.next')} onClick={onNext}>
           <ChevronRight />
         </Button>
@@ -59,18 +67,46 @@ export function CalendarToolbar({
         <CalendarDays /> {t('calendar.today')}
       </Button>
 
-      <Select value={String(days)} onValueChange={(val) => onDaysChange(Number(val))}>
-        <SelectTrigger aria-label="Số ngày hiển thị" className="h-8 w-[7rem]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {RANGE_OPTIONS.map((d) => (
-            <SelectItem key={d} value={String(d)}>
-              {d} ngày
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {/* Chuyển chế độ Ngày / Giờ (A3) */}
+      <div className="flex items-center rounded-md border border-border p-0.5" role="group" aria-label="Chế độ xem">
+        <button
+          type="button"
+          aria-pressed={view === 'day'}
+          onClick={() => onViewChange('day')}
+          className={cn(
+            'rounded px-2.5 py-1 text-xs font-medium transition-colors',
+            view === 'day' ? 'bg-foreground/10 text-foreground' : 'text-muted-foreground',
+          )}
+        >
+          Ngày
+        </button>
+        <button
+          type="button"
+          aria-pressed={view === 'hour'}
+          onClick={() => onViewChange('hour')}
+          className={cn(
+            'inline-flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium transition-colors',
+            view === 'hour' ? 'bg-foreground/10 text-foreground' : 'text-muted-foreground',
+          )}
+        >
+          <Clock className="size-3.5" /> Giờ
+        </button>
+      </div>
+
+      {view === 'day' && (
+        <Select value={String(days)} onValueChange={(val) => onDaysChange(Number(val))}>
+          <SelectTrigger aria-label="Số ngày hiển thị" className="h-8 w-[7rem]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {RANGE_OPTIONS.map((d) => (
+              <SelectItem key={d} value={String(d)}>
+                {d} ngày
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
       <div className="flex items-center gap-1.5">
         {CALENDAR_STATUSES.map((s) => {
