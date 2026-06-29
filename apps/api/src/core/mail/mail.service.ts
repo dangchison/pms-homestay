@@ -24,14 +24,15 @@ export class MailService {
     });
   }
 
-  /** Trả true nếu gửi thành công. KHÔNG ném (best-effort). */
-  async send(opts: { to: string; subject: string; text: string }): Promise<boolean> {
+  /** Trả true nếu gửi thành công. KHÔNG ném (best-effort). `html` tuỳ chọn (B2). */
+  async send(opts: { to: string; subject: string; text: string; html?: string }): Promise<boolean> {
     try {
       await this.transporter.sendMail({
         from: 'PMS Homestay <no-reply@pmsapp.vn>',
         to: opts.to,
         subject: opts.subject,
         text: opts.text,
+        ...(opts.html ? { html: opts.html } : {}),
       });
       return true;
     } catch (err) {

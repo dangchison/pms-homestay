@@ -26,8 +26,11 @@ const OWNER_EMAIL = `owner-${RUN}@e2e.test`;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-/** Mailpit API (dev stack) — chờ email mới nhất gửi tới `to`. */
-async function waitMailpit(to: string, timeoutMs = 4000): Promise<string> {
+/** Mailpit API (dev stack) — chờ email mới nhất gửi tới `to` (subject + text + html). */
+async function waitMailpit(
+  to: string,
+  timeoutMs = 4000,
+): Promise<{ subject: string; text: string; html: string }> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const list = (await fetch('http://localhost:8025/api/v1/messages?limit=30').then((r) => r.json())) as {
@@ -38,8 +41,9 @@ async function waitMailpit(to: string, timeoutMs = 4000): Promise<string> {
       const msg = (await fetch(`http://localhost:8025/api/v1/message/${found.ID}`).then((r) => r.json())) as {
         Subject: string;
         Text: string;
+        HTML: string;
       };
-      return `${msg.Subject}\n${msg.Text}`;
+      return { subject: msg.Subject, text: msg.Text, html: msg.HTML };
     }
     await sleep(150);
   }
@@ -113,9 +117,13 @@ describe('Notifications (task 4.4)', () => {
     expect(r1.delivered).toBe(2); // IN_APP + EMAIL cho OWNER
     expect(await channelsByEvent(eventId)).toEqual(['EMAIL', 'IN_APP']);
 
-    // Email thật tới Mailpit
+    // Email thật tới Mailpit — B2: có HTML thương hiệu + text fallback.
     const mail = await waitMailpit(OWNER_EMAIL);
-    expect(mail).toContain('Nhận thanh toán');
+    expect(mail.subject).toContain('Nhận thanh toán');
+    expect(mail.html.toLowerCase()).toContain('<!doctype html'); // email HTML
+    expect(mail.html).toContain('Nhận thanh toán'); // tiêu đề trong HTML
+    expect(mail.html).toContain('PMS Homestay'); // header thương hiệu
+    expect(mail.text).toContain('PMS Homestay'); // text fallback vẫn còn
 
     // Chạy lại cùng event → ON CONFLICT DO NOTHING → không ghi đôi
     const r2 = await notifications.processEvent(event);

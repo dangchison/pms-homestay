@@ -10,6 +10,7 @@ import { Queue } from 'bullmq';
 import { type notifications } from '@prisma/client';
 import { QUEUE_NOTIFICATIONS } from '@core/bullmq/queues';
 import { AppException } from '@core/http/exceptions/app.exception';
+import { EmailTemplateService } from '@core/mail/email-template.service';
 import { MailService } from '@core/mail/mail.service';
 import { type NotificationSink } from '@core/outbox/notification-sink';
 import { type ClaimedOutboxEvent } from '@core/outbox/outbox.service';
@@ -51,6 +52,7 @@ export class NotificationsService implements NotificationSink {
     private readonly prisma: PrismaService,
     @InjectQueue(QUEUE_NOTIFICATIONS) private readonly queue: Queue,
     private readonly mail: MailService,
+    private readonly emailTemplate: EmailTemplateService,
   ) {}
 
   /** Sink: dispatcher gọi sau khi fan-out SSE. 1 job/event, dedup jobId theo event_id. */
@@ -132,7 +134,13 @@ export class NotificationsService implements NotificationSink {
 
     // Side-effect NGOÀI tx (ADR-0002): email best-effort; SMS/ZNS stub (provider sau).
     if (t.channel === 'EMAIL' && t.email) {
-      await this.mail.send({ to: t.email, subject: t.title, text: `${t.body}\n\n— PMS Homestay` });
+      // B2: gửi kèm HTML có thương hiệu (Handlebars) + text fallback.
+      await this.mail.send({
+        to: t.email,
+        subject: t.title,
+        text: `${t.body}\n\n— PMS Homestay`,
+        html: this.emailTemplate.render({ title: t.title, body: t.body }),
+      });
     } else if (t.channel === 'SMS' || t.channel === 'ZNS') {
       this.logger.log(`[stub ${t.channel}] user=${t.userId} "${t.title}" — provider chưa cấu hình`);
     }
