@@ -20,7 +20,7 @@
 
 | # | Mục | Mô tả | Nguồn | Acceptance | Ưu tiên |
 |---|-----|-------|-------|-----------|:---:|
-| B1 | Forfeit cọc NO_SHOW + retention matrix | Sinh ADJUSTMENT khi NO_SHOW; áp đầy đủ retention matrix; night-audit per-property timezone | PROGRESS 4.6 TODO | e2e: NO_SHOW → forfeit ghi nhận đúng; retention dọn đúng kỳ | P1 |
+| B1 ✅ | Forfeit cọc NO_SHOW + retention matrix | Sinh ADJUSTMENT khi NO_SHOW; áp đầy đủ retention matrix; night-audit per-property timezone | PROGRESS 4.6 TODO | ✅ **Done** — NO_SHOW có cọc đã thu → ADJUSTMENT (SURCHARGE +cọc / DEPOSIT_APPLIED −cọc, total 0; DEPOSIT giữ PAID); no-show theo TZ TỪNG cơ sở; retention §7 đầy đủ (idempotency_keys/sync_logs/sync_jobs/notifications/payment_attempts per-tenant + outbox PROCESSED/FAILED global). e2e 4/4 | P1 |
 | B2 | Notifications nâng cấp | Template MJML/Handlebars; **SMS/ZNS provider thật** (đang stub); e2e đầu-cuối qua queue | PROGRESS 4.4 TODO | Email render template; SMS/ZNS gửi thật ở staging | P1 |
 | B3 | Audit mở rộng | Ghi LOGIN/LOGOUT/EXPORT; archive partition cũ (>12 tháng) ra S3 | PROGRESS 4.5 TODO | e2e: login ghi audit; partition cũ DETACH + upload S3 | P2 |
 | B4 | Billing SaaS hoàn chỉnh | Cổng thanh toán tự động (thay confirm thủ công); **platform-auth module** (thay `PLATFORM_ADMIN_SECRET` header) | PROGRESS 4.7 TODO | Thanh toán thuê bao tự kích hoạt ACTIVE; platform admin đăng nhập module riêng | P1 |

@@ -54,8 +54,10 @@ export class NightAuditProcessor extends WorkerHost implements OnApplicationBoot
     const anonymized = await this.dataRights.anonymizeStaleGuests(now);
     // Vòng đời partition audit_logs (8.5): tạo tháng kế + archive cũ + alert nếu thiếu.
     const partitions = await this.maintenance.runAuditPartitionMaintenance();
+    // Retention outbox_events global (B1, docs/03 §7): PROCESSED >7d + FAILED >90d.
+    const outbox = await this.maintenance.runOutboxRetention();
     this.logger.log(
-      `Night-audit xong cho ${tenants} tenant (lifecycle: suspended=${lifecycle.suspended} churned=${lifecycle.churned}; anonymized=${anonymized}; partitions: +${partitions.created}/archive ${partitions.archived.length}/missing ${partitions.missing.length})`,
+      `Night-audit xong cho ${tenants} tenant (lifecycle: suspended=${lifecycle.suspended} churned=${lifecycle.churned}; anonymized=${anonymized}; partitions: +${partitions.created}/archive ${partitions.archived.length}/missing ${partitions.missing.length}; outbox-retention: processed=${outbox.processed_deleted}/failed=${outbox.failed_deleted})`,
     );
     return { tenants };
   }

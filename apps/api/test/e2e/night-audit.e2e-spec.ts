@@ -5,6 +5,7 @@ import { Test } from '@nestjs/testing';
 import { Client } from 'pg';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { MaintenanceService } from '@modules/night-audit/maintenance.service';
 import { NightAuditService } from '@modules/night-audit/night-audit.service';
 import { AppModule } from '@/app.module';
 import { configureApp } from '@/app.setup';
@@ -109,8 +110,14 @@ describe('Night-audit (task 4.6)', () => {
   afterAll(async () => {
     if (admin) {
       const tid = `(SELECT id FROM tenants WHERE slug = '${tenantSlug}')`;
+      // notifications (FK → users) do OutboxDispatcher sinh từ booking/payment events — xoá
+      // trước users. Test set ENABLE_SCHEDULERS=false, nhưng nếu có dev API chạy (scheduler
+      // bật) nó claim outbox cross-tenant → sinh notifications (gotcha dev-server-vs-outbox).
+      await admin.query(`DELETE FROM notifications WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM outbox_events WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM daily_property_stats WHERE tenant_id IN ${tid}`);
+      await admin.query(`DELETE FROM payment_attempts WHERE tenant_id IN ${tid}`);
+      await admin.query(`DELETE FROM payments WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM invoice_items WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM invoices WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM room_occupancy WHERE tenant_id IN ${tid}`);
@@ -218,5 +225,96 @@ describe('Night-audit (task 4.6)', () => {
     // rollup upsert lại cùng giá trị (không tạo dòng mới)
     const n = (await admin.query(`SELECT count(*)::int n FROM daily_property_stats WHERE property_id = $1 AND stat_date = '2027-06-30'`, [propertyId])).rows[0].n;
     expect(n).toBe(1);
+  });
+
+  // ── B1: forfeit cọc NO_SHOW → ADJUSTMENT (cọc giữ PAID) ────────────────────
+  it('★ no-show có cọc đã thu → forfeit: NO_SHOW + ADJUSTMENT tịch thu, DEPOSIT giữ PAID', async () => {
+    // Phòng mới + gói DAILY cọc 30% (is_default=false) gán RIÊNG resE trên cùng property
+    const r4 = (
+      await request(http).post('/api/v1/rooms').set(auth()).send({ property_id: propertyId, room_number: '305' }).expect(201)
+    ).body.data.id;
+    const resE = (
+      (await request(http).get(`/api/v1/bookable-resources?property_id=${propertyId}`).set(auth()).expect(200)).body
+        .data as { id: string; room_ids: string[] }[]
+    ).find((r) => r.room_ids.includes(r4))!.id;
+    const depPlanId = (
+      await request(http)
+        .post('/api/v1/rate-plans')
+        .set(auth())
+        .send({ property_id: propertyId, name: 'DAILY-deposit', mode: 'DAILY', base_price_vnd: 500_000, effective_from: '2026-01-01', is_default: false, deposit_type: 'PERCENT', deposit_value: 3000, resource_ids: [resE] })
+        .expect(201)
+    ).body.data.id;
+
+    // book 2 đêm (1,000,000) → DEPOSIT 30% = 300,000 tự sinh; ngày nhận 20/06 < NOW 01/07
+    const ci = '2027-06-20T07:00:00.000Z';
+    const co = '2027-06-22T05:00:00.000Z';
+    const q = (
+      await request(http).post('/api/v1/pricing/quote').set(auth()).send({ resource_id: resE, rate_plan_id: depPlanId, mode: 'DAILY', check_in: ci, check_out: co }).expect(200)
+    ).body.data.quote_id;
+    const bId = (
+      await request(http)
+        .post('/api/v1/bookings')
+        .set({ ...auth(), 'Idempotency-Key': randomUUID() })
+        .send({ resource_id: resE, quote_id: q, rate_plan_id: depPlanId, mode: 'DAILY', check_in: ci, check_out: co })
+        .expect(201)
+    ).body.data.id;
+
+    type Inv = { id: string; kind: string; status: string; total_vnd: number; paid_vnd: number; balance_vnd: number; items: Array<{ item_type: string; amount_vnd: number; ref_invoice_id: string | null }> };
+    const deposit = (
+      (await request(http).get(`/api/v1/invoices?booking_id=${bId}`).set(auth()).expect(200)).body.data as Inv[]
+    ).find((i) => i.kind === 'DEPOSIT')!;
+    expect(deposit.total_vnd).toBe(300_000);
+
+    // thu đủ cọc → booking tự CONFIRMED
+    await request(http).post('/api/v1/payments').set({ ...auth(), 'Idempotency-Key': randomUUID() }).send({ invoice_id: deposit.id, amount_vnd: 300_000, method: 'CASH' }).expect(201);
+    expect((await statusOf(bId)).status).toBe('CONFIRMED');
+
+    // night-audit → NO_SHOW + forfeit
+    const summary = await nightAudit().runForTenant(tenantId, NOW);
+    expect(summary.deposits_forfeited).toBeGreaterThanOrEqual(1);
+    expect((await statusOf(bId)).status).toBe('NO_SHOW');
+
+    const after = (await request(http).get(`/api/v1/invoices?booking_id=${bId}`).set(auth()).expect(200)).body.data as Inv[];
+    const dep2 = after.find((i) => i.kind === 'DEPOSIT')!;
+    expect(dep2.status).toBe('PAID'); // cọc GIỮ PAID, không refund
+    expect(dep2.paid_vnd).toBe(300_000);
+
+    const adj = after.find((i) => i.kind === 'ADJUSTMENT')!;
+    expect(adj).toBeTruthy();
+    expect(adj.total_vnd).toBe(0); // SURCHARGE +300k + DEPOSIT_APPLIED −300k
+    expect(adj.balance_vnd).toBe(0);
+    expect(adj.items.some((it) => it.item_type === 'SURCHARGE' && it.amount_vnd === 300_000)).toBe(true);
+    expect(adj.items.some((it) => it.item_type === 'DEPOSIT_APPLIED' && it.amount_vnd === -300_000 && it.ref_invoice_id === dep2.id)).toBe(true);
+
+    // idempotent: chạy lại không sinh ADJUSTMENT thứ 2
+    await nightAudit().runForTenant(tenantId, NOW);
+    const adjCount = (after2: Inv[]) => after2.filter((i) => i.kind === 'ADJUSTMENT').length;
+    const after3 = (await request(http).get(`/api/v1/invoices?booking_id=${bId}`).set(auth()).expect(200)).body.data as Inv[];
+    expect(adjCount(after3)).toBe(1);
+  });
+
+  // ── B1: retention matrix (docs/03 §7) ──────────────────────────────────────
+  it('retention dọn đúng kỳ: idempotency_keys hết hạn (per-tenant) + outbox PROCESSED cũ (global)', async () => {
+    const idemKey = `retention-${RUN}`;
+    await admin.query(
+      `INSERT INTO idempotency_keys (tenant_id, key, request_path, request_hash, expires_at) VALUES ($1, $2, '/t', 'h', '2027-06-01T00:00:00Z')`,
+      [tenantId, idemKey],
+    );
+    // runOutboxRetention dùng now() của DB (đồng hồ thật), KHÔNG phải NOW cố định của
+    // test → seed created_at lùi 30 ngày so với now() thật để chắc chắn > ngưỡng 7 ngày.
+    await admin.query(
+      `INSERT INTO outbox_events (tenant_id, event_type, aggregate_type, aggregate_id, payload, status, created_at) VALUES ($1, 'booking.no_show', 'booking', $2, '{}'::jsonb, 'PROCESSED', now() - interval '30 days')`,
+      [tenantId, randomUUID()],
+    );
+
+    // per-tenant: cleanupRetention trong runForTenant xoá idempotency_key hết hạn
+    const summary = await nightAudit().runForTenant(tenantId, NOW);
+    expect(summary.retention_deleted).toBeGreaterThanOrEqual(1);
+    const idemLeft = (await admin.query(`SELECT count(*)::int n FROM idempotency_keys WHERE tenant_id = $1 AND key = $2`, [tenantId, idemKey])).rows[0].n;
+    expect(idemLeft).toBe(0);
+
+    // global: runOutboxRetention xoá PROCESSED > 7 ngày (cross-tenant)
+    const outbox = await app.get(MaintenanceService).runOutboxRetention();
+    expect(outbox.processed_deleted).toBeGreaterThanOrEqual(1);
   });
 });

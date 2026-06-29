@@ -251,6 +251,76 @@ export class InvoicesService {
     });
   }
 
+  /**
+   * ★ Forfeit cọc khi NO_SHOW (docs/09 §4 — "DEPOSIT giữ PAID, ghi nhận doanh thu
+   * hủy qua ADJUSTMENT note"). Gọi TRONG tx night-audit lúc booking → NO_SHOW.
+   * Nếu DEPOSIT invoice đã thu (paid_vnd > 0): sinh ADJUSTMENT ISSUED 2 dòng —
+   * SURCHARGE (+phần đã thu = doanh thu tịch thu) + DEPOSIT_APPLIED (−phần đó, ref →
+   * DEPOSIT) → total/balance = 0 (cọc giữ lại là tiền thực thu, KHÔNG thu thêm).
+   * DEPOSIT invoice GIỮ NGUYÊN PAID. Idempotent: đã có dòng cấn cọc này → bỏ qua
+   * (NO_SHOW không có STAY nên DEPOSIT_APPLIED ref cọc chỉ đến từ forfeit trước).
+   * Trả số tiền forfeit (0 = không có cọc đã thu → không sinh gì).
+   */
+  async forfeitDepositForBooking(
+    tx: Tx,
+    booking: { id: string; tenant_id: string; booking_code: string },
+  ): Promise<number> {
+    const deposit = await tx.invoices.findFirst({
+      where: { booking_id: booking.id, kind: 'DEPOSIT', status: { not: 'VOID' } },
+      select: { id: true, paid_vnd: true },
+    });
+    const forfeitedVnd = deposit ? Number(deposit.paid_vnd) : 0;
+    if (!deposit || forfeitedVnd <= 0) return 0;
+
+    const already = await tx.invoice_items.findFirst({
+      where: { tenant_id: booking.tenant_id, ref_invoice_id: deposit.id, item_type: 'DEPOSIT_APPLIED' },
+      select: { id: true },
+    });
+    if (already) return 0;
+
+    const number = await this.counters.nextCode(tx, booking.tenant_id, 'INV', periodOf(new Date()));
+    const inv = await tx.invoices.create({
+      data: {
+        tenant_id: booking.tenant_id,
+        booking_id: booking.id,
+        kind: 'ADJUSTMENT',
+        invoice_number: number,
+        status: 'DRAFT',
+      },
+      select: { id: true },
+    });
+    await tx.invoice_items.create({
+      data: {
+        tenant_id: booking.tenant_id,
+        invoice_id: inv.id,
+        item_type: 'SURCHARGE',
+        description: `Phí no-show — tịch thu cọc booking ${booking.booking_code}`,
+        quantity: 1,
+        unit_price_vnd: forfeitedVnd,
+        amount_vnd: forfeitedVnd,
+        display_order: 0,
+      },
+    });
+    await tx.invoice_items.create({
+      data: {
+        tenant_id: booking.tenant_id,
+        invoice_id: inv.id,
+        item_type: 'DEPOSIT_APPLIED',
+        description: 'Cấn cọc đã thu (giữ lại do no-show)',
+        quantity: 1,
+        unit_price_vnd: -forfeitedVnd,
+        amount_vnd: -forfeitedVnd,
+        ref_invoice_id: deposit.id,
+        display_order: 1,
+      },
+    });
+    await tx.invoices.update({
+      where: { id: inv.id },
+      data: { status: 'ISSUED', issued_at: new Date(), version: { increment: 1 } },
+    });
+    return forfeitedVnd;
+  }
+
   // ── Public REST ─────────────────────────────────────────────────────────
 
   /** POST /invoices — ad-hoc/ADJUSTMENT (docs/09 §4.4). issue=true → phát hành ngay. */

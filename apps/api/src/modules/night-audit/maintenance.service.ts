@@ -10,6 +10,11 @@ export interface AuditPartitionMaintenanceResult {
   missing: string[];
 }
 
+export interface OutboxRetentionResult {
+  processed_deleted: number;
+  failed_deleted: number;
+}
+
 /**
  * Bảo trì vòng đời dữ liệu (task 8.5). Gọi các SQL function SECURITY DEFINER (0026)
  * — chạy NGOÀI ngữ cảnh tenant (cross-tenant, DDL với quyền owner). Night-audit
@@ -54,5 +59,22 @@ export class MaintenanceService {
       );
     }
     return result;
+  }
+
+  /**
+   * Retention outbox_events (docs/03 §7) — bảng GLOBAL no-RLS (cross-tenant như
+   * audit partition): xoá PROCESSED > 7 ngày + FAILED > 90 ngày (sau khi alert đã
+   * xử lý). `$executeRaw` (miễn tenancy lint, không cần ngữ cảnh tenant). Night-audit
+   * gọi mỗi đêm. Các bảng RLS per-tenant dọn ở NightAuditService.cleanupRetention.
+   */
+  async runOutboxRetention(): Promise<OutboxRetentionResult> {
+    const processed = await this.prisma.$executeRaw`
+      DELETE FROM outbox_events WHERE status = 'PROCESSED' AND created_at < now() - interval '7 days'`;
+    const failed = await this.prisma.$executeRaw`
+      DELETE FROM outbox_events WHERE status = 'FAILED' AND created_at < now() - interval '90 days'`;
+    if (processed > 0 || failed > 0) {
+      this.logger.log(`Retention outbox_events: PROCESSED=${processed}, FAILED=${failed} đã xoá`);
+    }
+    return { processed_deleted: processed, failed_deleted: failed };
   }
 }
