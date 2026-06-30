@@ -66,6 +66,18 @@ export const GuestIdDocumentResponseSchema = z.object({
 });
 export type GuestIdDocumentResponse = z.infer<typeof GuestIdDocumentResponseSchema>;
 
+/**
+ * Tín hiệu danh tính TOÀN CỤC của khách (Phase 3, docs/16 — tầng `persons`). CHỈ
+ * nhận diện, KHÔNG lộ PII cross-tenant: chủ hiện tại biết khách quen / bị blacklist
+ * ở nơi khác mà KHÔNG thấy dữ liệu/booking/lý-do của chủ khác.
+ */
+export const GuestPlatformSummaryResponseSchema = z.object({
+  linked: z.boolean(), // guest đã gắn person (có số giấy tờ) chưa
+  is_returning_guest: z.boolean(), // person xuất hiện ở ≥2 tenant (đã ở chủ khác)
+  blacklisted_elsewhere: z.boolean(), // bị blacklist ở tenant khác (không phải chủ hiện tại)
+});
+export type GuestPlatformSummaryResponse = z.infer<typeof GuestPlatformSummaryResponseSchema>;
+
 /** OCR CCCD (task 7.1, docs/12 §3) — pre-sign upload ảnh lên storage tier VN. */
 export const IdScanPresignRequestSchema = z.object({
   side: z.enum(['front', 'back']),

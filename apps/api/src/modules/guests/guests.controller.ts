@@ -74,6 +74,13 @@ export class GuestsController {
     return { data: await this.guests.getFullIdDocument(id, user) };
   }
 
+  /** Tín hiệu danh tính toàn cục (docs/16) — khách quen / blacklist nơi khác; KHÔNG lộ PII. */
+  @Get(':id/platform-summary')
+  @RequirePermissions('booking.read')
+  async platformSummary(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtClaims) {
+    return { data: await this.guests.getPlatformSummary(id, user) };
+  }
+
   @Patch(':id')
   @RequirePermissions('booking.create')
   async update(

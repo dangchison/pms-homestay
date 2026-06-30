@@ -297,6 +297,7 @@ export class DataRightsService {
       data.id_document_number_hash = null;
       data.id_document_last4 = null;
       data.legal_hold_until = null;
+      data.person_id = null; // xoá giấy tờ → gỡ liên kết danh tính toàn cục (docs/16)
       if (g.id_document_scan_url) {
         scanKey = g.id_document_scan_url;
         data.id_document_scan_url = null;
@@ -305,6 +306,11 @@ export class DataRightsService {
       data.legal_hold_until = holdUntil; // @db.Date — Prisma nhận Date
     }
     await tx.guests.update({ where: { id: g.id }, data });
+    // Guest ẩn danh rớt khỏi tenant_link_count (recompute lọc anonymized_at IS NULL) (docs/16).
+    // $executeRaw (không $queryRaw) — function trả void.
+    if (g.person_id) {
+      await tx.$executeRaw`SELECT recompute_person_counters(${g.person_id}::uuid)`;
+    }
     return scanKey;
   }
 
