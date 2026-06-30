@@ -195,7 +195,7 @@ Có plan thăm dò chuyển separate-schema (`plans/multi-tenancy-schema-per-ten
 **Nhược (kèm giảm thiểu hiện tại):**
 | Nhược điểm | Giảm thiểu |
 |---|---|
-| Noisy neighbor (chung pool/CPU/IO) | Tune `connection_limit`/pgbouncer + giám sát query-cost theo tenant (xem [docs/18 P2-D](18-phase2-backlog.md)) |
+| Noisy neighbor (chung pool/CPU/IO) | `connection_limit`/`pool_timeout` trong `DATABASE_URL` + PgBouncer transaction-mode (ADR-0002 §4); giám sát cost theo tenant qua `DB_SLOW_TX_LOG_MS` → log `slow_tenant_tx`. Vận hành: [docs/17 §9](17-oncall-runbook.md) (D2 ✅) |
 | Migration áp mọi tenant cùng lúc (blast radius) | Bắt buộc migration backward-compatible + staging drill |
 | Backup/restore per-tenant thủ công | Export client-side theo `tenant_id` (§7); chấp nhận cho quy mô hiện tại |
 | `tenant_id` lặp ở mọi bảng | Chi phí lưu trữ nhỏ; đánh đổi để có RLS |
