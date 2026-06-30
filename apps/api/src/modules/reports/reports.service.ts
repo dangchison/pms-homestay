@@ -4,6 +4,9 @@ import {
   type BreakEvenResponse,
   type BreakEvenScenario,
   type JwtClaims,
+  type LandlordSettlementModel,
+  type LandlordStatementQuery,
+  type LandlordStatementResponse,
   type OccupancyDay,
   type OccupancyReportQuery,
   type OccupancyReportResponse,
@@ -48,6 +51,37 @@ function ymd(d: Date): string {
 }
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
+}
+/**
+ * Prorate thuê tháng theo ngày overlap TỪNG tháng trong [from,to] (inclusive) —
+ * landlord statement FIXED_RENT (docs/16 #14). Nguyên 1 tháng = nguyên tiền thuê;
+ * nửa tháng = 1/2; kỳ nhiều tháng = cộng dồn theo số ngày mỗi tháng.
+ */
+function proratedMonthlyRent(monthlyRentVnd: number, from: string, to: string): number {
+  const DAY = 86_400_000;
+  const start = new Date(`${from}T00:00:00Z`);
+  const end = new Date(`${to}T00:00:00Z`);
+  let total = 0;
+  let y = start.getUTCFullYear();
+  let m = start.getUTCMonth();
+  for (;;) {
+    const monthStart = new Date(Date.UTC(y, m, 1));
+    const monthEnd = new Date(Date.UTC(y, m + 1, 0)); // ngày cuối tháng
+    const daysInMonth = monthEnd.getUTCDate();
+    const ovStart = monthStart > start ? monthStart : start;
+    const ovEnd = monthEnd < end ? monthEnd : end;
+    if (ovStart <= ovEnd) {
+      const overlapDays = Math.round((ovEnd.getTime() - ovStart.getTime()) / DAY) + 1; // inclusive
+      total += (monthlyRentVnd * overlapDays) / daysInMonth;
+    }
+    if (y === end.getUTCFullYear() && m === end.getUTCMonth()) break;
+    m += 1;
+    if (m > 11) {
+      m = 0;
+      y += 1;
+    }
+  }
+  return Math.round(total);
 }
 
 @Injectable()
@@ -252,6 +286,96 @@ export class ReportsService {
       },
       { readOnly: true },
     );
+  }
+
+  /**
+   * Landlord statement (R2R, docs/16 #14) — báo cáo kỳ cho CHỦ NHÀ GỐC. Tái dùng
+   * doanh thu/chi phí của getPnl; chọn mô hình thanh toán theo cấu hình property.
+   * Thứ tự lỗi: 404 (không tồn tại / cross-tenant) → 403 (thiếu quyền) → 422 (không R2R).
+   */
+  async getLandlordStatement(
+    query: LandlordStatementQuery,
+    user: JwtClaims,
+  ): Promise<LandlordStatementResponse> {
+    const prop = await withTenant(
+      this.prisma,
+      user.tnt,
+      (tx) =>
+        tx.properties.findFirst({
+          where: { id: query.property_id },
+          select: {
+            name: true,
+            is_rent_to_rent: true,
+            landlord_name: true,
+            landlord_phone: true,
+            rent_to_rent_contract_start: true,
+            rent_to_rent_contract_end: true,
+            monthly_landlord_rent_vnd: true,
+            landlord_revenue_share_bp: true,
+          },
+        }),
+      { readOnly: true },
+    );
+    if (!prop) {
+      throw new AppException({ code: 'PROPERTY_NOT_FOUND', title: 'Cơ sở không tồn tại', status: 404 });
+    }
+    await this.permissionService.authorizeOnProperty(user, query.property_id, 'report.financial');
+    if (!prop.is_rent_to_rent) {
+      throw new AppException({
+        code: 'NOT_RENT_TO_RENT',
+        title: 'Cơ sở không phải rent-to-rent',
+        detail: 'Báo cáo chủ nhà gốc chỉ áp dụng cho cơ sở thuê-lại (is_rent_to_rent = true).',
+        status: 422,
+      });
+    }
+
+    // Doanh thu + chi phí kỳ (getPnl authorize lại — rẻ, permission cache).
+    const pnl = await this.getPnl(query, user);
+
+    // Mô hình thanh toán: ưu tiên chia % doanh thu, kế đến thuê cố định, else chưa cấu hình.
+    const shareBp = prop.landlord_revenue_share_bp;
+    const monthlyRent =
+      prop.monthly_landlord_rent_vnd == null ? null : Number(prop.monthly_landlord_rent_vnd);
+    let settlementModel: LandlordSettlementModel;
+    let payout: number;
+    if (shareBp != null) {
+      settlementModel = 'REVENUE_SHARE';
+      payout = Math.round((pnl.revenue_total_vnd * shareBp) / 10_000);
+    } else if (monthlyRent != null) {
+      settlementModel = 'FIXED_RENT';
+      payout = proratedMonthlyRent(monthlyRent, query.from, query.to);
+    } else {
+      settlementModel = 'NONE';
+      payout = 0;
+    }
+
+    // Chi phí vận hành chưa gồm tiền thuê chủ nhà (tránh trùng với landlord_payout).
+    const rentLandlordExpense = pnl.expense_by_type.RENT_LANDLORD ?? 0;
+    const operatingCost = pnl.direct_cost_vnd + pnl.operating_cost_vnd - rentLandlordExpense;
+
+    return {
+      property_id: query.property_id,
+      property_name: prop.name,
+      from: query.from,
+      to: query.to,
+      landlord_name: prop.landlord_name,
+      landlord_phone: prop.landlord_phone,
+      contract_start: prop.rent_to_rent_contract_start
+        ? ymd(prop.rent_to_rent_contract_start)
+        : null,
+      contract_end: prop.rent_to_rent_contract_end ? ymd(prop.rent_to_rent_contract_end) : null,
+      revenue_room_vnd: pnl.revenue_room_vnd,
+      revenue_other_vnd: pnl.revenue_other_vnd,
+      revenue_total_vnd: pnl.revenue_total_vnd,
+      operating_cost_vnd: operatingCost,
+      settlement_model: settlementModel,
+      revenue_share_bp: settlementModel === 'REVENUE_SHARE' ? shareBp : null,
+      monthly_landlord_rent_vnd: settlementModel === 'FIXED_RENT' ? monthlyRent : null,
+      landlord_payout_vnd: payout,
+      available_room_nights: pnl.available_room_nights,
+      occupied_room_nights: pnl.occupied_room_nights,
+      occupancy_rate_pct: pnl.occupancy_rate_pct,
+    } satisfies LandlordStatementResponse;
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

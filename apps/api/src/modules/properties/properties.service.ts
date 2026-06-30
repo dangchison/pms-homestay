@@ -38,6 +38,7 @@ function toPropertyResponse(p: properties): PropertyResponse {
     rent_to_rent_contract_end: toDateOnly(p.rent_to_rent_contract_end),
     monthly_landlord_rent_vnd:
       p.monthly_landlord_rent_vnd == null ? null : Number(p.monthly_landlord_rent_vnd),
+    landlord_revenue_share_bp: p.landlord_revenue_share_bp,
     police_business_code: p.police_business_code,
     metadata: p.metadata as Record<string, unknown>,
     created_at: p.created_at.toISOString(),
@@ -176,6 +177,7 @@ export class PropertiesService {
         : undefined,
       monthly_landlord_rent_vnd:
         dto.monthly_landlord_rent_vnd == null ? undefined : BigInt(dto.monthly_landlord_rent_vnd),
+      landlord_revenue_share_bp: dto.landlord_revenue_share_bp,
       police_business_code: dto.police_business_code,
       ...(dto.metadata !== undefined ? { metadata: dto.metadata as Prisma.InputJsonValue } : {}),
     };
@@ -203,6 +205,7 @@ export class PropertiesService {
         : undefined,
       monthly_landlord_rent_vnd:
         dto.monthly_landlord_rent_vnd == null ? undefined : BigInt(dto.monthly_landlord_rent_vnd),
+      landlord_revenue_share_bp: dto.landlord_revenue_share_bp,
       police_business_code: dto.police_business_code,
       ...(dto.metadata !== undefined ? { metadata: dto.metadata as Prisma.InputJsonValue } : {}),
     };

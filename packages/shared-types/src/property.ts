@@ -24,6 +24,9 @@ const propertyFields = {
   rent_to_rent_contract_start: z.iso.date().optional(),
   rent_to_rent_contract_end: z.iso.date().optional(),
   monthly_landlord_rent_vnd: z.number().int().nonnegative().optional(),
+  // R2R chia % doanh thu (basis points, 10000=100%); set → ưu tiên mô hình share,
+  // bỏ trống = dùng monthly_landlord_rent_vnd (thuê cố định). docs/16 #14.
+  landlord_revenue_share_bp: z.number().int().min(0).max(10000).optional(),
   police_business_code: z.string().max(50).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 } as const;
@@ -53,6 +56,7 @@ export const PropertyResponseSchema = z.object({
   rent_to_rent_contract_start: z.string().nullable(),
   rent_to_rent_contract_end: z.string().nullable(),
   monthly_landlord_rent_vnd: z.number().nullable(),
+  landlord_revenue_share_bp: z.number().nullable(),
   police_business_code: z.string().nullable(),
   metadata: z.record(z.string(), z.unknown()),
   created_at: z.iso.datetime(),

@@ -4,7 +4,12 @@ import { type Response } from 'express';
 import { AuditExport } from '@core/http/decorators/audit-export.decorator';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
-import { BreakEvenQueryDto, OccupancyReportQueryDto, PnlQueryDto } from './dto';
+import {
+  BreakEvenQueryDto,
+  LandlordStatementQueryDto,
+  OccupancyReportQueryDto,
+  PnlQueryDto,
+} from './dto';
 import { ReportsService } from './reports.service';
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -34,6 +39,16 @@ export class ReportsController {
   @RequirePermissions('report.financial')
   async occupancy(@Query() query: OccupancyReportQueryDto, @CurrentUser() user: JwtClaims) {
     return { data: await this.reports.getOccupancy(query, user) };
+  }
+
+  /** Landlord statement (R2R) — báo cáo kỳ cho chủ nhà gốc (docs/16 #14). */
+  @Get('landlord-statement')
+  @RequirePermissions('report.financial')
+  async landlordStatement(
+    @Query() query: LandlordStatementQueryDto,
+    @CurrentUser() user: JwtClaims,
+  ) {
+    return { data: await this.reports.getLandlordStatement(query, user) };
   }
 
   /** Xuất Excel (P&L + lấp đầy theo ngày) cho [from,to] — binary qua `@Res`. */
