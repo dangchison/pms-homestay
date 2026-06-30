@@ -9,7 +9,9 @@
     "start": "next start --port 3002",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"@pms/web-staff: no tests yet\""
+    "test": "echo \"@pms/web-staff: no unit tests (xem test:e2e)\"",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.0",
@@ -26,6 +28,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@pms/eslint-config": "workspace:*",
     "@pms/tsconfig": "workspace:*",
     "@tailwindcss/postcss": "^4.0.0",
