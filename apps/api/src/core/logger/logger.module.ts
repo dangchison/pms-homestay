@@ -1,7 +1,51 @@
 import { randomUUID } from 'node:crypto';
-import { Module } from '@nestjs/common';
-import { LoggerModule } from 'nestjs-pino';
+import {
+  Inject,
+  Injectable,
+  Module,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from '@nestjs/common';
+import { InjectPinoLogger, LoggerModule, PinoLogger } from 'nestjs-pino';
 import { ENV, type Env } from '../config/env.schema';
+import { setTenantTxObserver } from '../observability/tenant-tx-metrics';
+
+/**
+ * Quan trắc cost theo tenant (docs/18 D2): đăng ký observer cho `withTenant` để log
+ * unit-of-work chậm kèm `tenant_id` (soi noisy-neighbor). CHỈ đăng ký khi
+ * `DB_SLOW_TX_LOG_MS > 0` → tắt thì không có observer (with-tenant no-op). Dùng pino
+ * logger đã cấu hình (cùng định dạng/level) — log `evt:'slow_tenant_tx'` để dashboard
+ * gom theo tenant.
+ */
+@Injectable()
+class TenantTxLogRegistrar implements OnModuleInit, OnModuleDestroy {
+  constructor(
+    @InjectPinoLogger(TenantTxLogRegistrar.name) private readonly logger: PinoLogger,
+    @Inject(ENV) private readonly env: Env,
+  ) {}
+
+  onModuleInit(): void {
+    const thresholdMs = this.env.DB_SLOW_TX_LOG_MS;
+    if (thresholdMs <= 0) return;
+    setTenantTxObserver(({ tenantId, durationMs, readOnly }) => {
+      if (durationMs < thresholdMs) return;
+      this.logger.warn(
+        {
+          evt: 'slow_tenant_tx',
+          tenant_id: tenantId,
+          duration_ms: durationMs,
+          read_only: readOnly,
+          threshold_ms: thresholdMs,
+        },
+        'unit-of-work tenant chậm (noisy-neighbor watch, docs/18 D2)',
+      );
+    });
+  }
+
+  onModuleDestroy(): void {
+    setTenantTxObserver(undefined);
+  }
+}
 
 /**
  * Pino structured logging + redact PII (docs/11 §2).
@@ -53,6 +97,7 @@ import { ENV, type Env } from '../config/env.schema';
       }),
     }),
   ],
+  providers: [TenantTxLogRegistrar],
   exports: [LoggerModule],
 })
 export class AppLoggerModule {}

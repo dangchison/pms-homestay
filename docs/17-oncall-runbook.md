@@ -265,12 +265,43 @@ login, KHÔNG chặn register/enroll).
 
 ---
 
+## 9. 🟡 Connection pool & noisy-neighbor (cost theo tenant)
+
+Shared-DB + RLS → các tenant **dùng chung pool/CPU/IO** (docs/02 §11). Một tenant chạy
+truy vấn nặng/nhiều có thể cạn pool, ảnh hưởng tenant khác.
+
+**Giới hạn pool (D2).** Mỗi instance API mở pool riêng theo `connection_limit` trong
+`DATABASE_URL` (vd `?connection_limit=10&pool_timeout=10`). Quy tắc: **(số instance ×
+connection_limit) < `max_connections` Postgres** (trừ phần superuser + migration). Cạn
+pool → request chờ tới `pool_timeout`s rồi lỗi; thủ phạm hay gặp là tx giữ connection
+lâu (CẤM I/O ngoài trong `withTenant` — ADR-0002 amendment).
+
+- PROD nên đặt **PgBouncer transaction-mode** trước Postgres (RLS an toàn vì GUC
+  `app.current_tenant_id` set LOCAL/transaction-scoped — ADR-0002 §4); Prisma trỏ
+  PgBouncer + `?pgbouncer=true` (tắt prepared statement), `connection_limit` nhỏ.
+- Kiểm tra bão hoà connection (cluster-level):
+  ```sql
+  SELECT state, wait_event_type, count(*) FROM pg_stat_activity
+  WHERE datname = 'pms' GROUP BY 1, 2 ORDER BY 3 DESC;
+  SHOW max_connections;
+  ```
+
+**Soi cost theo tenant (noisy-neighbor).** Bật `DB_SLOW_TX_LOG_MS=<ms>` (vd 1000; 0 =
+tắt) → mỗi unit-of-work `withTenant` vượt ngưỡng ghi log
+`{evt:'slow_tenant_tx', tenant_id, duration_ms, read_only, request_id, url}`. Dashboard/
+alert gom theo `tenant_id` (đếm + p95 `duration_ms`) → khoanh vùng tenant gây tải, đối
+chiếu `url` tìm truy vấn nặng. Đặt ngưỡng đủ cao ở prod để chỉ bắt tx bất thường (tránh
+nhiễu log). _(Visual dashboard dựng trên log pipeline = bước ops, như Sentry — §C1 docs/18.)_
+
+---
+
 ## Phụ lục — biến môi trường hay liên quan sự cố
 
 | Biến | Vai trò khi sự cố |
 |---|---|
 | `ENABLE_SCHEDULERS` | Bật cron/worker (outbox, night-audit, đối soát, iCal, notification). Tắt → các job "không chạy". |
-| `DATABASE_URL` / `DATABASE_URL_MIGRATIONS` | app_user (RLS) / postgres (superuser, admin ops). |
+| `DATABASE_URL` / `DATABASE_URL_MIGRATIONS` | app_user (RLS) / postgres (superuser, admin ops). `connection_limit`/`pool_timeout` giới hạn pool (§9). |
+| `DB_SLOW_TX_LOG_MS` | >0 → log `slow_tenant_tx` (cost theo tenant, §9). 0 = tắt. |
 | `PAYMENT_WEBHOOK_SECRET` | Thiếu → webhook đối soát trả 503 (§5). |
 | `ENFORCE_2FA_FOR_PRIVILEGED_ROLES` | Chặn login OWNER/ACCOUNTANT chưa 2FA (§8). |
 | `PLATFORM_ADMIN_SECRET` | Thiếu → xác nhận thanh toán thuê bao nền tảng trả 503. |

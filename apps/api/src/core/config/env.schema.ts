@@ -12,6 +12,14 @@ export const envSchema = z.object({
   API_PORT: z.coerce.number().int().positive().default(3001),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
+  /**
+   * Ngưỡng (ms) để log unit-of-work `withTenant` chậm kèm `tenant_id` → soi
+   * noisy-neighbor (docs/18 D2, docs/02 §11). 0 = TẮT (mặc định — không đăng ký
+   * observer, zero overhead). Bật ở staging/prod khi điều tra cost theo tenant
+   * (vd 1000) → log `evt:'slow_tenant_tx'` cho dashboard gom theo tenant.
+   */
+  DB_SLOW_TX_LOG_MS: z.coerce.number().int().nonnegative().default(0),
+
   /** Connection runtime — app_user (non-superuser, chịu RLS) */
   DATABASE_URL: z.url(),
   /** Connection cho migration tooling — owner; API runtime không dùng */

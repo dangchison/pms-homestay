@@ -1,5 +1,6 @@
 import { type Prisma, type PrismaClient } from '@prisma/client';
 import { softDeleteExtension } from '@core/prisma/soft-delete.extension';
+import { reportTenantTx } from '@core/observability/tenant-tx-metrics';
 import { tenantContextStorage } from './tenant-cls';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -48,17 +49,25 @@ export async function withTenant<T>(
     throw new Error(`withTenant: tenantId không phải UUID hợp lệ: "${tenantId}"`);
   }
 
-  return withSoftDelete(prisma).$transaction(
-    async (tx) => {
-      await tx.$executeRawUnsafe(
-        `SELECT set_config('app.current_tenant_id', $1, true)`,
-        tenantId,
-      );
-      if (opts?.readOnly) {
-        await tx.$executeRawUnsafe(`SET TRANSACTION READ ONLY`);
-      }
-      return tenantContextStorage.run({ tenantId, tx }, () => fn(tx));
-    },
-    { maxWait: 2_000, timeout: 10_000 },
-  );
+  // Đo thời lượng unit-of-work → quan trắc cost theo tenant (docs/18 D2). finally
+  // chạy cả khi tx ném lỗi (tx chậm rồi fail vẫn đáng ghi nhận). reportTenantTx
+  // no-op khi chưa bật DB_SLOW_TX_LOG_MS — không thêm chi phí ngoài 2 lần Date.now().
+  const startedAt = Date.now();
+  try {
+    return await withSoftDelete(prisma).$transaction(
+      async (tx) => {
+        await tx.$executeRawUnsafe(
+          `SELECT set_config('app.current_tenant_id', $1, true)`,
+          tenantId,
+        );
+        if (opts?.readOnly) {
+          await tx.$executeRawUnsafe(`SET TRANSACTION READ ONLY`);
+        }
+        return tenantContextStorage.run({ tenantId, tx }, () => fn(tx));
+      },
+      { maxWait: 2_000, timeout: 10_000 },
+    );
+  } finally {
+    reportTenantTx({ tenantId, durationMs: Date.now() - startedAt, readOnly: opts?.readOnly ?? false });
+  }
 }
