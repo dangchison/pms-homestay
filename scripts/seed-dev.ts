@@ -165,6 +165,10 @@ async function seedDemoData(
     `DELETE FROM booking_status_history WHERE tenant_id = $1`,
     `DELETE FROM bookings WHERE tenant_id = $1`,
     `DELETE FROM room_blocks WHERE tenant_id = $1`,
+    // quotes do API (pricing-engine) tạo lúc đặt phòng, KHÔNG do seed sinh — nhưng có
+    // FK tới rate_plans + bookable_resources → phải xoá TRƯỚC chúng, nếu không reseed
+    // trên DB đã dùng sẽ vỡ FK quotes_*_rate_plan_id_fkey (bug re-run trước đây).
+    `DELETE FROM quotes WHERE tenant_id = $1`,
     `DELETE FROM rate_plan_resources WHERE tenant_id = $1`,
     `DELETE FROM rate_plan_rules WHERE tenant_id = $1`,
     `DELETE FROM rate_plans WHERE tenant_id = $1`,
