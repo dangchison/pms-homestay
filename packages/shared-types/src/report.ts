@@ -100,3 +100,49 @@ export const OccupancyReportResponseSchema = z.object({
   days: z.array(OccupancyDaySchema),
 });
 export type OccupancyReportResponse = z.infer<typeof OccupancyReportResponseSchema>;
+
+/**
+ * Landlord statement (R2R) — báo cáo kỳ cho CHỦ NHÀ GỐC của cơ sở rent-to-rent
+ * (docs/16 #14). Query giống P&L (cơ sở + khoảng ngày); chỉ cơ sở `is_rent_to_rent`.
+ */
+export const LandlordStatementQuerySchema = z
+  .object({
+    property_id: z.uuid(),
+    from: z.iso.date(),
+    to: z.iso.date(),
+  })
+  .refine((d) => d.from <= d.to, { message: 'from phải ≤ to', path: ['from'] });
+export type LandlordStatementQuery = z.infer<typeof LandlordStatementQuerySchema>;
+
+/** Mô hình thanh toán cho chủ nhà gốc: chia % doanh thu · thuê cố định · chưa cấu hình. */
+export const LandlordSettlementModelSchema = z.enum(['REVENUE_SHARE', 'FIXED_RENT', 'NONE']);
+export type LandlordSettlementModel = z.infer<typeof LandlordSettlementModelSchema>;
+
+export const LandlordStatementResponseSchema = z.object({
+  property_id: z.uuid(),
+  property_name: z.string(),
+  from: z.string(),
+  to: z.string(),
+  // Chủ nhà gốc + hợp đồng (từ properties)
+  landlord_name: z.string().nullable(),
+  landlord_phone: z.string().nullable(),
+  contract_start: z.string().nullable(),
+  contract_end: z.string().nullable(),
+  // Doanh thu kỳ (rollup + live hôm nay, như P&L)
+  revenue_room_vnd: MoneyVndSchema,
+  revenue_other_vnd: MoneyVndSchema,
+  revenue_total_vnd: MoneyVndSchema,
+  // Chi phí vận hành kỳ — KHÔNG gồm RENT_LANDLORD (tránh trùng tiền thuê trả chủ nhà)
+  operating_cost_vnd: MoneyVndSchema,
+  // Mô hình + tham số hợp đồng
+  settlement_model: LandlordSettlementModelSchema,
+  revenue_share_bp: z.number().int().nullable(), // set khi REVENUE_SHARE
+  monthly_landlord_rent_vnd: z.number().int().nullable(), // set khi FIXED_RENT
+  // Tiền chủ nhà gốc nhận trong kỳ (share % doanh thu HOẶC thuê prorate theo ngày)
+  landlord_payout_vnd: MoneyVndSchema,
+  // Bối cảnh occupancy
+  available_room_nights: z.number().int(),
+  occupied_room_nights: z.number().int(),
+  occupancy_rate_pct: z.number(),
+});
+export type LandlordStatementResponse = z.infer<typeof LandlordStatementResponseSchema>;

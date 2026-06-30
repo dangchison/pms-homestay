@@ -323,6 +323,24 @@ README mỗi app/package; OpenAPI export commit; runbook on-call (restore, recla
 
 ---
 
+## EPIC 9 — Phase 3 / Product roadmap (docs/16)
+
+> Sau MVP (EPIC 1–8) + Phase 2 (docs/18). Mỗi tính năng từ [`16`](16-product-roadmap.md) khi quyết định làm → thêm task ở đây (docs/16 §4). Một task = một PR.
+
+### TASK 9.1 — Landlord statement (R2R) [docs/16 #14, Wave 1]
+Báo cáo kỳ cho **chủ nhà gốc** của cơ sở rent-to-rent: doanh thu kỳ + chi phí vận hành + **tiền chủ nhà nhận** theo mô hình hợp đồng (thuê cố định HOẶC chia % doanh thu). Differentiator cho tệp R2R (Top-5 #3).
+**Depends:** 3.7 (reports/P&L), 2.1 (properties)
+**Acceptance:**
+- Migration thêm `properties.landlord_revenue_share_bp INT NULL` (CHECK 0..10000; NULL = dùng mô hình thuê cố định `monthly_landlord_rent_vnd`). Forward-only, nullable (backward-compatible). Wire vào property create/update + response (`shared-types` `propertyFields` + `PropertyResponse` + `properties.service`).
+- `GET /reports/landlord-statement?property_id&from&to` — perm `report.financial` + `authorizeOnProperty`; CHỈ cơ sở `is_rent_to_rent` (else 422 `NOT_RENT_TO_RENT`). Tái dùng doanh thu/chi phí của `getPnl` (rollup `daily_property_stats` + live hôm nay), `readOnly` tx.
+- `settlement_model`: `REVENUE_SHARE` nếu `landlord_revenue_share_bp` set → payout = `round(revenue_total × bp / 10000)`; `FIXED_RENT` nếu chỉ có `monthly_landlord_rent_vnd` → payout = thuê tháng **prorate theo ngày overlap từng tháng** trong [from,to]; else `NONE` (payout 0).
+- Response: property + landlord (name/phone/contract dates) + revenue (room/other/total) + `operating_cost_vnd` (chưa gồm RENT_LANDLORD để tránh trùng) + settlement_model + `landlord_payout_vnd` + occupancy context.
+- e2e: revenue-share (bp) → payout đúng %; fixed-rent → prorate đúng (nguyên tháng = nguyên tiền; nửa tháng = 1/2); cơ sở không R2R → 422; thiếu `report.financial` (HOUSEKEEPER) → 403; cross-tenant → 404.
+
+_(Follow-up: export Excel/PDF cho landlord — tái dùng builder reports/police-report; trang Landlord ở web-admin.)_
+
+---
+
 ## Checklist PR (tự review trước khi submit)
 
 - [ ] Bảng mới: RLS policy (template NULLIF) + **composite FK** + index có tenant_id đứng đầu + partial unique nếu soft-delete + **dòng retention** (matrix `03` §7). _(CI tự kiểm: `test/integration/rls-coverage.spec.ts` — bảng có `tenant_id` thiếu FORCE RLS → đỏ; cross-tenant cố ý phải thêm vào NO_RLS_ALLOWLIST.)_
