@@ -339,6 +339,18 @@ Báo cáo kỳ cho **chủ nhà gốc** của cơ sở rent-to-rent: doanh thu k
 
 _(Follow-up: export Excel/PDF cho landlord — tái dùng builder reports/police-report; trang Landlord ở web-admin.)_
 
+### TASK 9.2 — Tầng danh tính khách toàn cục (Global Person Identity) [docs/16]
+Nhận diện **"cùng 1 khách" XUYÊN tenant** (đặt ở chủ A rồi ở chủ B) mà **KHÔNG lộ PII cross-tenant**: mỗi chủ vẫn cô lập dữ liệu khách (RLS), platform chỉ biết "cùng người / bị blacklist nơi khác". Khách KHÔNG phải tài khoản đăng nhập — chỉ là bản ghi danh tính.
+**Depends:** 2.5 (guests + PII), 7.3 (data-rights)
+**Acceptance:**
+- Migration 0030: bảng **GLOBAL `persons`** (KHÔNG tenant_id, KHÔNG RLS) khoá `national_id_hash` (= `guests.id_document_number_hash`, HMAC toàn cục) — chỉ hash + counters phi-PII (`tenant_link_count`, `blacklisted_anywhere`), KHÔNG PII. `guests.person_id` FK ĐƠN nullable. Function **SECURITY DEFINER** `recompute_person_counters(uuid)` (đếm cross-tenant bypass RLS, chỉ ghi counter phi-PII).
+- `GuestsService`: create/update có số giấy tờ → find-or-create person (`ON CONFLICT (national_id_hash)`) → set `person_id`; recompute sau mỗi write (create/update/blacklist/remove + data-erasure). Đổi giấy tờ → re-link + recompute person cũ & mới. `recompute` gọi qua `$executeRaw` (function trả void).
+- `GET /guests/:id/platform-summary` (perm `booking.read`) → `{linked, is_returning_guest, blacklisted_elsewhere}` — CHỈ nhận diện, KHÔNG PII/booking/tenant/lý-do.
+- Hành vi: cùng chủ → dedup prefill (sẵn có); khác chủ → chỉ nhận diện, chủ B tự quét lại CCCD. Người nước ngoài → hộ chiếu làm khoá (caveat đổi số/OCR). **Khai báo tạm trú NN = task riêng** (khác TT56).
+- e2e: cùng giấy tờ 2 tenant → cùng person (`tenant_link_count=2`); B thấy `is_returning_guest` KHÔNG lộ PII; không giấy tờ → `person_id` null; blacklist A → B thấy `blacklisted_elsewhere` (không lý do) + un-blacklist đồng bộ ngược; re-link đổi giấy tờ; erase giữ person; cross-tenant 404.
+
+_(Follow-up: `phone_hash` fallback; merge CCCD+hộ chiếu; consent-prefill; guest portal/account #8/#1; cron dọn person mồ côi.)_
+
 ---
 
 ## Checklist PR (tự review trước khi submit)

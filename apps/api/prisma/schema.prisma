@@ -457,14 +457,17 @@ model guests {
   deleted_at               DateTime?                  @db.Timestamptz(6)
   anonymized_at            DateTime?                  @db.Timestamptz(6)
   legal_hold_until         DateTime?                  @db.Date
+  person_id                String?                    @db.Uuid
   bookings                 bookings[]
   data_processing_consents data_processing_consents[]
+  persons                  persons?                   @relation(fields: [person_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants                  tenants                    @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([tenant_id, id])
   @@index([tenant_id, id_document_number_hash], map: "idx_guests_doc_hash")
   @@index([full_name(ops: raw("gin_trgm_ops"))], map: "idx_guests_name_trgm", type: Gin)
   @@index([tenant_id, phone], map: "idx_guests_phone")
+  @@index([person_id], map: "idx_guests_person")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1053,6 +1056,17 @@ model booking_surcharges {
 
   @@unique([tenant_id, id])
   @@index([tenant_id, booking_id], map: "idx_booking_surcharges_booking")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model persons {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  national_id_hash     Bytes    @unique
+  tenant_link_count    Int      @default(0)
+  blacklisted_anywhere Boolean  @default(false)
+  created_at           DateTime @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime @default(now()) @db.Timestamptz(6)
+  guests               guests[]
 }
 
 enum user_role {

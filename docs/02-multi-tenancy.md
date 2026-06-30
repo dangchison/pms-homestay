@@ -73,6 +73,8 @@ CREATE TABLE subscription_plans (
 );
 ```
 
+> **`persons`** (Phase 3, docs/16 — migration 0030) cũng là bảng **global** (không `tenant_id`, không RLS): danh tính khách TOÀN CỤC để nhận diện "cùng 1 người" xuyên tenant. **Pseudonymous** — chỉ `national_id_hash` (= `guests.id_document_number_hash`) + counters phi-PII, KHÔNG chứa PII. PII khách vẫn ở `guests` (tenant-scoped, RLS). Nhận diện cross-tenant chỉ trả cờ (returning/blacklisted-elsewhere) — KHÔNG lộ PII. Không nằm `NO_RLS_ALLOWLIST` vì guard chỉ quét bảng CÓ `tenant_id`.
+
 ### Bảng tenant-scoped (mọi bảng business khác)
 
 Tất cả các bảng business **bắt buộc** có:

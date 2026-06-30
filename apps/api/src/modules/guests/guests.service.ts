@@ -4,6 +4,7 @@ import {
   type BlacklistGuestRequest,
   type CreateGuestRequest,
   type GuestIdDocumentResponse,
+  type GuestPlatformSummaryResponse,
   type GuestResponse,
   type IdScanPresignRequest,
   type IdScanPresignResponse,
@@ -100,9 +101,16 @@ export class GuestsService {
   }
 
   async create(dto: CreateGuestRequest, user: JwtClaims): Promise<GuestResponse> {
-    const row = await withTenant(this.prisma, user.tnt, (tx) =>
-      tx.guests.create({ data: this.toWriteData(dto, user.tnt) }),
-    );
+    const row = await withTenant(this.prisma, user.tnt, async (tx) => {
+      const data = this.toWriteData(dto, user.tnt);
+      // Tầng danh tính toàn cục (docs/16): có số giấy tờ → resolve/link person.
+      if (dto.id_document_number !== undefined) {
+        data.person_id = await this.resolvePersonTx(tx, dto.id_document_number);
+      }
+      const created = await tx.guests.create({ data });
+      if (created.person_id) await this.recomputePersonCountersTx(tx, created.person_id);
+      return created;
+    });
     return toGuestResponse(row);
   }
 
@@ -158,18 +166,34 @@ export class GuestsService {
   }
 
   async update(id: string, dto: UpdateGuestRequest, user: JwtClaims): Promise<GuestResponse> {
-    await this.loadOrThrow(id, user);
-    const row = await withTenant(this.prisma, user.tnt, (tx) =>
-      tx.guests.update({ where: { id }, data: this.toWriteData(dto, user.tnt) }),
-    );
+    const existing = await this.loadOrThrow(id, user);
+    const oldPersonId = existing.person_id;
+    const row = await withTenant(this.prisma, user.tnt, async (tx) => {
+      const data = this.toWriteData(dto, user.tnt);
+      // Đổi số giấy tờ → re-link sang person mới (docs/16).
+      if (dto.id_document_number !== undefined) {
+        data.person_id = await this.resolvePersonTx(tx, dto.id_document_number);
+      }
+      const updated = await tx.guests.update({ where: { id }, data });
+      // Recompute khi giấy tờ thay đổi: person mới + person cũ (nếu khác — đã rời đi).
+      if (dto.id_document_number !== undefined) {
+        if (updated.person_id) await this.recomputePersonCountersTx(tx, updated.person_id);
+        if (oldPersonId && oldPersonId !== updated.person_id) {
+          await this.recomputePersonCountersTx(tx, oldPersonId);
+        }
+      }
+      return updated;
+    });
     return toGuestResponse(row);
   }
 
   async remove(id: string, user: JwtClaims): Promise<void> {
-    await this.loadOrThrow(id, user);
-    await withTenant(this.prisma, user.tnt, (tx) =>
-      tx.guests.update({ where: { id }, data: { deleted_at: new Date() } }),
-    );
+    const existing = await this.loadOrThrow(id, user);
+    await withTenant(this.prisma, user.tnt, async (tx) => {
+      await tx.guests.update({ where: { id }, data: { deleted_at: new Date() } });
+      // Guest rời person → cập nhật tenant_link_count (docs/16).
+      if (existing.person_id) await this.recomputePersonCountersTx(tx, existing.person_id);
+    });
   }
 
   /** ★ Xem số giấy tờ ĐẦY ĐỦ — decrypt server-side + audit READ_PII (ADR-0007 §3). */
@@ -204,17 +228,48 @@ export class GuestsService {
     user: JwtClaims,
     dto?: BlacklistGuestRequest,
   ): Promise<GuestResponse> {
-    await this.loadOrThrow(id, user);
-    const row = await withTenant(this.prisma, user.tnt, (tx) =>
-      tx.guests.update({
+    const existing = await this.loadOrThrow(id, user);
+    const row = await withTenant(this.prisma, user.tnt, async (tx) => {
+      const updated = await tx.guests.update({
         where: { id },
         data: {
           is_blacklisted: blacklisted,
           blacklist_reason: blacklisted ? (dto?.reason ?? null) : null,
         },
-      }),
-    );
+      });
+      // Lan/gỡ tín hiệu blacklist toàn nền tảng (docs/16) — KHÔNG lan lý do.
+      if (existing.person_id) await this.recomputePersonCountersTx(tx, existing.person_id);
+      return updated;
+    });
     return toGuestResponse(row);
+  }
+
+  /**
+   * Tín hiệu danh tính TOÀN CỤC (docs/16) — chỉ nhận diện, KHÔNG lộ PII cross-tenant.
+   * Đọc counters phi-PII trên `persons`; KHÔNG join guests tenant khác.
+   */
+  async getPlatformSummary(id: string, user: JwtClaims): Promise<GuestPlatformSummaryResponse> {
+    const guest = await this.loadOrThrow(id, user);
+    if (!guest.person_id) {
+      return { linked: false, is_returning_guest: false, blacklisted_elsewhere: false };
+    }
+    const person = await withTenant(
+      this.prisma,
+      user.tnt,
+      (tx) =>
+        tx.persons.findFirst({
+          where: { id: guest.person_id! },
+          select: { tenant_link_count: true, blacklisted_anywhere: true },
+        }),
+      { readOnly: true },
+    );
+    return {
+      linked: true,
+      // ≥2 tenant link ⇒ đã ở chủ khác (khách quen toàn nền tảng).
+      is_returning_guest: (person?.tenant_link_count ?? 0) >= 2,
+      // bị blacklist ở đâu đó nhưng KHÔNG phải do chủ hiện tại đang đánh dấu.
+      blacklisted_elsewhere: (person?.blacklisted_anywhere ?? false) && !guest.is_blacklisted,
+    };
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -230,6 +285,29 @@ export class GuestsService {
       throw new AppException({ code: 'GUEST_NOT_FOUND', title: 'Khách không tồn tại', status: 404 });
     }
     return guest;
+  }
+
+  /**
+   * Find-or-create person toàn cục theo HMAC số giấy tờ (docs/16). Atomic + an toàn
+   * race nhờ UNIQUE(national_id_hash) + ON CONFLICT. `tx.persons`/raw lint-clean
+   * (rule chỉ chặn this.prisma.<model>); persons global không RLS nên chạy trong
+   * tx tenant vô hại. Trả person_id để gắn vào guests.
+   */
+  private async resolvePersonTx(tx: Prisma.TransactionClient, idDocumentNumber: string): Promise<string> {
+    const hash = this.encryption.hmacIndex(normalizeDoc(idDocumentNumber));
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      INSERT INTO persons (national_id_hash) VALUES (${hash})
+      ON CONFLICT (national_id_hash) DO UPDATE SET updated_at = now()
+      RETURNING id`;
+    return rows[0]!.id;
+  }
+
+  /**
+   * Đồng bộ counters phi-PII của person từ guests cross-tenant (SECURITY DEFINER bypass RLS).
+   * `$executeRaw` (KHÔNG $queryRaw) vì function trả void — $queryRaw không deserialize được cột void.
+   */
+  private async recomputePersonCountersTx(tx: Prisma.TransactionClient, personId: string): Promise<void> {
+    await tx.$executeRaw`SELECT recompute_person_counters(${personId}::uuid)`;
   }
 
   private toWriteData(
