@@ -11,6 +11,7 @@ export * from './guest';
 export * from './booking';
 export * from './invoice';
 export * from './payment';
+export * from './shifts';
 export * from './asset';
 export * from './expense';
 export * from './billing';

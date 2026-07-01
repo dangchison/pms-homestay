@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import {
+  type AntiFraudFinding,
+  type AntiFraudQuery,
+  type AntiFraudResponse,
+  type AntiFraudSeverity,
   type BreakEvenQuery,
   type BreakEvenResponse,
   type BreakEvenScenario,
@@ -18,7 +22,16 @@ import { PermissionService } from '@core/auth/permission.service';
 import { AppException } from '@core/http/exceptions/app.exception';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { withTenant } from '@core/tenancy/with-tenant';
+import {
+  detectCancelAfterCash,
+  detectNoShowDepositRemoved,
+  detectPriceEditAfterCheckin,
+  detectRefundAnomalyByStaff,
+} from './anti-fraud.detectors';
 import { buildReportsWorkbook } from './reports-export.builder';
+
+/** Xếp hạng severity để sort desc (HIGH trước). */
+const SEVERITY_RANK: Record<AntiFraudSeverity, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 };
 
 type Tx = Prisma.TransactionClient;
 
@@ -376,6 +389,75 @@ export class ReportsService {
       occupied_room_nights: pnl.occupied_room_nights,
       occupancy_rate_pct: pnl.occupancy_rate_pct,
     } satisfies LandlordStatementResponse;
+  }
+
+  /**
+   * Báo cáo anti-fraud (docs/16 #11, Wave 1) — 4 dấu hiệu gian lận tiền mặt bounded
+   * theo [from,to] + property (server-side). Chỉ đọc (RLS chặn cross-tenant), KHÔNG
+   * lộ PII khách (chỉ booking_code + staff id/name). Thứ tự: 404 (không tồn tại /
+   * cross-tenant) → 403 (thiếu report.financial) → chạy detector trong 1 tx readOnly.
+   * findings sort desc theo severity rồi occurred_at.
+   */
+  async getAntiFraud(query: AntiFraudQuery, user: JwtClaims): Promise<AntiFraudResponse> {
+    await this.assertPropertyExists(query.property_id, user);
+    await this.permissionService.authorizeOnProperty(user, query.property_id, 'report.financial');
+
+    const from = new Date(`${query.from}T00:00:00.000Z`);
+    const to = new Date(`${query.to}T23:59:59.999Z`);
+
+    const findings = await withTenant(
+      this.prisma,
+      user.tnt,
+      async (tx) => {
+        const [cancelAfterCash, refundAnomaly, noShowDeposit, priceEdit] = await Promise.all([
+          detectCancelAfterCash(tx, query.property_id, from, to),
+          detectRefundAnomalyByStaff(tx, query.property_id, from, to),
+          detectNoShowDepositRemoved(tx, query.property_id, from, to),
+          detectPriceEditAfterCheckin(tx, query.property_id, from, to),
+        ]);
+        const all = [...cancelAfterCash, ...refundAnomaly, ...noShowDeposit, ...priceEdit];
+        await this.resolveStaffNames(tx, all);
+        return all;
+      },
+      { readOnly: true },
+    );
+
+    // Sort desc severity → occurred_at (mới nhất trước).
+    findings.sort((a, b) => {
+      const bySeverity = SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity];
+      if (bySeverity !== 0) return bySeverity;
+      return b.occurred_at.localeCompare(a.occurred_at);
+    });
+
+    const byType: Record<string, number> = {};
+    const bySeverity: Record<string, number> = {};
+    for (const f of findings) {
+      byType[f.type] = (byType[f.type] ?? 0) + 1;
+      bySeverity[f.severity] = (bySeverity[f.severity] ?? 0) + 1;
+    }
+
+    return {
+      property_id: query.property_id,
+      from: query.from,
+      to: query.to,
+      generated_at: new Date().toISOString(),
+      summary: { total: findings.length, by_type: byType, by_severity: bySeverity },
+      findings,
+    } satisfies AntiFraudResponse;
+  }
+
+  /** Điền staff_name từ users.full_name theo staff_id (batch, an toàn — không PII khách). */
+  private async resolveStaffNames(tx: Tx, findings: AntiFraudFinding[]): Promise<void> {
+    const ids = [...new Set(findings.map((f) => f.staff_id).filter((x): x is string => x != null))];
+    if (ids.length === 0) return;
+    const users = await tx.users.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, full_name: true },
+    });
+    const nameById = new Map(users.map((u) => [u.id, u.full_name]));
+    for (const f of findings) {
+      if (f.staff_id) f.staff_name = nameById.get(f.staff_id) ?? null;
+    }
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

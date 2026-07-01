@@ -146,3 +146,74 @@ export const LandlordStatementResponseSchema = z.object({
   occupancy_rate_pct: z.number(),
 });
 export type LandlordStatementResponse = z.infer<typeof LandlordStatementResponseSchema>;
+
+/**
+ * Báo cáo anti-fraud (Fraud pattern report) — docs/16 #11, Wave 1 chống thất thoát
+ * tiền mặt. Chỉ đọc, property-scoped, KHÔNG lộ PII khách (chỉ booking_code + staff).
+ * Query giống P&L (cơ sở + khoảng ngày).
+ */
+export const AntiFraudQuerySchema = z
+  .object({
+    property_id: z.uuid(),
+    from: z.iso.date(),
+    to: z.iso.date(),
+  })
+  .refine((d) => d.from <= d.to, { message: 'from phải ≤ to', path: ['from'] });
+export type AntiFraudQuery = z.infer<typeof AntiFraudQuerySchema>;
+
+/**
+ * 4 dấu hiệu gian lận tiền mặt (Wave 1):
+ * - CANCEL_AFTER_CASH: hủy booking SAU khi đã thu tiền mặt.
+ * - REFUND_ANOMALY_BY_STAFF: 1 nhân viên hoàn tiền bất thường (vượt ngưỡng / z-score).
+ * - NO_SHOW_DEPOSIT_REMOVED: booking NO_SHOW có cọc từng thu nhưng bị rút (VOID/refund).
+ * - PRICE_EDIT_AFTER_CHECKIN: sửa giá/tiền booking-invoice SAU khi khách đã check-in.
+ */
+export const AntiFraudFindingTypeSchema = z.enum([
+  'CANCEL_AFTER_CASH',
+  'REFUND_ANOMALY_BY_STAFF',
+  'NO_SHOW_DEPOSIT_REMOVED',
+  'PRICE_EDIT_AFTER_CHECKIN',
+]);
+export type AntiFraudFindingType = z.infer<typeof AntiFraudFindingTypeSchema>;
+
+export const AntiFraudSeveritySchema = z.enum(['LOW', 'MEDIUM', 'HIGH']);
+export type AntiFraudSeverity = z.infer<typeof AntiFraudSeveritySchema>;
+
+/** Loại thực thể gắn finding — số ít (service map plural 'bookings'/'invoices' → singular). */
+export const AntiFraudEntityTypeSchema = z.enum(['booking', 'invoice', 'payment']);
+export type AntiFraudEntityType = z.infer<typeof AntiFraudEntityTypeSchema>;
+
+/**
+ * Một dấu hiệu gian lận. KHÔNG chứa PII khách (chỉ booking_code + staff id/name).
+ * amount_vnd = số tiền liên quan (net); occurred_at = thời điểm sự kiện đặc trưng.
+ */
+export const AntiFraudFindingSchema = z.object({
+  type: AntiFraudFindingTypeSchema,
+  severity: AntiFraudSeveritySchema,
+  booking_code: z.string().nullable(),
+  staff_id: z.string().nullable(),
+  staff_name: z.string().nullable(),
+  amount_vnd: MoneyVndSchema,
+  occurred_at: z.string(), // ISO
+  entity_type: AntiFraudEntityTypeSchema,
+  entity_id: z.string(),
+  detail: z.string(),
+});
+export type AntiFraudFinding = z.infer<typeof AntiFraudFindingSchema>;
+
+export const AntiFraudSummarySchema = z.object({
+  total: z.number().int(),
+  by_type: z.record(z.string(), z.number().int()),
+  by_severity: z.record(z.string(), z.number().int()),
+});
+export type AntiFraudSummary = z.infer<typeof AntiFraudSummarySchema>;
+
+export const AntiFraudResponseSchema = z.object({
+  property_id: z.uuid(),
+  from: z.string(),
+  to: z.string(),
+  generated_at: z.string(), // ISO
+  summary: AntiFraudSummarySchema,
+  findings: z.array(AntiFraudFindingSchema),
+});
+export type AntiFraudResponse = z.infer<typeof AntiFraudResponseSchema>;

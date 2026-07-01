@@ -42,6 +42,7 @@ import { RatePlansModule } from '@modules/rate-plans/rate-plans.module';
 import { ReportsModule } from '@modules/reports/reports.module';
 import { ResourcesModule } from '@modules/resources/resources.module';
 import { RoomsModule } from '@modules/rooms/rooms.module';
+import { ShiftsModule } from '@modules/shifts/shifts.module';
 import { SubscriptionModule } from '@modules/subscription/subscription.module';
 import { TenantModule } from '@modules/tenant/tenant.module';
 import { UsersModule } from '@modules/users/users.module';
@@ -80,6 +81,7 @@ export class AppModule implements NestModule {
         BookingsModule,
         CleaningModule,
         PaymentsModule,
+        ShiftsModule,
         AssetsModule,
         ExpensesModule,
         BillingModule,
