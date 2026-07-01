@@ -1,6 +1,6 @@
 -- Up Migration
 -- ============================================================================
--- 0033 — Bắc cầu voucher vào báo giá: quotes.discount_code_id → discount_codes
+-- 0034 — Bắc cầu voucher vào báo giá: quotes.discount_code_id → discount_codes
 -- (Wave-1 #4, task 9.4b). Cột NULLABLE (mặc định NULL) trỏ tới mã giảm giá đã áp
 -- cho báo giá. Booking (createBookingTx) đọc cột này để gọi redeemInTx tăng
 -- used_count ATOMIC trong CÙNG tx booking — chống double-spend (docs/07 §7).
@@ -14,7 +14,7 @@
 -- (backward-compatible tuyệt đối).
 --
 -- Composite FK (tenant_id, discount_code_id) → discount_codes(tenant_id, id) theo
--- ADR-0005 (target UNIQUE(tenant_id, id) đã tạo ở 0032). ON DELETE NO ACTION: mã
+-- ADR-0005 (target UNIQUE(tenant_id, id) đã tạo ở 0033). ON DELETE NO ACTION: mã
 -- đang được báo giá tham chiếu KHÔNG bị xoá CỨNG (mã dùng soft-delete deleted_at —
 -- xoá mềm không đụng FK). ON UPDATE NO ACTION đồng bộ chuẩn chung.
 --

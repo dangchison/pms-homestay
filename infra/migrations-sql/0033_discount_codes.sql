@@ -1,6 +1,6 @@
 -- Up Migration
 -- ============================================================================
--- 0032 — Mã giảm giá / khuyến mãi (discount_codes) — Wave-1 #4, docs/07 §7
+-- 0033 — Mã giảm giá / khuyến mãi (discount_codes) — Wave-1 #4, docs/07 §7
 -- Bảng GLOBAL-theo-tenant (mỗi tenant tự quản mã của mình) cho voucher áp vào
 -- BÁO GIÁ (quote) khi tạo booking: giảm tiền cố định (FIXED, đơn vị VND) hoặc
 -- giảm theo phần trăm (PERCENT, basis-point 0..10000 — 10000 = 100%, cùng quy
@@ -23,7 +23,7 @@
 -- ENUM (docs/03 §13, giống payment_status/invoice_status). ALTER TYPE ADD VALUE
 -- khó tiến hoá/không revert — chấp nhận vì loại giảm giá không hay đổi; nếu tương
 -- lai cần loại thứ 3 dạng hay đổi thì cân nhắc VARCHAR+CHECK ở migration SAU,
--- KHÔNG sửa 0032.
+-- KHÔNG sửa 0033.
 --
 -- RLS tenant-scoped (CRUD qua withTenant). Composite FK chuẩn chung: UNIQUE
 -- (tenant_id, id) làm target cho các bảng con tương lai (vd booking_discounts)
