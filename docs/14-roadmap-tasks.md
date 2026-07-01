@@ -351,6 +351,18 @@ Nhận diện **"cùng 1 khách" XUYÊN tenant** (đặt ở chủ A rồi ở c
 
 _(Follow-up: `phone_hash` fallback; merge CCCD+hộ chiếu; consent-prefill; guest portal/account #8/#1; cron dọn person mồ côi.)_
 
+### TASK 9.3 — Khai báo tạm trú khách nước ngoài (NA17 / XNC) [docs/12 §2]
+Nghĩa vụ **RIÊNG với khách nước ngoài**: khai báo tạm trú lên Cục Quản lý xuất nhập cảnh (cổng `khaibaotamtru.xuatnhapcanh.gov.vn`, mẫu **NA17**), cần dữ liệu **thị thực + nhập cảnh** per-stay mà `guests`/`bookings` chưa có. **KHÁC** thông báo lưu trú công an TT56 (`bookings.police_report_status`, áp cho MỌI khách) — một khách NN cần **CẢ HAI** (song song).
+**Depends:** 2.5 (guests + PII/crypto), 7.2 (compliance module + police-report builder), 9.2 (danh tính — flag task này)
+**Acceptance:**
+- Migration 0031: bảng `foreign_residence_declarations` (RLS tenant-scoped, composite FK `(tenant,booking)`/`(tenant,guest)` ADR-0005, `enforce_tenant_isolation`). 1 khai báo / booking (`UNIQUE(tenant,booking_id)`). Dữ liệu NA17 per-stay: `visa_number_enc` (mã hoá field ADR-0007) + `visa_number_last4` + `visa_type`/`visa_expiry`/`date_of_entry`/`port_of_entry`/`intended_departure` (cột thường). Vòng đời `status` DRAFT→SUBMITTED|FAILED + `submitted_at`/`submitted_by`/`xnc_reference`/`failure_reason`. `property_id` denorm (filter/authorize). Định danh (họ tên/hộ chiếu/quốc tịch) **KHÔNG denormalize** — tham chiếu `guest_id`, giải mã LIVE khi xuất NA17.
+- `POST|GET|PATCH /compliance/foreign-residence` + `GET /:id` + `POST /:id/submit` + `GET /:id/na17` — CRUD + gửi + xuất phiếu. Perm `guest.pii.read` (pha-1) + `authorizeOnProperty` (pha-2, PII nhạy cảm). `property_id`/`guest_id` suy từ booking (404 `BOOKING_NOT_FOUND`; 422 `BOOKING_NO_GUEST`; 409 `FOREIGN_RESIDENCE_EXISTS`). list/get chỉ trả **last4** (không lộ số thị thực đầy đủ). Sửa sau SUBMITTED → 422.
+- **Submit = STUB** cổng XNC (như police-report B6): đủ dữ liệu tối thiểu (ngày nhập cảnh + dự kiến rời + có thị thực **hoặc** `visa_type='EXEMPT'`) → SUBMITTED (set `submitted_at`/`submitted_by`); thiếu → FAILED kèm `failure_reason`. Đã SUBMITTED → idempotent (trả nguyên trạng). Ghi audit STATE_CHANGE scope `foreign-residence-submit`. Phase 2 (creds): thay bằng POST cổng XNC (NGOÀI `withTenant` — I/O) → lưu `xnc_reference`.
+- **NA17 export** (`na17.builder` thuần → phiếu key/value .xlsx): giải mã số thị thực + **số hộ chiếu của guest** LIVE + 1 audit READ_PII scope `foreign-residence-na17` (KHÔNG log giá trị). **Redact `visa_number`** thêm vào `audit.redact` + pino (NĐ13 — auto-audit CREATE/UPDATE không lưu số thị thực plaintext).
+- e2e (16): create DRAFT masked last4 + auto-audit CREATE redact `[REDACTED]` + DB lưu enc không plaintext; 409 trùng / 404 no-booking / 422 no-guest; update DRAFT + body rỗng 400; list + filter status; submit đủ→SUBMITTED (+audit) / idempotent / thiếu→FAILED; sửa sau SUBMITTED 422; NA17 giải mã visa+hộ chiếu+địa chỉ; HOUSEKEEPER 403.
+
+_(Follow-up: tích hợp cổng XNC thật (creds); trang web-admin nhập NA17 + nút Gửi/Tải; gợi ý tự tạo khai báo khi check-in khách quốc tịch ≠ VN; batch xuất nhiều NA17.)_
+
 ---
 
 ## Checklist PR (tự review trước khi submit)

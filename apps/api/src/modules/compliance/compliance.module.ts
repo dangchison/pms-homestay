@@ -5,6 +5,8 @@ import { ComplianceController } from './compliance.controller';
 import { ComplianceService } from './compliance.service';
 import { DataRightsController } from './data-rights.controller';
 import { DataRightsService } from './data-rights.service';
+import { ForeignResidenceController } from './foreign-residence.controller';
+import { ForeignResidenceService } from './foreign-residence.service';
 
 /**
  * Tuân thủ pháp lý VN (EPIC 7). PermissionService (AuthCoreModule @Global) +
@@ -15,8 +17,8 @@ import { DataRightsService } from './data-rights.service';
  */
 @Module({
   imports: [AuditModule, GuestsModule],
-  controllers: [ComplianceController, DataRightsController],
-  providers: [ComplianceService, DataRightsService],
+  controllers: [ComplianceController, DataRightsController, ForeignResidenceController],
+  providers: [ComplianceService, DataRightsService, ForeignResidenceService],
   exports: [DataRightsService],
 })
 export class ComplianceModule {}

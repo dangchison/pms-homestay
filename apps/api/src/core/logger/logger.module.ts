@@ -74,6 +74,7 @@ class TenantTxLogRegistrar implements OnModuleInit, OnModuleDestroy {
               '*.password',
               '*.password_hash',
               '*.id_document_number',
+              '*.visa_number',
               '*.two_factor_secret',
               '*.token',
               'req.body.guest_info.phone',
