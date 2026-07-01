@@ -32,6 +32,13 @@ export const QuoteRequestSchema = z
     check_out: z.iso.datetime(),
     adults: z.number().int().min(1).optional(),
     children: z.number().int().min(0).optional(),
+    /**
+     * Mã giảm giá / voucher (task 9.4c, docs/07 §7). OPTIONAL — bỏ trống thì báo giá
+     * chạy y hệt trước (không voucher). Có mã → server áp qua DiscountsService.applyDiscount
+     * (RLS + property của quote); mã KHÔNG hợp lệ → 422 DISCOUNT_NOT_APPLICABLE (KHÔNG
+     * âm thầm áp 0, tránh booking sau rớt voucher). CITEXT ở DB — so khớp không phân biệt hoa/thường.
+     */
+    discount_code: z.string().min(1).max(64).optional(),
   })
   .refine((d) => new Date(d.check_out) > new Date(d.check_in), {
     message: 'check_out phải sau check_in',
@@ -58,5 +65,11 @@ export const QuoteResponseSchema = z.object({
   deposit_vnd: z.number().int(),
   expires_at: z.iso.datetime(),
   holidays: z.array(z.object({ date: z.string(), name: z.string() })),
+  /**
+   * Mã voucher đã áp cho báo giá (task 9.4c). Bỏ trống/không có khi báo giá không dùng
+   * voucher → shape backward-compatible tuyệt đối với client cũ (chỉ THÊM field optional,
+   * không đổi field cũ). discount_vnd đã có sẵn (đã gồm phần voucher khi có mã).
+   */
+  discount_code: z.string().optional(),
 });
 export type QuoteResponse = z.infer<typeof QuoteResponseSchema>;

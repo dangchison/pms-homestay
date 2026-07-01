@@ -8,11 +8,12 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { type JwtClaims } from '@pms/shared-types';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
-import { CreateDiscountCodeDto, UpdateDiscountCodeDto } from './dto';
+import { CreateDiscountCodeDto, DiscountValidateQueryDto, UpdateDiscountCodeDto } from './dto';
 import { DiscountsService } from './discounts.service';
 
 /**
@@ -37,6 +38,31 @@ export class DiscountsController {
   @RequirePermissions('rate_plan.manage')
   async list(@CurrentUser() user: JwtClaims) {
     return { data: await this.discounts.list(user) };
+  }
+
+  /**
+   * GET /discount-codes/:code/validate?subtotal_vnd=&property_id= (task 9.4c) — FE pre-check
+   * voucher TRƯỚC báo giá. Trả 200 { valid, discount_vnd, reason_code } y hệt applyDiscount
+   * (số tiền tính ở MỘT chỗ — service). Gate `booking.read` (READ-ONLY; NHÂN VIÊN đặt phòng có,
+   * housekeeper không) — KHÔNG thêm permission mới (tránh nới OWNER matrix). Cross-tenant: chạy
+   * dưới tenant người gọi (RLS) → mã tenant khác trả reason_code NOT_FOUND + HTTP 200 (KHÔNG lộ
+   * tồn tại, KHÔNG 404) nên an toàn làm gate FE. Route hai đoạn `:code/validate` KHÔNG đụng
+   * `@Get(':id')` (một đoạn). code là CITEXT (so khớp không phân biệt hoa/thường ở DB).
+   */
+  @Get(':code/validate')
+  @RequirePermissions('booking.read')
+  async validate(
+    @Param('code') code: string,
+    @Query() query: DiscountValidateQueryDto,
+    @CurrentUser() user: JwtClaims,
+  ) {
+    return {
+      data: await this.discounts.applyDiscount(
+        code,
+        { subtotalVnd: BigInt(query.subtotal_vnd), propertyId: query.property_id },
+        user,
+      ),
+    };
   }
 
   @Get(':id')

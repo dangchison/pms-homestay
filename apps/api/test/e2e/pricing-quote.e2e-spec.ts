@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { randomUUID } from 'node:crypto';
 import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Client } from 'pg';
@@ -25,6 +26,7 @@ describe('POST /pricing/quote + persist (task 2.4)', () => {
   let admin: Client;
   let token: string;
   let tenantId: string;
+  let propertyId: string;
   let resourceId: string;
   let planId: string;
 
@@ -59,7 +61,7 @@ describe('POST /pricing/quote + persist (task 2.4)', () => {
     ).body.data.access_token;
     tenantId = (await admin.query(`SELECT id FROM tenants WHERE slug = $1`, [tenantSlug])).rows[0].id;
 
-    const propertyId = (
+    propertyId = (
       await request(http)
         .post('/api/v1/properties')
         .set(auth())
@@ -107,7 +109,8 @@ describe('POST /pricing/quote + persist (task 2.4)', () => {
   afterAll(async () => {
     if (admin) {
       const tid = `(SELECT id FROM tenants WHERE slug = '${tenantSlug}')`;
-      await admin.query(`DELETE FROM quotes WHERE tenant_id IN ${tid}`);
+      await admin.query(`DELETE FROM quotes WHERE tenant_id IN ${tid}`); // trước discount_codes (FK)
+      await admin.query(`DELETE FROM discount_codes WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM rate_plans WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM resource_members WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM bookable_resources WHERE tenant_id IN ${tid}`);
@@ -202,6 +205,98 @@ describe('POST /pricing/quote + persist (task 2.4)', () => {
         check_out: '2026-05-23T07:00:00.000Z',
       })
       .expect(400);
+  });
+
+  // ── Voucher (task 9.4c): quote WITH discount_code ────────────────────────────
+
+  describe('quote WITH discount_code (task 9.4c)', () => {
+    // Đêm thường 19/5/2026 (T3, không lễ) → base 500k phẳng, dễ kiểm số.
+    const CI = '2026-05-19T07:00:00.000Z';
+    const CO = '2026-05-20T05:00:00.000Z';
+
+    /** Seed mã trực tiếp (admin) → điều khiển mọi cột. */
+    const seedCode = async (over: Record<string, unknown> = {}): Promise<string> => {
+      const c = {
+        code: `PQ-${randomUUID().slice(0, 8)}`,
+        discount_type: 'FIXED',
+        discount_value: 100000,
+        min_order_vnd: 0,
+        applicable_property_ids: null as string[] | null,
+        is_active: true,
+        ...over,
+      };
+      const res = await admin.query(
+        `INSERT INTO discount_codes (tenant_id, code, discount_type, discount_value, min_order_vnd, applicable_property_ids, is_active)
+         VALUES ($1,$2,$3::discount_type,$4,$5,$6,$7) RETURNING id, code`,
+        [tenantId, c.code, c.discount_type, c.discount_value, c.min_order_vnd, c.applicable_property_ids, c.is_active],
+      );
+      return res.rows[0].code;
+    };
+
+    const quoteWith = (body: Record<string, unknown>) =>
+      request(http).post('/api/v1/pricing/quote').set(auth()).send({ resource_id: resourceId, mode: 'DAILY', check_in: CI, check_out: CO, ...body });
+
+    it('FIXED: total netted, line_items có DISCOUNT âm, quotes.discount_code_id persisted', async () => {
+      const code = await seedCode({ discount_type: 'FIXED', discount_value: 100000 });
+      const res = await quoteWith({ discount_code: code }).expect(200);
+      // subtotal 500k, voucher 100k → discount_vnd 100k, total 400k, tax 0
+      expect(res.body.data.subtotal_vnd).toBe(500_000);
+      expect(res.body.data.discount_vnd).toBe(100_000);
+      expect(res.body.data.total_vnd).toBe(400_000);
+      expect(res.body.data.discount_code).toBe(code);
+      const disc = res.body.data.line_items.find((li: { type: string }) => li.type === 'DISCOUNT');
+      expect(disc).toMatchObject({ type: 'DISCOUNT', amount_vnd: -100_000 });
+
+      const row = await admin.query(
+        `SELECT discount_code_id, discount_vnd, total_vnd FROM quotes WHERE id=$1`,
+        [res.body.data.quote_id],
+      );
+      expect(row.rows[0].discount_code_id).toBeTruthy();
+      expect(Number(row.rows[0].discount_vnd)).toBe(100_000);
+      expect(Number(row.rows[0].total_vnd)).toBe(400_000);
+    });
+
+    it('PERCENT roundVnd parity: value 1500 (15%) trên subtotal 500000 → voucher 75000', async () => {
+      const code = await seedCode({ discount_type: 'PERCENT', discount_value: 1500 });
+      const res = await quoteWith({ discount_code: code }).expect(200);
+      // 500000*1500/10000 = 75000
+      expect(res.body.data.discount_vnd).toBe(75_000);
+      expect(res.body.data.total_vnd).toBe(425_000);
+    });
+
+    it('FIXED cap: voucher > subtotal → giảm = subtotal (total 0, không âm)', async () => {
+      const code = await seedCode({ discount_type: 'FIXED', discount_value: 900000 });
+      const res = await quoteWith({ discount_code: code }).expect(200);
+      expect(res.body.data.discount_vnd).toBe(500_000);
+      expect(res.body.data.total_vnd).toBe(0);
+    });
+
+    it('mã KHÔNG hợp lệ → 422 DISCOUNT_NOT_APPLICABLE (reason trong detail), KHÔNG persist quote', async () => {
+      const before = (await admin.query(`SELECT count(*)::int AS n FROM quotes WHERE tenant_id=$1`, [tenantId])).rows[0].n;
+      // mã không tồn tại → reason NOT_FOUND
+      const res = await quoteWith({ discount_code: `GHOST-${randomUUID().slice(0, 6)}` }).expect(422);
+      expect(res.body.error.code).toBe('DISCOUNT_NOT_APPLICABLE');
+      expect(res.body.error.detail).toBe('NOT_FOUND');
+      const after = (await admin.query(`SELECT count(*)::int AS n FROM quotes WHERE tenant_id=$1`, [tenantId])).rows[0].n;
+      expect(after).toBe(before); // KHÔNG có quote mồ côi
+    });
+
+    it('mã inactive → 422 (reason INACTIVE), KHÔNG persist', async () => {
+      const code = await seedCode({ is_active: false });
+      const res = await quoteWith({ discount_code: code }).expect(422);
+      expect(res.body.error.code).toBe('DISCOUNT_NOT_APPLICABLE');
+      expect(res.body.error.detail).toBe('INACTIVE');
+    });
+
+    it('KHÔNG discount_code → byte-identical path cũ: discount_vnd 0, total = subtotal, discount_code_id NULL, KHÔNG DISCOUNT line', async () => {
+      const res = await quoteWith({}).expect(200);
+      expect(res.body.data.discount_vnd).toBe(0);
+      expect(res.body.data.total_vnd).toBe(res.body.data.subtotal_vnd);
+      expect(res.body.data.discount_code).toBeUndefined();
+      expect(res.body.data.line_items.some((li: { type: string }) => li.type === 'DISCOUNT')).toBe(false);
+      const row = await admin.query(`SELECT discount_code_id FROM quotes WHERE id=$1`, [res.body.data.quote_id]);
+      expect(row.rows[0].discount_code_id).toBeNull();
+    });
   });
 
   it('purgeExpired: quote quá hạn > 7 ngày chưa dùng bị dọn', async () => {

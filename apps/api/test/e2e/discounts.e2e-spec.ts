@@ -26,6 +26,8 @@ const PASSWORD = 'S3cure!Passw0rd-dev';
 const tenantSlug = `disc-${RUN}`;
 const ownerEmail = `owner-${RUN}@e2e.test`;
 const accEmail = `acc-${RUN}@e2e.test`;
+const staffEmail = `staff-${RUN}@e2e.test`; // có booking.read → validate 200
+const hkEmail = `hk-${RUN}@e2e.test`; // HOUSEKEEPER (KHÔNG booking.read) → validate 403
 // tenant thứ 2 để kiểm cross-tenant (RLS)
 const otherSlug = `disc2-${RUN}`;
 const otherOwnerEmail = `owner2-${RUN}@e2e.test`;
@@ -36,6 +38,8 @@ describe('Discount codes + redemption (task 9.4b)', () => {
   let admin: Client;
   let token: string; // OWNER tenant 1
   let accToken: string; // ACCOUNTANT tenant 1 (KHÔNG rate_plan.manage → 403)
+  let staffToken: string; // STAFF tenant 1 (có booking.read → validate 200)
+  let hkToken: string; // HOUSEKEEPER tenant 1 (KHÔNG booking.read → validate 403)
   let otherToken: string; // OWNER tenant 2
   let discounts: DiscountsService;
   let tenantId: string;
@@ -152,6 +156,26 @@ describe('Discount codes + redemption (task 9.4b)', () => {
     await admin.query(`INSERT INTO user_property_roles (tenant_id, user_id, property_id, role) VALUES ($1,$2,$3,'ACCOUNTANT')`, [tenantId, acc.rows[0].id, propertyId]);
     accToken = (
       await request(http).post('/api/v1/auth/login').set('X-Tenant-Slug', tenantSlug).send({ email: accEmail, password: PASSWORD }).expect(200)
+    ).body.data.access_token;
+
+    // STAFF (có booking.read) + HOUSEKEEPER (KHÔNG booking.read) — kiểm gate validate.
+    const hash = await argon2.hash(PASSWORD, { type: argon2.argon2id });
+    const staff = await admin.query(
+      `INSERT INTO users (tenant_id, email, password_hash, full_name, default_role) VALUES ($1,$2,$3,'STAFF','STAFF') RETURNING id`,
+      [tenantId, staffEmail, hash],
+    );
+    await admin.query(`INSERT INTO user_property_roles (tenant_id, user_id, property_id, role) VALUES ($1,$2,$3,'STAFF')`, [tenantId, staff.rows[0].id, propertyId]);
+    staffToken = (
+      await request(http).post('/api/v1/auth/login').set('X-Tenant-Slug', tenantSlug).send({ email: staffEmail, password: PASSWORD }).expect(200)
+    ).body.data.access_token;
+
+    const hk = await admin.query(
+      `INSERT INTO users (tenant_id, email, password_hash, full_name, default_role) VALUES ($1,$2,$3,'HK','HOUSEKEEPER') RETURNING id`,
+      [tenantId, hkEmail, hash],
+    );
+    await admin.query(`INSERT INTO user_property_roles (tenant_id, user_id, property_id, role) VALUES ($1,$2,$3,'HOUSEKEEPER')`, [tenantId, hk.rows[0].id, propertyId]);
+    hkToken = (
+      await request(http).post('/api/v1/auth/login').set('X-Tenant-Slug', tenantSlug).send({ email: hkEmail, password: PASSWORD }).expect(200)
     ).body.data.access_token;
 
     // ── Tenant 2 (cross-tenant) ──
@@ -401,6 +425,78 @@ describe('Discount codes + redemption (task 9.4b)', () => {
     });
   });
 
+  // ── (2b) GET /discount-codes/:code/validate (task 9.4c) ──────────────────────
+
+  describe('GET /discount-codes/:code/validate', () => {
+    const validate = (code: string, q: Record<string, string | number>, tok = staffToken) =>
+      request(http)
+        .get(`/api/v1/discount-codes/${encodeURIComponent(code)}/validate`)
+        .query(q)
+        .set(auth(tok));
+
+    it('FIXED OK: parity với applyDiscount → 200 {valid:true, discount_vnd:value, reason_code:OK}', async () => {
+      const id = await seedCode({ discount_type: 'FIXED', discount_value: 50000, min_order_vnd: 0 });
+      const code = await codeOf(id);
+      const res = await validate(code, { subtotal_vnd: 200000, property_id: propertyId }).expect(200);
+      expect(res.body.data).toEqual({ valid: true, discount_vnd: 50000, reason_code: 'OK' });
+      // parity byte-for-byte với service applyDiscount
+      const svc = await discounts.applyDiscount(code, { subtotalVnd: 200000n, propertyId }, owner(tenantId));
+      expect(res.body.data).toEqual(svc);
+    });
+
+    it('mã không tồn tại → 200 {valid:false, discount_vnd:0, reason_code:NOT_FOUND} (KHÔNG 404)', async () => {
+      const res = await validate(`GHOST-${RUN}`, { subtotal_vnd: 200000, property_id: propertyId }).expect(200);
+      expect(res.body.data).toEqual({ valid: false, discount_vnd: 0, reason_code: 'NOT_FOUND' });
+    });
+
+    it('reason_code parity: BELOW_MIN_ORDER khi subtotal < min_order (200, KHÔNG lỗi)', async () => {
+      const id = await seedCode({ min_order_vnd: 500000 });
+      const res = await validate(await codeOf(id), { subtotal_vnd: 200000, property_id: propertyId }).expect(200);
+      expect(res.body.data).toMatchObject({ valid: false, reason_code: 'BELOW_MIN_ORDER' });
+    });
+
+    it('PERCENT roundVnd parity: value 1500 subtotal 333333 → 50000', async () => {
+      const id = await seedCode({ discount_type: 'PERCENT', discount_value: 1500 });
+      const res = await validate(await codeOf(id), { subtotal_vnd: 333333, property_id: propertyId }).expect(200);
+      expect(res.body.data).toEqual({ valid: true, discount_vnd: 50000, reason_code: 'OK' });
+    });
+
+    it('gate booking.read: STAFF → 200; HOUSEKEEPER (không booking.read) → 403', async () => {
+      const id = await seedCode({ discount_type: 'FIXED', discount_value: 10000 });
+      const code = await codeOf(id);
+      await validate(code, { subtotal_vnd: 200000, property_id: propertyId }, staffToken).expect(200);
+      await validate(code, { subtotal_vnd: 200000, property_id: propertyId }, hkToken).expect(403);
+    });
+
+    it('cross-tenant: tenant 2 gọi mã tenant 1 → 200 NOT_FOUND (RLS ẩn, KHÔNG lộ)', async () => {
+      const id = await seedCode({ discount_type: 'FIXED', discount_value: 10000 });
+      const code = await codeOf(id);
+      // tenant 2 owner có booking.read nhưng RLS ẩn mã của tenant 1 → NOT_FOUND
+      const res = await validate(code, { subtotal_vnd: 200000, property_id: propertyId }, otherToken).expect(200);
+      expect(res.body.data).toMatchObject({ valid: false, reason_code: 'NOT_FOUND' });
+    });
+
+    it('subtotal_vnd chuỗi được coerce sang int trước applyDiscount (?subtotal_vnd=200000 chạy)', async () => {
+      const id = await seedCode({ discount_type: 'FIXED', discount_value: 50000, min_order_vnd: 150000 });
+      // truyền chuỗi qua query — z.coerce ép sang 200000 ≥ min 150000 → OK
+      const res = await validate(await codeOf(id), { subtotal_vnd: '200000', property_id: propertyId }).expect(200);
+      expect(res.body.data).toEqual({ valid: true, discount_vnd: 50000, reason_code: 'OK' });
+    });
+
+    it('validation: thiếu subtotal_vnd → 400 VALIDATION_FAILED', async () => {
+      const res = await validate(`ANY-${RUN}`, { property_id: propertyId }).expect(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('validation: subtotal_vnd âm → 400', async () => {
+      await validate(`ANY-${RUN}`, { subtotal_vnd: -1, property_id: propertyId }).expect(400);
+    });
+
+    it('validation: property_id không phải uuid → 400', async () => {
+      await validate(`ANY-${RUN}`, { subtotal_vnd: 200000, property_id: 'not-a-uuid' }).expect(400);
+    });
+  });
+
   // ── (3) Redemption qua createBookingTx ──────────────────────────────────────
 
   describe('redemption qua createBookingTx', () => {
@@ -473,6 +569,85 @@ describe('Discount codes + redemption (task 9.4b)', () => {
       await admin.query(`UPDATE quotes SET discount_code_id=$1 WHERE id=$2`, [codeId, quoteId]);
       await bookWithQuote(quoteId, ci, co).expect(201);
       expect(await usedCountOf(codeId)).toBe(6);
+    });
+  });
+
+  // ── (4) End-to-end voucher: quote(discount_code) → booking (task 9.4c) ────────
+
+  describe('end-to-end voucher booking (quote → booking)', () => {
+    const win = (day: number): [string, string] => [
+      `2026-11-${String(day).padStart(2, '0')}T07:00:00.000Z`,
+      `2026-11-${String(day + 1).padStart(2, '0')}T05:00:00.000Z`,
+    ];
+
+    const quoteWithCode = (code: string, ci: string, co: string) =>
+      request(http)
+        .post('/api/v1/pricing/quote')
+        .set(auth())
+        .send({ resource_id: resourceId, mode: 'DAILY', check_in: ci, check_out: co, discount_code: code });
+
+    const bookWithQuote = (quoteId: string, ci: string, co: string) =>
+      request(http)
+        .post('/api/v1/bookings')
+        .set({ ...auth(), 'Idempotency-Key': randomUUID() })
+        .send({ resource_id: resourceId, quote_id: quoteId, mode: 'DAILY', check_in: ci, check_out: co, guest_id: guestId });
+
+    it('quote(discount_code max_uses=1) → booking 201: total netted, used_count +1, KHÔNG 409 PRICE_CHANGED', async () => {
+      const [ci, co] = win(2);
+      const codeId = await seedCode({ discount_type: 'FIXED', discount_value: 100000, max_uses: 1, used_count: 0 });
+      const q = (await quoteWithCode(await codeOf(codeId), ci, co).expect(200)).body.data;
+      // báo giá gốc 1 đêm = 500k → total sau voucher 100k = 400k
+      expect(q.total_vnd).toBe(400_000);
+      expect(q.discount_vnd).toBe(100_000);
+
+      const res = await bookWithQuote(q.quote_id, ci, co).expect(201);
+      expect(Number(res.body.data.total_amount_vnd)).toBe(q.total_vnd); // 400k (voucher-netted)
+      expect(await usedCountOf(codeId)).toBe(1); // +1 đúng một lần
+    });
+
+    it('booking thứ 2 trên mã đã cạn (quote mới) → 409 DISCOUNT_EXHAUSTED, used_count giữ 1', async () => {
+      const [ci1, co1] = win(4);
+      const [ci2, co2] = win(6);
+      const codeId = await seedCode({ discount_type: 'FIXED', discount_value: 80000, max_uses: 1, used_count: 0 });
+      const code = await codeOf(codeId);
+
+      // booking 1 thành công → used_count = 1 (mã cạn)
+      const q1 = (await quoteWithCode(code, ci1, co1).expect(200)).body.data;
+      await bookWithQuote(q1.quote_id, ci1, co1).expect(201);
+      expect(await usedCountOf(codeId)).toBe(1);
+
+      // quote 2 vẫn báo giá được (validate ở quote-time: used_count(1) >= max_uses(1) → USAGE_LIMIT_REACHED
+      // → 422 DISCOUNT_NOT_APPLICABLE). Nên để test redeem-cạn, seed quote 2 với discount_code_id trực tiếp.
+      const quoteId2 = (
+        await request(http).post('/api/v1/pricing/quote').set(auth())
+          .send({ resource_id: resourceId, mode: 'DAILY', check_in: ci2, check_out: co2 }).expect(200)
+      ).body.data.quote_id;
+      await admin.query(`UPDATE quotes SET discount_code_id=$1 WHERE id=$2`, [codeId, quoteId2]);
+
+      const res = await bookWithQuote(quoteId2, ci2, co2).expect(409);
+      expect(res.body.error.code).toBe('DISCOUNT_EXHAUSTED');
+      expect(await usedCountOf(codeId)).toBe(1); // không tăng
+    });
+
+    it('replay CÙNG Idempotency-Key trên booking voucher → response cached, used_count KHÔNG tăng lần 2', async () => {
+      const [ci, co] = win(8);
+      const codeId = await seedCode({ discount_type: 'FIXED', discount_value: 60000, max_uses: 5, used_count: 0 });
+      const q = (await quoteWithCode(await codeOf(codeId), ci, co).expect(200)).body.data;
+
+      const idemKey = randomUUID();
+      const first = await request(http).post('/api/v1/bookings')
+        .set({ ...auth(), 'Idempotency-Key': idemKey })
+        .send({ resource_id: resourceId, quote_id: q.quote_id, mode: 'DAILY', check_in: ci, check_out: co, guest_id: guestId })
+        .expect(201);
+      expect(await usedCountOf(codeId)).toBe(1);
+
+      // replay cùng key → trả response đầu tiên, KHÔNG redeem lần 2
+      const replay = await request(http).post('/api/v1/bookings')
+        .set({ ...auth(), 'Idempotency-Key': idemKey })
+        .send({ resource_id: resourceId, quote_id: q.quote_id, mode: 'DAILY', check_in: ci, check_out: co, guest_id: guestId })
+        .expect(201);
+      expect(replay.body.data.id).toBe(first.body.data.id);
+      expect(await usedCountOf(codeId)).toBe(1); // vẫn 1
     });
   });
 });

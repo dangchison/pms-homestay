@@ -170,3 +170,15 @@ export const ApplyDiscountResultSchema = z.object({
   reason_code: ApplyDiscountReasonCodeSchema,
 });
 export type ApplyDiscountResult = z.infer<typeof ApplyDiscountResultSchema>;
+
+/**
+ * Query cho GET /discount-codes/:code/validate (task 9.4c) — FE pre-check trước khi báo giá.
+ * subtotal_vnd đến từ query-string (chuỗi) → z.coerce.number ép sang int TRƯỚC khi applyDiscount
+ * (nên ?subtotal_vnd=200000 chạy). Thiếu / âm subtotal_vnd → 400; property_id không phải uuid → 400.
+ * Endpoint trả 200 kèm reason_code (kể cả NOT_FOUND) — KHÔNG 404 — để an toàn cho FE dùng làm gate.
+ */
+export const DiscountValidateQuerySchema = z.object({
+  subtotal_vnd: z.coerce.number().int().min(0),
+  property_id: z.uuid(),
+});
+export type DiscountValidateQuery = z.infer<typeof DiscountValidateQuerySchema>;

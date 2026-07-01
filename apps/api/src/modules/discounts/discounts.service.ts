@@ -213,27 +213,43 @@ export class DiscountsService {
   // ── Áp mã (logic thuần) ───────────────────────────────────────────────────
 
   /**
-   * Áp mã lên báo giá theo CODE (chuỗi, CITEXT) — load row LIVE (raw, giữ NULL) rồi ủy cho
-   * evaluate. now mặc định = thời điểm gọi. Ở 9.4b đây là scaffolding (chỉ e2e gọi trực
-   * tiếp qua service); endpoint validate & luồng populate discount_code_id SẼ wiring ở 9.4c.
+   * Áp mã lên báo giá theo CODE (chuỗi, CITEXT) — mở withTenant READ-ONLY rồi ủy cho
+   * applyDiscountInTx. Dùng bởi endpoint validate (9.4c) + e2e gọi trực tiếp. now mặc định
+   * = thời điểm gọi. RLS của withTenant lo cross-tenant (mã tenant khác → row null → NOT_FOUND).
    */
   async applyDiscount(
     code: string,
     ctx: ApplyDiscountContext,
     user: JwtClaims,
   ): Promise<ApplyDiscountResult> {
-    const row = await withTenant(
+    const { code_id: _code_id, ...result } = await withTenant(
       this.prisma,
       user.tnt,
-      async (tx) => {
-        const rows = await tx.$queryRaw<DiscountRow[]>(
-          SELECT_LIVE(Prisma.sql`AND code = ${code}::citext`),
-        );
-        return rows[0] ?? null;
-      },
+      (tx) => this.applyDiscountInTx(tx, code, ctx),
       { readOnly: true },
     );
-    return DiscountsService.evaluate(row, ctx);
+    return result;
+  }
+
+  /**
+   * ★ Áp mã TRONG tx có sẵn (task 9.4c) — dùng bởi pricing.quote để áp voucher vào báo giá
+   * CÙNG transaction (RLS context của tx đó đã set; property_id là property đã-resolve của
+   * quote). Load row LIVE (raw, giữ NULL applicable_property_ids) rồi ủy cho evaluate — số tiền
+   * giảm tính DUY NHẤT ở evaluate nên KHỚP byte-for-byte với applyDiscount / endpoint validate.
+   *
+   * Trả kèm `code_id` (id mã, null khi NOT_FOUND) để caller ghi quotes.discount_code_id khi áp
+   * thành công. Endpoint validate KHÔNG cần id nên gọi applyDiscount (trả gọn ApplyDiscountResult).
+   */
+  async applyDiscountInTx(
+    tx: Tx,
+    code: string,
+    ctx: ApplyDiscountContext,
+  ): Promise<ApplyDiscountResult & { code_id: string | null }> {
+    const rows = await tx.$queryRaw<DiscountRow[]>(
+      SELECT_LIVE(Prisma.sql`AND code = ${code}::citext`),
+    );
+    const row = rows[0] ?? null;
+    return { ...DiscountsService.evaluate(row, ctx), code_id: row?.id ?? null };
   }
 
   /**
