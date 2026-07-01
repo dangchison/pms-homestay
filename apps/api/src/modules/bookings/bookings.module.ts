@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { QUEUE_HOLD_EXPIRY } from '@core/bullmq/queues';
 import { IdempotencyInterceptor } from '@core/http/interceptors/idempotency.interceptor';
 import { CleaningModule } from '@modules/cleaning/cleaning.module';
+import { DiscountsModule } from '@modules/discounts/discounts.module';
 import { ExpensesModule } from '@modules/expenses/expenses.module';
 import { InvoicesModule } from '@modules/invoices/invoices.module';
 import { OccupancyModule } from '@modules/occupancy/occupancy.module';
@@ -23,6 +24,7 @@ import { HoldExpiryProcessor } from './hold-expiry.cron';
     InvoicesModule,
     ExpensesModule,
     CleaningModule,
+    DiscountsModule,
     BullModule.registerQueue({ name: QUEUE_HOLD_EXPIRY }),
   ],
   controllers: [BookingsController],

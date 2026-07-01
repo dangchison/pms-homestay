@@ -47,7 +47,7 @@ const discountCodeBase = z.object({
  *  - PERCENT ⇒ discount_value 0..10000; FIXED ⇒ discount_value ≥ 1
  *  - nếu đủ cả valid_from & valid_to thì from ≤ to
  */
-const refineDiscountValue = (
+export const refineDiscountValue = (
   d: { discount_type: DiscountType; discount_value: number },
 ): boolean =>
   d.discount_type === 'PERCENT'
@@ -132,3 +132,41 @@ export const DiscountCodeResponseSchema = z.object({
   updated_at: z.string(),
 });
 export type DiscountCodeResponse = z.infer<typeof DiscountCodeResponseSchema>;
+
+/**
+ * Mã lý do kết quả applyDiscount (task 9.4b, docs/07 §7) — 1 nhánh / lý do để FE
+ * hiện thông báo phù hợp. 'OK' là nhánh DUY NHẤT hợp lệ (valid:true); còn lại đều
+ * valid:false, discount_vnd:0:
+ *   NOT_FOUND              — mã không tồn tại hoặc đã soft-delete
+ *   INACTIVE              — is_active = false
+ *   NOT_STARTED           — now < valid_from
+ *   EXPIRED               — now > valid_to
+ *   BELOW_MIN_ORDER       — subtotal < min_order_vnd
+ *   PROPERTY_NOT_ELIGIBLE — applicable_property_ids != NULL và KHÔNG chứa property_id
+ *                           (mảng rỗng [] → không property nào hợp lệ)
+ *   USAGE_LIMIT_REACHED   — max_uses != NULL và used_count >= max_uses
+ * Biên: now == valid_from và now == valid_to đều HỢP LỆ (closed interval).
+ */
+export const ApplyDiscountReasonCodeSchema = z.enum([
+  'OK',
+  'NOT_FOUND',
+  'INACTIVE',
+  'NOT_STARTED',
+  'EXPIRED',
+  'BELOW_MIN_ORDER',
+  'PROPERTY_NOT_ELIGIBLE',
+  'USAGE_LIMIT_REACHED',
+]);
+export type ApplyDiscountReasonCode = z.infer<typeof ApplyDiscountReasonCodeSchema>;
+
+/**
+ * Kết quả áp mã (applyDiscount). discount_vnd là số tiền giảm ĐÃ làm tròn (roundVnd,
+ * VND), luôn 0 khi valid:false. FIXED bị "cap" theo subtotal (không âm total);
+ * PERCENT = roundVnd(subtotal * discount_value / 10000) (basis-point, half-away-from-zero).
+ */
+export const ApplyDiscountResultSchema = z.object({
+  valid: z.boolean(),
+  discount_vnd: z.number(),
+  reason_code: ApplyDiscountReasonCodeSchema,
+});
+export type ApplyDiscountResult = z.infer<typeof ApplyDiscountResultSchema>;

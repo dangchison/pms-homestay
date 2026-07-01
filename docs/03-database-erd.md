@@ -460,9 +460,11 @@ CREATE TABLE quotes (
   total_vnd BIGINT NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,               -- now() + 15 phút
   used_by_booking_id UUID,                       -- set khi booking tạo thành công
+  discount_code_id UUID,                         -- voucher đã áp (NULL=không có); 0033, task 9.4b
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   FOREIGN KEY (tenant_id, resource_id) REFERENCES bookable_resources (tenant_id, id),
-  FOREIGN KEY (tenant_id, rate_plan_id) REFERENCES rate_plans (tenant_id, id)
+  FOREIGN KEY (tenant_id, rate_plan_id) REFERENCES rate_plans (tenant_id, id),
+  FOREIGN KEY (tenant_id, discount_code_id) REFERENCES discount_codes (tenant_id, id)  -- 0033
 );
 CREATE INDEX idx_quotes_expiry ON quotes(expires_at) WHERE used_by_booking_id IS NULL;
 ```
@@ -1092,7 +1094,9 @@ Cập nhật khi item thay đổi; chỉ cho sửa items khi `status = 'DRAFT'`.
 | Event (2) | outbox_events · notifications |
 | Audit/Compliance (3) | audit_logs · idempotency_keys · data_processing_consents |
 
-**Phase 2 (đã thiết kế, chưa tạo ở MVP):** `discount_codes` (07 §7), `e_invoices` (12 §6), `ledger_entries` (ADR-0003 §5).
+**Phase 3 (đã tạo sau MVP):** `discount_codes` (07 §7, Wave-1 #4 — migration 0032 bảng + 0033 bắc cầu `quotes.discount_code_id`).
+
+**Phase 2 (đã thiết kế, chưa tạo ở MVP):** `e_invoices` (12 §6), `ledger_entries` (ADR-0003 §5).
 
 ## 7. Retention & Partition matrix
 

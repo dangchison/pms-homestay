@@ -428,6 +428,8 @@ model quotes {
   expires_at         DateTime           @db.Timestamptz(6)
   used_by_booking_id String?            @db.Uuid
   created_at         DateTime           @default(now()) @db.Timestamptz(6)
+  discount_code_id   String?            @db.Uuid
+  discount_codes     discount_codes?    @relation(fields: [tenant_id, discount_code_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction, map: "quotes_discount_code_fkey")
   tenants            tenants            @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   rate_plans         rate_plans         @relation(fields: [tenant_id, rate_plan_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
   bookable_resources bookable_resources @relation(fields: [tenant_id, resource_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
@@ -1124,6 +1126,7 @@ model discount_codes {
   created_at              DateTime      @default(now()) @db.Timestamptz(6)
   updated_at              DateTime      @default(now()) @db.Timestamptz(6)
   tenants                 tenants       @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  quotes                  quotes[]
 
   @@unique([tenant_id, id])
 }
