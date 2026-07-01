@@ -1108,5 +1108,6 @@ Cập nhật khi item thay đổi; chỉ cho sửa items khi `status = 'DRAFT'`.
 | `quotes` hết hạn không dùng | Cron delete | 7 ngày | Xoá |
 | `payment_attempts` | Cron delete | 12 tháng | Xoá |
 | `booking_status_history`, finance | Không xoá | Vĩnh viễn (nhỏ + nghĩa vụ kế toán) | — |
+| `discount_codes` | Không xoá (soft-delete) | Vĩnh viễn (finance-like — voucher gắn báo giá/booking, giữ để audit) | — |
 
 > Quy tắc khi thêm bảng log/event mới: **bắt buộc khai báo dòng retention** trong bảng này (checklist PR — `14`).
