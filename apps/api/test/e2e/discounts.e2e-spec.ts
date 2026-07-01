@@ -320,6 +320,16 @@ describe('Discount codes + redemption (task 9.4b)', () => {
       await request(http).get('/api/v1/discount-codes').set(auth(accToken)).expect(403);
     });
 
+    it('HOUSEKEEPER (không rate_plan.manage) → 403 MỌI endpoint QUẢN LÝ (create/list/get/patch/delete)', async () => {
+      // HK có booking.read (validate 200) nhưng KHÔNG rate_plan.manage → chặn toàn bộ quản lý mã.
+      // Vai thấp nhất → chốt ma trận RBAC riêng, KHÔNG suy ra từ ACCOUNTANT. fixedId đã gán ở test đầu.
+      await dc('', hkToken).send({ code: `HK-${RUN}`, discount_type: 'FIXED', discount_value: 1000 }).expect(403);
+      await request(http).get('/api/v1/discount-codes').set(auth(hkToken)).expect(403);
+      await request(http).get(`/api/v1/discount-codes/${fixedId}`).set(auth(hkToken)).expect(403);
+      await request(http).patch(`/api/v1/discount-codes/${fixedId}`).set(auth(hkToken)).send({ is_active: false }).expect(403);
+      await request(http).delete(`/api/v1/discount-codes/${fixedId}`).set(auth(hkToken)).expect(403);
+    });
+
     it('cross-tenant: tenant 2 KHÔNG thấy mã tenant 1 (RLS) + getById → 404', async () => {
       const list = await request(http).get('/api/v1/discount-codes').set(auth(otherToken)).expect(200);
       expect(list.body.data.some((d: { id: string }) => d.id === fixedId)).toBe(false);

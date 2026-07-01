@@ -156,6 +156,10 @@
 
 | Commit | Nội dung |
 |---|---|
+| `(pending)` | Task 9.4d (Wave-1 #4) — đóng e2e discounts + quote-with-discount: HK→403 mọi endpoint quản lý; đối chiếu đủ 15 mục acceptance; typecheck cuối (gồm test/) xanh |
+| `2473f03` | Task 9.4c (Wave-1 #4) — wire discount_code vào quote (FIXED/PERCENT, DISCOUNT line âm, persist discount_code_id, 422 DISCOUNT_NOT_APPLICABLE) + GET /:code/validate (booking.read) + verifyQuoteForBooking add-back |
+| `44d7d84` | Task 9.4b (Wave-1 #4) — DiscountsService CRUD + applyDiscount (mọi reason_code, FIXED cap, PERCENT roundVnd) + redeemInTx atomic chống double-spend (migration 0033 quotes.discount_code_id) |
+| `0162e28` | Task 9.4a (Wave-1 #4) — migration 0032 discount_codes (FIXED\|PERCENT, RLS, composite FK, soft-delete) + shared-types Zod đồng bộ CHECK |
 | `75891dd` | Task 6.5 — Reports dashboard (BE `GET /reports/occupancy` + FE P&L/break-even/occupancy heatmap, Recharts) |
 | `9612a26` | Task 6.4 — Invoice & Payment UI (BE `GET /invoices` list + `GET /payments?invoice_id` + FE F1/F2/F4 VietQR realtime/refund/unmatched) |
 | `1b749dc` | Task 6.3 — Booking form + live quote (`/bookings/new`: RHF+Zod + quote debounce/cọc + guest picker + Idempotency-Key + 409 PRICE_CHANGED/OVERLAP) |
