@@ -24,6 +24,7 @@ export const EVENT_TYPES = [
   'invoice.overdue',
   'cleaning_task.assigned',
   'cleaning_task.completed',
+  'shift.variance_detected',
   'sync_job.completed',
   'sync_job.failed',
 ] as const;
@@ -112,4 +113,14 @@ export type CleaningTaskEventPayload = {
   room_id: string;
   booking_id?: string;
   assigned_to?: string;
+};
+/**
+ * shift.variance_detected (task 9.4, docs/16 #10) — chỉ emit khi đóng ca có chênh
+ * lệch tiền mặt (variance_vnd != 0). Payload tối thiểu để anti-fraud alert/route:
+ * shift_id + property_id + variance (âm = thiếu tiền, dương = thừa) — KHÔNG nhét entity.
+ */
+export type ShiftVarianceEventPayload = {
+  shift_id: string;
+  property_id: string;
+  variance_vnd: number;
 };
