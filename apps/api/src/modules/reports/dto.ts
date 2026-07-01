@@ -1,4 +1,5 @@
 import {
+  AntiFraudQuerySchema,
   BreakEvenQuerySchema,
   LandlordStatementQuerySchema,
   OccupancyReportQuerySchema,
@@ -10,3 +11,4 @@ export class PnlQueryDto extends createZodDto(PnlQuerySchema) {}
 export class BreakEvenQueryDto extends createZodDto(BreakEvenQuerySchema) {}
 export class OccupancyReportQueryDto extends createZodDto(OccupancyReportQuerySchema) {}
 export class LandlordStatementQueryDto extends createZodDto(LandlordStatementQuerySchema) {}
+export class AntiFraudQueryDto extends createZodDto(AntiFraudQuerySchema) {}

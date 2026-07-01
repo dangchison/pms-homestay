@@ -363,6 +363,18 @@ Nghĩa vụ **RIÊNG với khách nước ngoài**: khai báo tạm trú lên C�
 
 _(Follow-up: tích hợp cổng XNC thật (creds); trang web-admin nhập NA17 + nút Gửi/Tải; gợi ý tự tạo khai báo khi check-in khách quốc tịch ≠ VN; batch xuất nhiều NA17.)_
 
+### TASK 9.4 — Sổ quỹ ca + bàn giao ca (Shift cash book & handover) [docs/16 #10, Wave 1]
+Chống **thất thoát tiền mặt**: mỗi ca thu ngân của MỘT cơ sở mở ca (ghi float đầu ca) → thu tiền mặt trong ca → đóng ca đếm tiền thực + so **tiền kỳ vọng** (float + Σ CASH thu − Σ refund CASH). Chênh lệch (variance) != 0 → phát hiện bất thường (anti-fraud). Differentiator cho chủ nhiều cơ sở / nhiều ca.
+**Depends:** 3.3 (payments/CASH), 2.1 (properties)
+**Acceptance:**
+- Migration 0032 `cash_shifts` (RLS tenant-scoped, `enforce_tenant_isolation`; composite FK `(tenant,property)` ADR-0005 + `UNIQUE(tenant,id)`; trigger `set_updated_at`; index `(tenant,property)`; **partial unique 1 ca OPEN/cơ sở** `WHERE status='OPEN'`; `variance_vnd` GENERATED STORED `(counted − expected)`; CHECK float/counted ≥ 0; retention Vĩnh viễn — finance). `idempotency_key` + partial unique cho replay POST. Forward-only.
+- `shared-types`: `'shift.variance_detected'` vào `EVENT_TYPES` + `ShiftVarianceEventPayload`; Zod `OpenShiftRequest`/`CloseShiftRequest`/`ShiftResponse`/`ShiftDetailResponse`(+cash_payments)/`ShiftsListQuery`.
+- `POST /shifts` (perm `payment.reconcile` + `authorizeOnProperty`; Idempotency-Key) mở ca; đã có ca OPEN → 409 `SHIFT_ALREADY_OPEN` (partial-unique nguồn chân lý, map P2002). `GET /shifts` + `GET /shifts/:id` (perm `report.financial`) list/chi tiết (+ payment CASH thuộc cửa sổ/cơ sở). `POST /shifts/:id/close` (perm `payment.reconcile`; If-Match=version → 428 thiếu / 409 `VERSION_CONFLICT`) tính expected TRONG tx, ghi counted/expected/closed_*; chỉ ca OPEN (else 422 `SHIFT_NOT_OPEN`).
+- expected = `roundVnd(float + Σ payment CASH SUCCEEDED received_at∈[opened_at,now] tại cơ sở − Σ refunded_amount_vnd của các payment đó)`; chỉ CASH (VIETQR/BANK_TRANSFER ngoài két). variance != 0 → emit `shift.variance_detected` (outbox, `aggregate_type='cash_shift'`, payload `{shift_id,property_id,variance_vnd}`) — ca khớp KHÔNG emit.
+- e2e: ca khớp (float 500k + 2 CASH → variance 0, KHÔNG outbox); ca thiếu tiền (variance −100k + 1 outbox); refund CASH trừ expected đúng; ca thứ 2 khi OPEN → 409 rồi close→mở lại 201; cross-tenant 404; HOUSEKEEPER (thiếu `payment.reconcile`) → 403; If-Match thiếu/sai → 428/409; RLS interleaved list.
+
+_(Follow-up: STAFF thu ngân mở ca (thêm `payment.reconcile` vào STAFF — đổi ma trận docs/04, PR riêng); refund theo ngày refund thay vì refunded_amount_vnd hiện tại; trang web-admin/web-staff mở-đóng ca + báo cáo anti-fraud tổng hợp.)_
+
 ---
 
 ## Checklist PR (tự review trước khi submit)

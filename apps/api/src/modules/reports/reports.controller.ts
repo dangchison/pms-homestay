@@ -5,6 +5,7 @@ import { AuditExport } from '@core/http/decorators/audit-export.decorator';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
 import {
+  AntiFraudQueryDto,
   BreakEvenQueryDto,
   LandlordStatementQueryDto,
   OccupancyReportQueryDto,
@@ -49,6 +50,13 @@ export class ReportsController {
     @CurrentUser() user: JwtClaims,
   ) {
     return { data: await this.reports.getLandlordStatement(query, user) };
+  }
+
+  /** Báo cáo anti-fraud (docs/16 #11, Wave 1) — 4 dấu hiệu gian lận tiền mặt, không PII. */
+  @Get('anti-fraud')
+  @RequirePermissions('report.financial')
+  async antiFraud(@Query() query: AntiFraudQueryDto, @CurrentUser() user: JwtClaims) {
+    return { data: await this.reports.getAntiFraud(query, user) };
   }
 
   /** Xuất Excel (P&L + lấp đầy theo ngày) cho [from,to] — binary qua `@Res`. */
