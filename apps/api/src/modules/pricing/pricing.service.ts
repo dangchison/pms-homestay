@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { type JwtClaims, type QuoteRequest, type QuoteResponse } from '@pms/shared-types';
+import {
+  type JwtClaims,
+  type QuoteLineItem,
+  type QuoteRequest,
+  type QuoteResponse,
+} from '@pms/shared-types';
 import {
   PricingError,
   localDate,
@@ -11,6 +16,7 @@ import { PermissionService } from '@core/auth/permission.service';
 import { AppException } from '@core/http/exceptions/app.exception';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { withTenant } from '@core/tenancy/with-tenant';
+import { DiscountsService } from '@modules/discounts/discounts.service';
 import { holidayRowToEngine, toApiLineItem, toRatePlanConfig } from './pricing.mappers';
 
 type Tx = Prisma.TransactionClient;
@@ -23,6 +29,7 @@ export class PricingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly permissionService: PermissionService,
+    private readonly discounts: DiscountsService,
   ) {}
 
   /**
@@ -54,6 +61,41 @@ export class PricingService {
       });
 
       const lineItems = engineQuote.lineItems.map(toApiLineItem);
+
+      // Voucher (task 9.4c) — CHỈ khi client gửi discount_code (path không mã byte-identical
+      // như trước). Áp CÙNG tx (RLS đã set) trên property ĐÃ-RESOLVE của quote — KHÔNG dùng
+      // property client gửi. Mã KHÔNG hợp lệ → 422 DISCOUNT_NOT_APPLICABLE NÉM TRƯỚC khi INSERT
+      // → KHÔNG quote nào được persist (báo giá nguyên tử: áp sạch hoặc từ chối, để booking sau
+      // không âm thầm rớt voucher). Số tiền voucher tính DUY NHẤT ở DiscountsService.evaluate →
+      // khớp endpoint validate. discount_vnd = engine + voucher; total = subtotal - discount + tax.
+      let discountVnd = engineQuote.discountVnd;
+      let totalVnd = engineQuote.totalVnd;
+      let discountCodeId: string | null = null;
+      if (dto.discount_code) {
+        const applied = await this.discounts.applyDiscountInTx(tx, dto.discount_code, {
+          subtotalVnd: BigInt(engineQuote.subtotalVnd),
+          propertyId: resource.property_id,
+        });
+        if (!applied.valid || applied.code_id === null) {
+          throw new AppException({
+            code: 'DISCOUNT_NOT_APPLICABLE',
+            title: 'Mã giảm giá không áp dụng được cho báo giá này',
+            status: 422,
+            detail: applied.reason_code,
+          });
+        }
+        discountCodeId = applied.code_id;
+        discountVnd = engineQuote.discountVnd + applied.discount_vnd;
+        totalVnd = engineQuote.subtotalVnd - discountVnd + engineQuote.taxVnd;
+        lineItems.push({
+          type: 'DISCOUNT',
+          description: `Mã giảm giá ${dto.discount_code}`,
+          quantity: 1,
+          unit_price_vnd: -applied.discount_vnd,
+          amount_vnd: -applied.discount_vnd,
+        } satisfies QuoteLineItem);
+      }
+
       const expiresAt = new Date(Date.now() + QUOTE_TTL_MS);
       const row = await tx.quotes.create({
         data: {
@@ -69,9 +111,10 @@ export class PricingService {
           children: dto.children ?? 0,
           line_items: lineItems as unknown as Prisma.InputJsonValue,
           subtotal_vnd: BigInt(engineQuote.subtotalVnd),
-          discount_vnd: BigInt(engineQuote.discountVnd),
+          discount_vnd: BigInt(discountVnd),
           tax_vnd: BigInt(engineQuote.taxVnd),
-          total_vnd: BigInt(engineQuote.totalVnd),
+          total_vnd: BigInt(totalVnd),
+          discount_code_id: discountCodeId,
           expires_at: expiresAt,
         },
       });
@@ -89,12 +132,13 @@ export class PricingService {
         children: row.children,
         line_items: lineItems,
         subtotal_vnd: engineQuote.subtotalVnd,
-        discount_vnd: engineQuote.discountVnd,
+        discount_vnd: discountVnd,
         tax_vnd: engineQuote.taxVnd,
-        total_vnd: engineQuote.totalVnd,
+        total_vnd: totalVnd,
         deposit_vnd: engineQuote.depositVnd,
         expires_at: expiresAt.toISOString(),
         holidays: engineQuote.holidays.map((h) => ({ date: h.date, name: h.name })),
+        ...(dto.discount_code ? { discount_code: dto.discount_code } : {}),
       };
     });
   }
@@ -164,8 +208,16 @@ export class PricingService {
       property?.timezone ?? 'Asia/Ho_Chi_Minh',
       { mode: quote.mode, checkIn: quote.check_in, checkOut: quote.check_out, adults: quote.adults, children: quote.children },
     );
-    if (recalculated.totalVnd !== Number(quote.total_vnd)) {
-      throw priceChanged(`giá mới ${recalculated.totalVnd} ≠ báo giá ${Number(quote.total_vnd)}`);
+    // ★ So khớp VÔ-CẢM-VOUCHER (task 9.4c): engine KHÔNG biết voucher nên recalculated.totalVnd
+    // là tổng TRƯỚC voucher. quote.total_vnd đã trừ voucher → phải CỘNG LẠI phần voucher trước khi
+    // so, nếu không MỌI booking có voucher sẽ 409 PRICE_CHANGED oan. voucherPortion = phần discount
+    // của quote VƯỢT engine hiện tại = Number(quote.discount_vnd) - recalculated.discountVnd (khi
+    // không voucher: quote.discount_vnd == engine → phần = 0 → so y hệt trước). Đổi giá thật (rate
+    // thay đổi) vẫn 409 vì recalculated.totalVnd lệch tổng-trước-voucher của quote.
+    const voucherPortion = Number(quote.discount_vnd) - recalculated.discountVnd;
+    const preVoucherQuoteTotal = Number(quote.total_vnd) + voucherPortion;
+    if (recalculated.totalVnd !== preVoucherQuoteTotal) {
+      throw priceChanged(`giá mới ${recalculated.totalVnd} ≠ báo giá ${preVoucherQuoteTotal}`);
     }
     return quote;
   }

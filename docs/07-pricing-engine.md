@@ -178,9 +178,38 @@ Server tính bằng engine → **INSERT bảng `quotes`** (line_items, totals, `
 
 `rate_plans.version` bump mỗi lần sửa giá → mọi re-calculate là xác định, phục vụ cả audit/tranh chấp giá.
 
-## 7. Discount & Promotion (phase 2 — thiết kế sẵn, không tạo bảng ở MVP)
+## 7. Discount & Promotion (Wave-1 #4 — đã triển khai)
 
-`discount_codes` (schema giữ như cũ — tạo ở phase 2): code per tenant, FIXED/PERCENT, min order, max uses, validity window, danh sách property áp dụng.
+`discount_codes` (bảng ở migration 0032, link `quotes.discount_code_id` ở 0033): code per tenant (CITEXT), FIXED (VND) / PERCENT (basis-point 0..10000), min order, max uses, validity window (closed-interval), `applicable_property_ids` (NULL = MỌI property, KHÁC `[]` = KHÔNG property nào).
+
+### Áp mã vào báo giá (task 9.4c)
+
+`POST /api/v1/pricing/quote` nhận thêm field **optional** `discount_code`:
+
+```
+POST /api/v1/pricing/quote
+{ ...quote fields..., "discount_code": "SUMMER25" }   // discount_code optional
+```
+
+- KHÔNG gửi `discount_code` → báo giá y hệt trước (backward-compatible tuyệt đối).
+- Có mã hợp lệ → server áp qua `DiscountsService` (CÙNG tx, RLS + property đã-resolve của quote):
+  `discount_vnd = engineDiscount + voucher`, thêm 1 dòng `line_items` loại `DISCOUNT` (amount âm),
+  `total_vnd = subtotal − discount_vnd + tax`, ghi `quotes.discount_code_id`, echo `discount_code` trong response.
+  Số tiền voucher: FIXED = min(value, subtotal) (cap, không âm total); PERCENT = `roundVnd(subtotal × value / 10000)`
+  (basis-point, half-away-from-zero — tính DUY NHẤT ở `DiscountsService.evaluate`).
+- Mã KHÔNG hợp lệ (NOT_FOUND / INACTIVE / EXPIRED / NOT_STARTED / BELOW_MIN_ORDER / PROPERTY_NOT_ELIGIBLE /
+  USAGE_LIMIT_REACHED) → **422 `DISCOUNT_NOT_APPLICABLE`** (RFC7807; `reason_code` ở `detail`), **KHÔNG persist quote**
+  (báo giá nguyên tử — áp sạch hoặc từ chối, để booking sau không âm thầm rớt voucher).
+
+`verifyQuoteForBooking` (khi tạo booking) so tổng ENGINE (vô-cảm-voucher) với tổng **TRƯỚC voucher** của quote
+(`total_vnd + (discount_vnd − engineDiscount)`) — booking có voucher KHÔNG bị 409 PRICE_CHANGED oan; đổi giá thật vẫn 409.
+Redeem `used_count` (atomic, exactly-once, chống double-spend) ở tx booking — task 9.4b, không đổi.
+
+### Pre-check voucher (FE, task 9.4c)
+
+`GET /api/v1/discount-codes/:code/validate?subtotal_vnd=<int>&property_id=<uuid>` — gate `booking.read` (read-only),
+trả **200** `{ valid, discount_vnd, reason_code }` (số khớp byte-for-byte với áp-mã-lúc-báo-giá). Mã không tồn tại
+(kể cả cross-tenant do RLS ẩn) → 200 `{ valid:false, reason_code:'NOT_FOUND' }` (KHÔNG 404 — an toàn làm gate FE, không lộ tồn tại).
 
 ## 8. Test cases bắt buộc
 

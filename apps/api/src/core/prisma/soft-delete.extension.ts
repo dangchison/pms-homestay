@@ -10,6 +10,7 @@ export const SOFT_DELETABLE_MODELS = new Set<string>([
   'bookable_resources', // task 2.1
   'guests', // task 2.5
   'assets', // task 3.5
+  'discount_codes', // task 9.4b — soft-delete (deleted_at); list/applyDiscount/trùng-code chỉ thấy live
 ]);
 
 function mentionsDeletedAt(where: unknown): boolean {

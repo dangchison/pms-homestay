@@ -29,6 +29,7 @@ import { PrismaService } from '@core/prisma/prisma.service';
 import { withTenant } from '@core/tenancy/with-tenant';
 import { OccupancyService } from '@modules/occupancy/occupancy.service';
 import { CleaningService } from '@modules/cleaning/cleaning.service';
+import { DiscountsService } from '@modules/discounts/discounts.service';
 import { ExpensesService } from '@modules/expenses/expenses.service';
 import { InvoicesService } from '@modules/invoices/invoices.service';
 import { PricingService } from '@modules/pricing/pricing.service';
@@ -105,6 +106,7 @@ export class BookingsService {
     private readonly invoices: InvoicesService,
     private readonly expenses: ExpensesService,
     private readonly cleaning: CleaningService,
+    private readonly discounts: DiscountsService,
     private readonly outbox: OutboxService,
   ) {}
 
@@ -145,6 +147,14 @@ export class BookingsService {
         checkOut,
         mode: dto.mode,
       });
+
+      // 1b. Voucher (task 9.4b): quote đã gắn mã → tăng used_count ATOMIC trong CÙNG
+      // tx. Mã cạn/hết hiệu lực → DISCOUNT_EXHAUSTED 409 ⇒ rollback CẢ booking (không
+      // booking mồ côi). quote.discount_code_id = NULL → bỏ qua, luồng cũ chạy y hệt
+      // (backward-compatible). Điền discount_code_id vào quote thuộc task 9.4c.
+      if (quote.discount_code_id) {
+        await this.discounts.redeemInTx(tx, user.tnt, quote.discount_code_id);
+      }
 
       // 2. phòng thành viên + advisory lock (sorted, tránh deadlock WHOLE↔ROOM)
       const members = await this.occupancy.memberRooms(tx, resource.id);

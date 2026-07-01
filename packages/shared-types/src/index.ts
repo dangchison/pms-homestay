@@ -24,4 +24,5 @@ export * from './audit-log';
 export * from './subscription';
 export * from './channel';
 export * from './compliance';
+export * from './discount-code';
 export * from './platform';

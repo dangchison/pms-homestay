@@ -1253,6 +1253,29 @@
         ]
       }
     },
+    "/api/v1/guests/{id}/platform-summary": {
+      "get": {
+        "operationId": "GuestsController_platformSummary",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Guests"
+        ]
+      }
+    },
     "/api/v1/guests/{id}/blacklist": {
       "post": {
         "operationId": "GuestsController_blacklist",
@@ -1673,6 +1696,124 @@
         ]
       }
     },
+    "/api/v1/bookings/{id}/reschedule": {
+      "post": {
+        "operationId": "BookingsController_reschedule",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RescheduleBookingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Bookings"
+        ]
+      }
+    },
+    "/api/v1/bookings/{id}/surcharges": {
+      "post": {
+        "operationId": "BookingsController_addSurcharge",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBookingSurchargeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Bookings"
+        ]
+      },
+      "get": {
+        "operationId": "BookingsController_listSurcharges",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Bookings"
+        ]
+      }
+    },
+    "/api/v1/bookings/{id}/surcharges/{surchargeId}": {
+      "delete": {
+        "operationId": "BookingsController_removeSurcharge",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "surchargeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Bookings"
+        ]
+      }
+    },
     "/api/v1/cleaning-tasks": {
       "post": {
         "operationId": "CleaningController_create",
@@ -2033,17 +2174,8 @@
     },
     "/api/v1/payments": {
       "get": {
-        "operationId": "PaymentsController_listByInvoice",
-        "parameters": [
-          {
-            "name": "invoice_id",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "operationId": "PaymentsController_list",
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
@@ -2162,6 +2294,98 @@
         },
         "tags": [
           "PaymentWebhook"
+        ]
+      }
+    },
+    "/api/v1/shifts": {
+      "post": {
+        "operationId": "ShiftsController_open",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenShiftDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Shifts"
+        ]
+      },
+      "get": {
+        "operationId": "ShiftsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Shifts"
+        ]
+      }
+    },
+    "/api/v1/shifts/{id}": {
+      "get": {
+        "operationId": "ShiftsController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Shifts"
+        ]
+      }
+    },
+    "/api/v1/shifts/{id}/close": {
+      "post": {
+        "operationId": "ShiftsController_close",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseShiftDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Shifts"
         ]
       }
     },
@@ -2521,6 +2745,48 @@
         ]
       }
     },
+    "/api/v1/reports/landlord-statement": {
+      "get": {
+        "operationId": "ReportsController_landlordStatement",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/anti-fraud": {
+      "get": {
+        "operationId": "ReportsController_antiFraud",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/export": {
+      "get": {
+        "operationId": "ReportsController_exportXlsx",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
     "/api/v1/events/stream": {
       "get": {
         "operationId": "EventsController_stream",
@@ -2583,6 +2849,30 @@
         },
         "tags": [
           "Audit"
+        ]
+      }
+    },
+    "/api/v1/platform/auth/login": {
+      "post": {
+        "operationId": "PlatformAuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformLoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "PlatformAuth"
         ]
       }
     },
@@ -2700,6 +2990,20 @@
       },
       "get": {
         "operationId": "ChannelsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Channels"
+        ]
+      }
+    },
+    "/api/v1/channels/conflict-count": {
+      "get": {
+        "operationId": "ChannelsController_conflictCount",
         "parameters": [],
         "responses": {
           "200": {
@@ -3000,6 +3304,30 @@
         ]
       }
     },
+    "/api/v1/compliance/police-report/submit": {
+      "post": {
+        "operationId": "ComplianceController_submitPoliceReport",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitPoliceReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Compliance"
+        ]
+      }
+    },
     "/api/v1/guests/{id}/consents": {
       "get": {
         "operationId": "DataRightsController_listConsents",
@@ -3161,6 +3489,276 @@
         },
         "tags": [
           "DataRights"
+        ]
+      }
+    },
+    "/api/v1/compliance/foreign-residence": {
+      "post": {
+        "operationId": "ForeignResidenceController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateForeignResidenceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ForeignResidence"
+        ]
+      },
+      "get": {
+        "operationId": "ForeignResidenceController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ForeignResidence"
+        ]
+      }
+    },
+    "/api/v1/compliance/foreign-residence/{id}": {
+      "get": {
+        "operationId": "ForeignResidenceController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ForeignResidence"
+        ]
+      },
+      "patch": {
+        "operationId": "ForeignResidenceController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateForeignResidenceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ForeignResidence"
+        ]
+      }
+    },
+    "/api/v1/compliance/foreign-residence/{id}/submit": {
+      "post": {
+        "operationId": "ForeignResidenceController_submit",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ForeignResidence"
+        ]
+      }
+    },
+    "/api/v1/compliance/foreign-residence/{id}/na17": {
+      "get": {
+        "operationId": "ForeignResidenceController_na17",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "ForeignResidence"
+        ]
+      }
+    },
+    "/api/v1/discount-codes": {
+      "post": {
+        "operationId": "DiscountsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDiscountCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Discounts"
+        ]
+      },
+      "get": {
+        "operationId": "DiscountsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Discounts"
+        ]
+      }
+    },
+    "/api/v1/discount-codes/{code}/validate": {
+      "get": {
+        "operationId": "DiscountsController_validate",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Discounts"
+        ]
+      }
+    },
+    "/api/v1/discount-codes/{id}": {
+      "get": {
+        "operationId": "DiscountsController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Discounts"
+        ]
+      },
+      "patch": {
+        "operationId": "DiscountsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDiscountCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Discounts"
+        ]
+      },
+      "delete": {
+        "operationId": "DiscountsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Discounts"
         ]
       }
     },
@@ -3555,6 +4153,14 @@
         "type": "object",
         "properties": {}
       },
+      "RescheduleBookingDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateBookingSurchargeDto": {
+        "type": "object",
+        "properties": {}
+      },
       "CreateCleaningTaskDto": {
         "type": "object",
         "properties": {}
@@ -3603,6 +4209,14 @@
         "type": "object",
         "properties": {}
       },
+      "OpenShiftDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CloseShiftDto": {
+        "type": "object",
+        "properties": {}
+      },
       "CreateAssetDto": {
         "type": "object",
         "properties": {}
@@ -3627,6 +4241,10 @@
         "type": "object",
         "properties": {}
       },
+      "PlatformLoginDto": {
+        "type": "object",
+        "properties": {}
+      },
       "ChargeSubscriptionDto": {
         "type": "object",
         "properties": {}
@@ -3647,11 +4265,31 @@
         "type": "object",
         "properties": {}
       },
+      "SubmitPoliceReportDto": {
+        "type": "object",
+        "properties": {}
+      },
       "GrantConsentDto": {
         "type": "object",
         "properties": {}
       },
       "DataCorrectionDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateForeignResidenceDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateForeignResidenceDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateDiscountCodeDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateDiscountCodeDto": {
         "type": "object",
         "properties": {}
       },
