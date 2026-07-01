@@ -18,6 +18,8 @@ const SENSITIVE_EXACT = new Set([
   'old_password',
   'id_document_number',
   'id_document_number_enc',
+  'visa_number',
+  'visa_number_enc',
   'two_factor_secret',
   'totp_secret',
   'token',
