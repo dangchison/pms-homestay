@@ -114,6 +114,15 @@ export const envSchema = z.object({
   SMS_PROVIDER: z.enum(['mock', 'esms', 'log']).default('mock'),
 
   /**
+   * Nhà cung cấp OCR CCCD/hộ chiếu (Đợt 4 — M3, docs/18). Mặc định 'auto': hành vi
+   * hiện hữu — FptOcrProvider (có FPT_AI_API_KEY→gọi FPT.AI; else 503 OCR_NOT_CONFIGURED,
+   * fallback nhập tay). 'fpt' = luôn FptOcrProvider. 'mock' = MockOcrProvider (sandbox
+   * tất định từ SHA-256(image_key), KHÔNG I/O ngoài, KHÔNG cần creds — dev/CI end-to-end).
+   * mock KHÔNG tự bật ở prod: default 'auto' KHÔNG BAO GIỜ ra mock, chỉ khi set
+   * OCR_PROVIDER=mock tường minh (tránh trả CCCD giả im lặng vào hệ thống thật).
+   */
+  OCR_PROVIDER: z.enum(['auto', 'fpt', 'mock']).default('auto'),
+  /**
    * OCR CCCD/hộ chiếu FPT.AI Vision (task 7.1, docs/12 §3). Thiếu API key →
    * POST /guests/scan-id trả 503 (fallback nhập tay luôn sẵn). Endpoint mặc định
    * idr/vnm (nhận diện giấy tờ VN). Hợp đồng FPT.AI là track lead-time dài (docs/14).
