@@ -2815,6 +2815,20 @@
         ]
       }
     },
+    "/api/v1/notifications/outbound": {
+      "get": {
+        "operationId": "NotificationsController_listOutbound",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
     "/api/v1/notifications/{id}/read": {
       "post": {
         "operationId": "NotificationsController_markRead",

@@ -67,6 +67,7 @@ model tenants {
   monthly_meter_readings         monthly_meter_readings[]
   notifications                  notifications[]
   operational_expenses           operational_expenses[]
+  outbound_messages              outbound_messages[]
   outbox_events                  outbox_events[]
   payment_attempts               payment_attempts[]
   payments                       payments[]
@@ -469,6 +470,7 @@ model guests {
   foreign_residence_declarations foreign_residence_declarations[]
   persons                        persons?                         @relation(fields: [person_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants                        tenants                          @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  outbound_messages              outbound_messages[]
 
   @@unique([tenant_id, id])
   @@index([tenant_id, id_document_number_hash], map: "idx_guests_doc_hash")
@@ -553,6 +555,7 @@ model bookings {
   invoices                       invoices[]
   monthly_meter_readings         monthly_meter_readings[]
   operational_expenses           operational_expenses[]
+  outbound_messages              outbound_messages[]
   room_occupancy                 room_occupancy[]
 
   @@unique([tenant_id, booking_code])
@@ -1158,6 +1161,32 @@ model discount_codes {
   quotes                  quotes[]
 
   @@unique([tenant_id, id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model outbound_messages {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id           String    @db.Uuid
+  channel             String    @db.VarChar(16)
+  provider            String    @db.VarChar(16)
+  provider_message_id String?   @db.VarChar(255)
+  recipient           String
+  title               String
+  body                String
+  status              String    @default("PENDING") @db.VarChar(16)
+  error_reason        String?
+  event_id            String?   @db.Uuid
+  booking_id          String?   @db.Uuid
+  guest_id            String?   @db.Uuid
+  metadata            Json      @default("{}")
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime  @default(now()) @db.Timestamptz(6)
+  bookings            bookings? @relation(fields: [tenant_id, booking_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+  tenants             tenants   @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  guests              guests?   @relation(fields: [tenant_id, guest_id], references: [tenant_id, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([tenant_id, created_at(sort: Desc)], map: "idx_outbound_messages_tenant_created")
 }
 
 enum user_role {

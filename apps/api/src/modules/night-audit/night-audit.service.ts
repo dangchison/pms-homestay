@@ -18,6 +18,7 @@ const SYNC_LOGS_RETENTION_DAYS = 30;
 const SYNC_JOBS_RETENTION_DAYS = 90;
 const NOTIFICATIONS_RETENTION_DAYS = 365; // 12 tháng
 const PAYMENT_ATTEMPTS_RETENTION_DAYS = 365; // 12 tháng
+const OUTBOUND_MESSAGES_RETENTION_DAYS = 90; // sổ gửi kênh ngoài (M1, docs/18 §retention)
 
 function startOfUtcDay(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -340,6 +341,13 @@ export class NightAuditService {
     total += (
       await tx.payment_attempts.deleteMany({
         where: { created_at: { lt: cutoff(PAYMENT_ATTEMPTS_RETENTION_DAYS) } },
+      })
+    ).count;
+    // outbound_messages (M1, docs/18): sổ gửi kênh ngoài giữ 90 ngày. Bảng con
+    // (FK nullable tới bookings/guests) — deleteMany theo created_at an toàn.
+    total += (
+      await tx.outbound_messages.deleteMany({
+        where: { created_at: { lt: cutoff(OUTBOUND_MESSAGES_RETENTION_DAYS) } },
       })
     ).count;
     return total;

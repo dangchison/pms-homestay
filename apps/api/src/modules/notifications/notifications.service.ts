@@ -1,5 +1,5 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import {
   type JwtClaims,
   type ListNotificationsQuery,
@@ -11,18 +11,20 @@ import { type notifications } from '@prisma/client';
 import { QUEUE_NOTIFICATIONS } from '@core/bullmq/queues';
 import { AppException } from '@core/http/exceptions/app.exception';
 import { EmailTemplateService } from '@core/mail/email-template.service';
-import { MailService } from '@core/mail/mail.service';
 import { type NotificationSink } from '@core/outbox/notification-sink';
 import { type ClaimedOutboxEvent } from '@core/outbox/outbox.service';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { withTenant } from '@core/tenancy/with-tenant';
 import {
   channelsFor,
+  type DeliveryChannel,
   type NotificationEventInput,
   type NotificationTarget,
   renderTemplate,
   roleSeesCategory,
 } from './notification-targets';
+import { OutboundMessagesService } from './outbound-messages.service';
+import { NotificationProviderRegistry } from './providers/notification-provider.registry';
 
 function toResponse(n: notifications): NotificationResponse {
   return {
@@ -41,18 +43,18 @@ function toResponse(n: notifications): NotificationResponse {
  * ★ Notifications (task 4.4, docs/10 §7). Implements NotificationSink — dispatcher
  * (4.2) enqueue 1 job/event vào queue `notifications`; worker (gated
  * ENABLE_SCHEDULERS) gọi `processEvent` → route theo role/property × kênh → ghi 1
- * dòng/kênh (idempotent ON CONFLICT) + side-effect (email SMTP best-effort; SMS/ZNS
- * stub). Test gọi processEvent trực tiếp (như các worker khác).
+ * dòng/kênh (idempotent ON CONFLICT) + side-effect: kênh ngoài (EMAIL/SMS/ZNS) qua
+ * NotificationProviderRegistry (M1, docs/18) + ghi outbound_messages. Test gọi
+ * processEvent trực tiếp (như các worker khác).
  */
 @Injectable()
 export class NotificationsService implements NotificationSink {
-  private readonly logger = new Logger(NotificationsService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     @InjectQueue(QUEUE_NOTIFICATIONS) private readonly queue: Queue,
-    private readonly mail: MailService,
     private readonly emailTemplate: EmailTemplateService,
+    private readonly providers: NotificationProviderRegistry,
+    private readonly outbound: OutboundMessagesService,
   ) {}
 
   /** Sink: dispatcher gọi sau khi fan-out SSE. 1 job/event, dedup jobId theo event_id. */
@@ -82,7 +84,27 @@ export class NotificationsService implements NotificationSink {
     return { delivered };
   }
 
-  private async routeTargets(event: NotificationEventInput): Promise<NotificationTarget[]> {
+  /**
+   * Route + deliver ÉP kênh cụ thể (bỏ qua channelsFor). Dùng khi cần gửi 1 kênh
+   * nhất định cho recipients đủ điều kiện (vd targeted SMS/ZNS, e2e M1). Ghi
+   * notifications (idempotent) + side-effect như processEvent.
+   */
+  async processEventForChannels(
+    event: NotificationEventInput,
+    channels: DeliveryChannel[],
+  ): Promise<{ delivered: number }> {
+    const targets = await this.routeTargets(event, channels);
+    let delivered = 0;
+    for (const target of targets) {
+      if (await this.deliverTarget(event, target)) delivered += 1;
+    }
+    return { delivered };
+  }
+
+  private async routeTargets(
+    event: NotificationEventInput,
+    channelsOverride?: DeliveryChannel[],
+  ): Promise<NotificationTarget[]> {
     const category = event.event_type.split('.')[0] ?? '';
     const propertyId = typeof event.payload['property_id'] === 'string' ? event.payload['property_id'] : null;
 
@@ -95,6 +117,7 @@ export class NotificationsService implements NotificationSink {
           select: {
             id: true,
             email: true,
+            phone: true,
             default_role: true,
             user_property_roles: { select: { property_id: true, role: true } },
           },
@@ -111,8 +134,8 @@ export class NotificationsService implements NotificationSink {
           u.user_property_roles.some((r) => r.property_id === propertyId && roleSeesCategory(r.role, category)));
       if (!sees) continue;
       const metadata: Record<string, unknown> = { event_type: event.event_type, ...event.payload };
-      for (const channel of channelsFor(event.event_type)) {
-        targets.push({ userId: u.id, email: u.email, channel, title, body, metadata });
+      for (const channel of channelsOverride ?? channelsFor(event.event_type)) {
+        targets.push({ userId: u.id, email: u.email, phone: u.phone, channel, title, body, metadata });
       }
     }
     return targets;
@@ -132,17 +155,36 @@ export class NotificationsService implements NotificationSink {
     );
     if (inserted === 0) return false; // đã gửi → idempotent skip (không gửi đôi email)
 
-    // Side-effect NGOÀI tx (ADR-0002): email best-effort; SMS/ZNS stub (provider sau).
-    if (t.channel === 'EMAIL' && t.email) {
-      // B2: gửi kèm HTML có thương hiệu (Handlebars) + text fallback.
-      await this.mail.send({
-        to: t.email,
-        subject: t.title,
-        text: `${t.body}\n\n— PMS Homestay`,
-        html: this.emailTemplate.render({ title: t.title, body: t.body }),
+    // Side-effect NGOÀI tx (ADR-0002): MỌI kênh ngoài (EMAIL/SMS/ZNS) đi qua registry
+    // → provider theo env (EMAIL=SMTP; SMS/ZNS mock|log; esms|zalo Phase sau) rồi ghi 1
+    // dòng outbound_messages truy vết. IN_APP là dòng notifications thuần → không gửi ngoài.
+    if (t.channel === 'EMAIL' || t.channel === 'SMS' || t.channel === 'ZNS') {
+      // recipient: EMAIL=email; SMS/ZNS=số ĐT user, fallback email/userId khi chưa có.
+      const recipient = t.channel === 'EMAIL' ? (t.email ?? t.userId) : (t.phone ?? t.email ?? t.userId);
+      const provider = this.providers.forChannel(t.channel);
+      const res = await provider.send({
+        channel: t.channel,
+        recipient,
+        title: t.title,
+        // EMAIL: giữ text footer thương hiệu + HTML (Handlebars). SMS/ZNS: body thuần.
+        body: t.channel === 'EMAIL' ? `${t.body}\n\n— PMS Homestay` : t.body,
+        ...(t.channel === 'EMAIL' ? { html: this.emailTemplate.render({ title: t.title, body: t.body }) } : {}),
       });
-    } else if (t.channel === 'SMS' || t.channel === 'ZNS') {
-      this.logger.log(`[stub ${t.channel}] user=${t.userId} "${t.title}" — provider chưa cấu hình`);
+      const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
+      await this.outbound.recordOutbound(event.tenant_id, {
+        channel: t.channel,
+        provider: provider.name,
+        providerMessageId: res.providerMessageId,
+        recipient,
+        title: t.title,
+        body: t.body,
+        status: res.status,
+        errorReason: res.errorReason,
+        eventId: event.event_id,
+        bookingId: str(t.metadata['booking_id']),
+        guestId: str(t.metadata['guest_id']),
+        metadata: { user_id: t.userId, ...t.metadata },
+      });
     }
     return true;
   }

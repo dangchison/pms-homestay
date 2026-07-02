@@ -89,6 +89,16 @@ export const envSchema = z.object({
   SMTP_PORT: z.coerce.number().int().positive().default(1025),
 
   /**
+   * Provider gửi ZNS/SMS (Đợt 4 — mock/sandbox theo env, docs/18). Mặc định 'mock'
+   * → dev/CI chạy end-to-end không cần creds thật (MockMessagingProvider trả SENT +
+   * id mock-<uuid>). 'log' = stub cũ (LogMessagingProvider, không I/O ngoài, chỉ log).
+   * 'zalo'/'esms' = slot creds Phase sau — CHƯA impl (registry ném rõ ràng 'provider
+   * chưa cấu hình' thay vì gửi thật). EMAIL luôn qua SMTP (SmtpEmailProvider→Mailpit/relay).
+   */
+  ZNS_PROVIDER: z.enum(['mock', 'zalo', 'log']).default('mock'),
+  SMS_PROVIDER: z.enum(['mock', 'esms', 'log']).default('mock'),
+
+  /**
    * OCR CCCD/hộ chiếu FPT.AI Vision (task 7.1, docs/12 §3). Thiếu API key →
    * POST /guests/scan-id trả 503 (fallback nhập tay luôn sẵn). Endpoint mặc định
    * idr/vnm (nhận diện giấy tờ VN). Hợp đồng FPT.AI là track lead-time dài (docs/14).
