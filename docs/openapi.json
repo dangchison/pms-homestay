@@ -2297,6 +2297,30 @@
         ]
       }
     },
+    "/api/v1/dev/simulate-bank-transfer": {
+      "post": {
+        "operationId": "DevSimulateBankTransferController_simulate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateBankTransferDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "DevSimulateBankTransfer"
+        ]
+      }
+    },
     "/api/v1/shifts": {
       "post": {
         "operationId": "ShiftsController_open",
@@ -4243,6 +4267,10 @@
         "properties": {}
       },
       "PaymentWebhookDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "SimulateBankTransferDto": {
         "type": "object",
         "properties": {}
       },

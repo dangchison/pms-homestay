@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { QUEUE_PAYMENT_RECONCILE } from '@core/bullmq/queues';
 import { BookingsModule } from '@modules/bookings/bookings.module';
 import { InvoicesModule } from '@modules/invoices/invoices.module';
+import { DevSimulateBankTransferController } from './dev-simulate-bank-transfer.controller';
 import { InvoiceQrController } from './invoice-qr.controller';
 import { PaymentReconcileProcessor } from './payment-reconcile.processor';
 import { PaymentWebhookController } from './payment-webhook.controller';
@@ -22,7 +23,12 @@ import { VietqrService } from './vietqr.service';
     BookingsModule,
     BullModule.registerQueue({ name: QUEUE_PAYMENT_RECONCILE }),
   ],
-  controllers: [PaymentsController, InvoiceQrController, PaymentWebhookController],
+  controllers: [
+    PaymentsController,
+    InvoiceQrController,
+    PaymentWebhookController,
+    DevSimulateBankTransferController,
+  ],
   providers: [PaymentsService, VietqrService, ReconciliationService, PaymentReconcileProcessor],
   exports: [PaymentsService],
 })

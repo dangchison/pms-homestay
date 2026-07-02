@@ -53,6 +53,22 @@ export const envSchema = z.object({
   MOCK_GATEWAY_AUTOCONFIRM_SECONDS: z.coerce.number().int().positive().default(15),
 
   /**
+   * HARD-GATE công cụ demo dev-only (Đợt 4/M4). Mặc định false = AN TOÀN PROD:
+   * endpoint `POST /dev/simulate-bank-transfer` (giả lập chuyển khoản ngân hàng để
+   * khép vòng demo hosted booking) VÔ HÌNH → trả 404 NOT_FOUND (không lộ bề mặt tấn
+   * công). Đặt =true ở dev/CI để mở endpoint.
+   *
+   * PHẢI dùng enum(['true','false']).transform (KHÔNG z.stringbool/z.coerce.boolean):
+   * coerce coi mọi chuỗi khác rỗng — kể cả 'false' — là TRUE → bật nhầm ở prod là
+   * thảm hoạ an toàn. Giá trị lạ (vd 'yes','1') → loadEnv() throw (không âm thầm bật);
+   * không set biến → false (boolean).
+   */
+  DEMO_TOOLS_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+
+  /**
    * @deprecated B4 — thay bằng platform-auth module (JWT_PLATFORM_SECRET + đăng nhập
    * platform_users). Không còn dùng để bảo vệ endpoint confirm; giữ lại tạm để không
    * vỡ env cũ. Tài khoản nhận phí nền tảng cho VietQR động (mặc định dev: MB BIN 970422).

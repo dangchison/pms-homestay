@@ -54,6 +54,23 @@ export const PaymentWebhookSchema = z.object({
 });
 export type PaymentWebhook = z.infer<typeof PaymentWebhookSchema>;
 
+/**
+ * POST /dev/simulate-bank-transfer (Đợt 4/M4 — dev-only) — giả lập 1 giao dịch
+ * chuyển khoản để khép vòng đối soát demo. Endpoint dựng `PaymentWebhook` chuẩn hoá
+ * từ payload này rồi chạy acceptWebhook + reconcile ĐỒNG BỘ (worker off). `content`
+ * để trống thì tự dựng từ `booking_code`/`invoice_number` (tiện demo). KHÔNG chứa PII.
+ */
+export const SimulateBankTransferSchema = z.object({
+  bank_account: z.string().min(1).max(64),
+  amount_vnd: z.number().int().positive(),
+  content: z.string().max(2000).optional(),
+  provider: z.enum(['casso', 'sepay']).default('casso'),
+  booking_code: z.string().max(255).optional(),
+  invoice_number: z.string().max(255).optional(),
+  event_id: z.string().min(1).max(255).optional(),
+});
+export type SimulateBankTransfer = z.infer<typeof SimulateBankTransferSchema>;
+
 export const UnmatchedPaymentStatusSchema = z.enum(['PENDING', 'RESOLVED', 'IGNORED']);
 export type UnmatchedPaymentStatus = z.infer<typeof UnmatchedPaymentStatusSchema>;
 
