@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   type BlacklistGuestRequest,
   type CreateGuestRequest,
@@ -22,7 +22,7 @@ import { PrismaService } from '@core/prisma/prisma.service';
 import { StorageService } from '@core/storage/storage.service';
 import { withTenant } from '@core/tenancy/with-tenant';
 import { offsetToSkipTake } from '@/shared/dto';
-import { OcrService } from './ocr.service';
+import { OCR_PROVIDER_TOKEN, type OcrProvider } from './providers/ocr-provider';
 
 /** Chuẩn hoá số giấy tờ trước khi mã hoá/hash (bỏ khoảng trắng, in hoa). */
 function normalizeDoc(raw: string): string {
@@ -73,7 +73,7 @@ export class GuestsService {
     private readonly encryption: EncryptionService,
     private readonly audit: AuditService,
     private readonly storage: StorageService,
-    private readonly ocr: OcrService,
+    @Inject(OCR_PROVIDER_TOKEN) private readonly ocr: OcrProvider,
   ) {}
 
   /**
@@ -97,7 +97,7 @@ export class GuestsService {
     if (!dto.image_key.startsWith(`cccd/${user.tnt}/`)) {
       throw new AppException({ code: 'OCR_IMAGE_KEY_INVALID', title: 'Key ảnh không hợp lệ', status: 400 });
     }
-    return this.ocr.scanIdDocument(dto.image_key);
+    return this.ocr.scan(dto.image_key);
   }
 
   async create(dto: CreateGuestRequest, user: JwtClaims): Promise<GuestResponse> {

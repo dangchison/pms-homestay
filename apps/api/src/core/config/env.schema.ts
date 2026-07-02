@@ -38,6 +38,37 @@ export const envSchema = z.object({
   PAYMENT_WEBHOOK_SECRET: z.string().min(16).optional(),
 
   /**
+   * Cổng thanh toán billing SaaS (Đợt 4 — M2, docs/18 B4). Mặc định 'manual':
+   * luồng hiện hữu — charge tạo payment PENDING + QR, platform admin xác nhận tay
+   * (KHÔNG enqueue, KHÔNG endpoint tự-confirm). 'mock' = sandbox nội bộ chạy
+   * end-to-end KHÔNG cần creds cổng thật: charge còn enqueue delayed job auto-confirm
+   * + mở endpoint public `POST /public/billing/mock-gateway/:paymentRef/pay`. Cổng
+   * thật (PayOS/VNPay) là slot Phase sau (webhook HMAC cùng khuôn payment-webhook).
+   */
+  BILLING_GATEWAY: z.enum(['manual', 'mock']).default('manual'),
+  /**
+   * Số giây trễ trước khi mock-gateway tự xác nhận payment qua queue `billing-gateway`
+   * (chỉ áp khi BILLING_GATEWAY='mock'). Mô phỏng độ trễ đối soát của cổng thật.
+   */
+  MOCK_GATEWAY_AUTOCONFIRM_SECONDS: z.coerce.number().int().positive().default(15),
+
+  /**
+   * HARD-GATE công cụ demo dev-only (Đợt 4/M4). Mặc định false = AN TOÀN PROD:
+   * endpoint `POST /dev/simulate-bank-transfer` (giả lập chuyển khoản ngân hàng để
+   * khép vòng demo hosted booking) VÔ HÌNH → trả 404 NOT_FOUND (không lộ bề mặt tấn
+   * công). Đặt =true ở dev/CI để mở endpoint.
+   *
+   * PHẢI dùng enum(['true','false']).transform (KHÔNG z.stringbool/z.coerce.boolean):
+   * coerce coi mọi chuỗi khác rỗng — kể cả 'false' — là TRUE → bật nhầm ở prod là
+   * thảm hoạ an toàn. Giá trị lạ (vd 'yes','1') → loadEnv() throw (không âm thầm bật);
+   * không set biến → false (boolean).
+   */
+  DEMO_TOOLS_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+
+  /**
    * @deprecated B4 — thay bằng platform-auth module (JWT_PLATFORM_SECRET + đăng nhập
    * platform_users). Không còn dùng để bảo vệ endpoint confirm; giữ lại tạm để không
    * vỡ env cũ. Tài khoản nhận phí nền tảng cho VietQR động (mặc định dev: MB BIN 970422).
@@ -88,6 +119,25 @@ export const envSchema = z.object({
   SMTP_HOST: z.string().default('localhost'),
   SMTP_PORT: z.coerce.number().int().positive().default(1025),
 
+  /**
+   * Provider gửi ZNS/SMS (Đợt 4 — mock/sandbox theo env, docs/18). Mặc định 'mock'
+   * → dev/CI chạy end-to-end không cần creds thật (MockMessagingProvider trả SENT +
+   * id mock-<uuid>). 'log' = stub cũ (LogMessagingProvider, không I/O ngoài, chỉ log).
+   * 'zalo'/'esms' = slot creds Phase sau — CHƯA impl (registry ném rõ ràng 'provider
+   * chưa cấu hình' thay vì gửi thật). EMAIL luôn qua SMTP (SmtpEmailProvider→Mailpit/relay).
+   */
+  ZNS_PROVIDER: z.enum(['mock', 'zalo', 'log']).default('mock'),
+  SMS_PROVIDER: z.enum(['mock', 'esms', 'log']).default('mock'),
+
+  /**
+   * Nhà cung cấp OCR CCCD/hộ chiếu (Đợt 4 — M3, docs/18). Mặc định 'auto': hành vi
+   * hiện hữu — FptOcrProvider (có FPT_AI_API_KEY→gọi FPT.AI; else 503 OCR_NOT_CONFIGURED,
+   * fallback nhập tay). 'fpt' = luôn FptOcrProvider. 'mock' = MockOcrProvider (sandbox
+   * tất định từ SHA-256(image_key), KHÔNG I/O ngoài, KHÔNG cần creds — dev/CI end-to-end).
+   * mock KHÔNG tự bật ở prod: default 'auto' KHÔNG BAO GIỜ ra mock, chỉ khi set
+   * OCR_PROVIDER=mock tường minh (tránh trả CCCD giả im lặng vào hệ thống thật).
+   */
+  OCR_PROVIDER: z.enum(['auto', 'fpt', 'mock']).default('auto'),
   /**
    * OCR CCCD/hộ chiếu FPT.AI Vision (task 7.1, docs/12 §3). Thiếu API key →
    * POST /guests/scan-id trả 503 (fallback nhập tay luôn sẵn). Endpoint mặc định

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { InjectQueue } from '@nestjs/bullmq';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   type ChargeSubscriptionResponse,
@@ -9,6 +10,8 @@ import {
   type SubscriptionSummaryResponse,
 } from '@pms/shared-types';
 import { type Prisma, type subscription_payments, type subscription_plans } from '@prisma/client';
+import { Queue } from 'bullmq';
+import { QUEUE_BILLING_GATEWAY } from '@core/bullmq/queues';
 import { ENV, type Env } from '@core/config/env.schema';
 import { AppException } from '@core/http/exceptions/app.exception';
 import { PrismaService } from '@core/prisma/prisma.service';
@@ -21,6 +24,20 @@ function addMonths(d: Date, n: number): Date {
   const r = new Date(d);
   r.setUTCMonth(r.getUTCMonth() + n);
   return r;
+}
+
+/**
+ * jobId cổng mock — tiền tố `mock-gw__` + payment.id. Dùng `__` (KHÔNG `:`) vì
+ * BullMQ vỡ với jobId chứa `:` (gotcha memory + reconciliation.service). Đồng thời
+ * dedup: enqueue nhiều lần cùng payment → BullMQ giữ 1 job theo jobId.
+ */
+export function mockGatewayJobId(paymentId: string): string {
+  return `mock-gw__${paymentId}`;
+}
+
+/** Payload delayed job cổng mock. */
+export interface MockGatewayJobData {
+  paymentId: string;
 }
 
 type ResourceKind = 'property' | 'room' | 'user';
@@ -71,6 +88,7 @@ export class SubscriptionService {
     private readonly vietqr: VietqrService,
     private readonly tenantStatus: TenantStatusService,
     @Inject(ENV) private readonly env: Env,
+    @InjectQueue(QUEUE_BILLING_GATEWAY) private readonly gatewayQueue: Queue,
   ) {}
 
   // ── Trang billing: gói + trạng thái + usage ────────────────────────────────
@@ -190,6 +208,12 @@ export class SubscriptionService {
       addInfo: paymentRef,
     });
 
+    // Đợt 4/M2: CHỈ mode 'mock' mới enqueue delayed auto-confirm. Mode 'manual'
+    // (mặc định) KHÔNG chạm queue → luồng prod y hệt trước (admin xác nhận tay).
+    if (this.env.BILLING_GATEWAY === 'mock') {
+      await this.enqueueMockGatewayConfirm(payment.id);
+    }
+
     return {
       payment: toPaymentResponse(payment),
       qr: {
@@ -239,6 +263,47 @@ export class SubscriptionService {
     await this.tenantStatus.invalidate(payment.tenant_id); // bỏ chặn write NGAY
     this.logger.log(`Subscription confirmed: tenant=${payment.tenant_id} plan=${payment.plan_code} ref=${payment.payment_ref}`);
     return toPaymentResponse(updated);
+  }
+
+  // ── Resolver ref → id (endpoint mock-gateway public dùng payment_ref, không id) ─
+  /**
+   * Xác nhận theo `payment_ref` (cột `@unique`) rồi delegate `confirmPayment(id)`.
+   * Dùng cho cổng mock (endpoint public + delayed job) — cổng thật đối chiếu theo
+   * mã giao dịch/nội dung chuyển khoản = payment_ref, không biết id nội bộ. 404
+   * SUBSCRIPTION_PAYMENT_NOT_FOUND nếu ref không tồn tại; CANCELLED/CONFIRMED thừa
+   * kế nguyên trạng từ confirmPayment (idempotent / 422).
+   */
+  async confirmPaymentByRef(paymentRef: string): Promise<SubscriptionPaymentResponse> {
+    // eslint-disable-next-line no-restricted-syntax -- bảng subscription_payments GLOBAL không RLS; ref là @unique (M2)
+    const payment = await this.prisma.subscription_payments.findUnique({
+      where: { payment_ref: paymentRef },
+      select: { id: true },
+    });
+    if (!payment) {
+      throw new AppException({
+        code: 'SUBSCRIPTION_PAYMENT_NOT_FOUND',
+        title: 'Không tìm thấy thanh toán',
+        status: 404,
+      });
+    }
+    return this.confirmPayment(payment.id);
+  }
+
+  // ── Enqueue delayed auto-confirm cổng mock (dedup theo jobId) ────────────────
+  /**
+   * Thêm 1 delayed job vào queue `billing-gateway` để tự confirm payment sau
+   * MOCK_GATEWAY_AUTOCONFIRM_SECONDS giây. jobId cố định theo payment → BullMQ dedup
+   * (enqueue 2 lần cùng payment chỉ giữ 1 job). Chỉ gọi ở mode 'mock'.
+   */
+  async enqueueMockGatewayConfirm(paymentId: string): Promise<void> {
+    await this.gatewayQueue.add(
+      'mock-gateway-confirm',
+      { paymentId } satisfies MockGatewayJobData,
+      {
+        jobId: mockGatewayJobId(paymentId),
+        delay: this.env.MOCK_GATEWAY_AUTOCONFIRM_SECONDS * 1000,
+      },
+    );
   }
 
   // ── Cron lifecycle (night-audit gọi) — cross-tenant trên bảng tenants ────────

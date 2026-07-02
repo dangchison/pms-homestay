@@ -6,6 +6,7 @@ import {
   PaymentWebhookSchema,
   RefundPaymentRequestSchema,
   ResolveUnmatchedRequestSchema,
+  SimulateBankTransferSchema,
 } from '@pms/shared-types';
 import { z } from 'zod';
 import { createZodDto } from '@core/http/pipes/zod-validation.pipe';
@@ -14,6 +15,7 @@ export class CreatePaymentDto extends createZodDto(CreatePaymentRequestSchema) {
 export class RefundPaymentDto extends createZodDto(RefundPaymentRequestSchema) {}
 export class PaymentWebhookDto extends createZodDto(PaymentWebhookSchema) {}
 export class ResolveUnmatchedDto extends createZodDto(ResolveUnmatchedRequestSchema) {}
+export class SimulateBankTransferDto extends createZodDto(SimulateBankTransferSchema) {}
 
 /**
  * GET /payments — 2 chế độ: `invoice_id` (payment của 1 hoá đơn, F2) HOẶC

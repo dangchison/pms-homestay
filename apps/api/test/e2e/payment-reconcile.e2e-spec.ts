@@ -145,6 +145,9 @@ describe('Payment reconciliation — Casso/SePay webhook (task 3.4)', () => {
       await admin.query(`DELETE FROM room_occupancy WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM booking_status_history WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM quotes WHERE tenant_id IN ${tid}`);
+      // booking CONFIRMED (auto-confirm/resolve) phát outbound_messages (kênh EMAIL) gắn
+      // booking_id → xoá trước bookings (FK (tenant_id, booking_id)).
+      await admin.query(`DELETE FROM outbound_messages WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM bookings WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM rate_plans WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM resource_members WHERE tenant_id IN ${tid}`);
@@ -155,6 +158,8 @@ describe('Payment reconciliation — Casso/SePay webhook (task 3.4)', () => {
       await admin.query(`DELETE FROM user_property_roles WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM properties WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM refresh_tokens WHERE tenant_id IN ${tid}`);
+      // booking CONFIRMED (auto-confirm/resolve) phát notification → xoá trước users (FK user_id).
+      await admin.query(`DELETE FROM notifications WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM users WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM tenants WHERE slug = $1`, [tenantSlug]);
       await admin.end();

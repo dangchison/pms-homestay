@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import type Redis from 'ioredis';
 import { AppException } from '@core/http/exceptions/app.exception';
 import { PrismaService } from '@core/prisma/prisma.service';
+import { assertWithinRateLimit } from '@core/redis/rate-limit';
 import { REDIS } from '@core/redis/redis.module';
 import { withTenant } from '@core/tenancy/with-tenant';
 import { type BusyInterval, buildIcal, computeBusyEtag } from './ical-builder';
@@ -51,16 +52,7 @@ export class IcalPushService {
 
   /** 10/min/(IP, token) — vượt → 429. Áp TRƯỚC khi truy DB để chống abuse. */
   async assertWithinRateLimit(ip: string, token: string): Promise<void> {
-    const key = `ical:push:${ip}:${token}`;
-    const count = await this.redis.incr(key);
-    if (count === 1) await this.redis.expire(key, RATE_WINDOW_SECONDS);
-    if (count > RATE_LIMIT) {
-      throw new AppException({
-        code: 'RATE_LIMITED',
-        title: 'Quá nhiều yêu cầu — thử lại sau ít phút',
-        status: 429,
-      });
-    }
+    await assertWithinRateLimit(this.redis, `ical:push:${ip}`, token, RATE_LIMIT, RATE_WINDOW_SECONDS);
   }
 
   /** token → iCal feed + ETag. Token sai/không tồn tại → 404 (không tiết lộ). */

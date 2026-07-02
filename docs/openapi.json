@@ -2297,6 +2297,30 @@
         ]
       }
     },
+    "/api/v1/dev/simulate-bank-transfer": {
+      "post": {
+        "operationId": "DevSimulateBankTransferController_simulate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateBankTransferDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "DevSimulateBankTransfer"
+        ]
+      }
+    },
     "/api/v1/shifts": {
       "post": {
         "operationId": "ShiftsController_open",
@@ -2815,6 +2839,20 @@
         ]
       }
     },
+    "/api/v1/notifications/outbound": {
+      "get": {
+        "operationId": "NotificationsController_listOutbound",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
     "/api/v1/notifications/{id}/read": {
       "post": {
         "operationId": "NotificationsController_markRead",
@@ -2962,6 +3000,29 @@
         },
         "tags": [
           "PlatformBilling"
+        ]
+      }
+    },
+    "/api/v1/public/billing/mock-gateway/{paymentRef}/pay": {
+      "post": {
+        "operationId": "MockGatewayController_pay",
+        "parameters": [
+          {
+            "name": "paymentRef",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "MockGateway"
         ]
       }
     },
@@ -4206,6 +4267,10 @@
         "properties": {}
       },
       "PaymentWebhookDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "SimulateBankTransferDto": {
         "type": "object",
         "properties": {}
       },

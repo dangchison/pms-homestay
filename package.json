@@ -19,6 +19,7 @@
     "db:generate": "pnpm --filter @pms/api db:generate",
     "db:seed:required": "tsx scripts/seed-prod-required.ts",
     "db:seed:dev": "tsx scripts/seed-dev.ts",
+    "demo:bank-transfer": "tsx scripts/simulate-bank-transfer.ts",
     "db:reset": "docker compose -f infra/docker/docker-compose.dev.yml down -v && pnpm db:up && pnpm db:migrate && pnpm db:seed:required && pnpm db:seed:dev"
   },
   "devDependencies": {

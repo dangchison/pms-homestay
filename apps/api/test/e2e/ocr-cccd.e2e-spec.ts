@@ -8,13 +8,17 @@ import { AppModule } from '@/app.module';
 import { configureApp } from '@/app.setup';
 import { loadEnv } from '@core/config/env.schema';
 import { CircuitBreaker } from '@modules/guests/circuit-breaker';
-import { OcrService } from '@modules/guests/ocr.service';
+import { FptOcrProvider } from '@modules/guests/providers/fpt-ocr.provider';
 
 /**
- * ★ Acceptance task 7.1 (docs/12 §3): OCR CCCD qua FPT.AI — service gọi ngoài tx
+ * ★ Acceptance task 7.1 (docs/12 §3): OCR CCCD qua FPT.AI — provider gọi ngoài tx
  * (timeout 15s, retry 1, circuit breaker); POST /guests/scan-id trả extracted,
  * KHÔNG persist raw; ảnh upload pre-signed (tier VN); fallback nhập tay. Test bypass
  * HTTP qua seam rawOcr; circuit breaker test thuần (clock tiêm).
+ *
+ * Đợt 4 / M3 (docs/18): OcrService cũ tách thành OcrProvider — spec này giữ hành vi
+ * FptOcrProvider (env mặc định OCR_PROVIDER='auto' → FptOcrProvider; không FPT_AI_API_KEY
+ * trong test → scan-id 503 fallback). Gọi trực tiếp app.get(FptOcrProvider).scan(...).
  */
 
 // ── Unit thuần: CircuitBreaker (không cần app) ─────────────────────────────────
@@ -86,7 +90,7 @@ describe('OCR CCCD scan-id (task 7.1)', () => {
     await app?.close();
   });
 
-  it('OcrService (seam rawOcr) → map đúng field + parse ngày VN dd/mm/yyyy; KHÔNG ghi DB', async () => {
+  it('FptOcrProvider (seam rawOcr) → map đúng field + parse ngày VN dd/mm/yyyy; KHÔNG ghi DB', async () => {
     const before = await guestCount();
     const raw = {
       errorCode: 0,
@@ -106,7 +110,7 @@ describe('OCR CCCD scan-id (task 7.1)', () => {
         },
       ],
     };
-    const out = await app.get(OcrService).scanIdDocument(`cccd/${tenantId}/x/front.jpg`, { rawOcr: raw });
+    const out = await app.get(FptOcrProvider).scan(`cccd/${tenantId}/x/front.jpg`, { rawOcr: raw });
     expect(out.document_number).toBe('012345678901');
     expect(out.document_type).toBe('CCCD'); // type_new ưu tiên
     expect(out.full_name).toBe('NGUYEN VAN A');
@@ -118,8 +122,8 @@ describe('OCR CCCD scan-id (task 7.1)', () => {
     expect(await guestCount()).toBe(before);
   });
 
-  it('OcrService: data rỗng → field null (không crash)', async () => {
-    const out = await app.get(OcrService).scanIdDocument('k', { rawOcr: { errorCode: 0, data: [] } });
+  it('FptOcrProvider: data rỗng → field null (không crash)', async () => {
+    const out = await app.get(FptOcrProvider).scan('k', { rawOcr: { errorCode: 0, data: [] } });
     expect(out.document_number).toBeNull();
     expect(out.full_name).toBeNull();
     expect(out.nationality).toBe('VN'); // mặc định VN khi thiếu

@@ -13,6 +13,8 @@ export interface NotificationEventInput {
 export interface NotificationTarget {
   userId: string;
   email: string | null;
+  /** Số ĐT người nhận (SMS/ZNS) — NULL nếu user chưa có (fallback email/userId khi gửi). */
+  phone: string | null;
   channel: DeliveryChannel;
   title: string;
   body: string;

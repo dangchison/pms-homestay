@@ -93,6 +93,8 @@ describe('Notifications (task 4.4)', () => {
   afterAll(async () => {
     if (admin) {
       const tid = `(SELECT id FROM tenants WHERE slug = '${tenantSlug}')`;
+      // EMAIL nay đi qua provider → ghi outbound_messages (FK tới tenants) → xoá trước tenants.
+      await admin.query(`DELETE FROM outbound_messages WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM notifications WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM outbox_events WHERE tenant_id IN ${tid}`);
       await admin.query(`DELETE FROM user_property_roles WHERE tenant_id IN ${tid}`);
