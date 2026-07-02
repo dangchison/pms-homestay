@@ -2979,6 +2979,29 @@
         ]
       }
     },
+    "/api/v1/public/billing/mock-gateway/{paymentRef}/pay": {
+      "post": {
+        "operationId": "MockGatewayController_pay",
+        "parameters": [
+          {
+            "name": "paymentRef",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "MockGateway"
+        ]
+      }
+    },
     "/api/v1/channels": {
       "post": {
         "operationId": "ChannelsController_create",

@@ -38,6 +38,21 @@ export const envSchema = z.object({
   PAYMENT_WEBHOOK_SECRET: z.string().min(16).optional(),
 
   /**
+   * Cổng thanh toán billing SaaS (Đợt 4 — M2, docs/18 B4). Mặc định 'manual':
+   * luồng hiện hữu — charge tạo payment PENDING + QR, platform admin xác nhận tay
+   * (KHÔNG enqueue, KHÔNG endpoint tự-confirm). 'mock' = sandbox nội bộ chạy
+   * end-to-end KHÔNG cần creds cổng thật: charge còn enqueue delayed job auto-confirm
+   * + mở endpoint public `POST /public/billing/mock-gateway/:paymentRef/pay`. Cổng
+   * thật (PayOS/VNPay) là slot Phase sau (webhook HMAC cùng khuôn payment-webhook).
+   */
+  BILLING_GATEWAY: z.enum(['manual', 'mock']).default('manual'),
+  /**
+   * Số giây trễ trước khi mock-gateway tự xác nhận payment qua queue `billing-gateway`
+   * (chỉ áp khi BILLING_GATEWAY='mock'). Mô phỏng độ trễ đối soát của cổng thật.
+   */
+  MOCK_GATEWAY_AUTOCONFIRM_SECONDS: z.coerce.number().int().positive().default(15),
+
+  /**
    * @deprecated B4 — thay bằng platform-auth module (JWT_PLATFORM_SECRET + đăng nhập
    * platform_users). Không còn dùng để bảo vệ endpoint confirm; giữ lại tạm để không
    * vỡ env cũ. Tài khoản nhận phí nền tảng cho VietQR động (mặc định dev: MB BIN 970422).

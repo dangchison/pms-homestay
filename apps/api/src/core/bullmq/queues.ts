@@ -10,3 +10,5 @@ export const QUEUE_PAYMENT_RECONCILE = 'payment-reconcile';
 export const QUEUE_NIGHT_AUDIT = 'night-audit';
 export const QUEUE_NOTIFICATIONS = 'notifications';
 export const QUEUE_ICAL_PULL = 'ical-pull';
+/** Cổng thanh toán mock/sandbox (Đợt 4/M2) — delayed job auto-confirm billing SaaS. */
+export const QUEUE_BILLING_GATEWAY = 'billing-gateway';
