@@ -40,6 +40,10 @@ const NIGHTLY_WHOLE_VND = 1_600_000;
  *  hoá đơn MONTHLY_RENT: quantity/amount/description/total đều dẫn xuất từ đây
  *  (sửa 1 chỗ, demo không lệch ngầm giữa rate plan ↔ meter ↔ invoice). */
 const MONTHLY_RENT_VND = 6_500_000;
+/** Tiền thuê trả chủ nhà — nguồn số DUY NHẤT cho expense RENT_LANDLORD (bước 13) và
+ *  properties.monthly_landlord_rent_vnd (bước 20): landlord-statement FIXED_RENT chỉ khớp
+ *  chi phí khi 2 nơi cùng số (sửa 1 chỗ, demo không lệch ngầm). */
+const LANDLORD_RENT_VND = 25_000_000;
 const ELEC_PER_KWH_VND = 3_500;
 const WATER_PER_M3_VND = 15_000;
 /** Chỉ số công tơ kỳ TRƯỚC (start→end); kỳ NÀY mở đầu bằng đúng chỉ số end kỳ trước. */
@@ -567,9 +571,9 @@ async function seedDemoData(
     `INSERT INTO operational_expenses (tenant_id, property_id, expense_type, description,
         amount_vnd, expense_date, is_recurring, recurrence_pattern, is_paid, paid_at, created_by)
      VALUES ($1, $2, 'RENT_LANDLORD', 'Tiền thuê nhà trả chủ (định kỳ hằng tháng)',
-        25000000, $3::date, true, 'MONTHLY', true, ($3::date + 3)::timestamptz, $4)
+        $3, $4::date, true, 'MONTHLY', true, ($4::date + 3)::timestamptz, $5)
      RETURNING id`,
-    [tenantId, propertyId, firstOfMonth(monthsBack(todayStr, 2)), userIds.owner],
+    [tenantId, propertyId, LANDLORD_RENT_VND, firstOfMonth(monthsBack(todayStr, 2)), userIds.owner],
   );
   for (const child of [
     { monthOff: 1, paid: true }, // tháng trước — đã trả
@@ -579,8 +583,8 @@ async function seedDemoData(
       `INSERT INTO operational_expenses (tenant_id, property_id, expense_type, description,
           amount_vnd, expense_date, is_recurring, parent_expense_id, is_paid, paid_at, created_by)
        VALUES ($1, $2, 'RENT_LANDLORD', 'Tiền thuê nhà trả chủ (sinh từ định kỳ)',
-          25000000, $3::date, false, $4, $5, CASE WHEN $5 THEN ($3::date + 3)::timestamptz END, $6)`,
-      [tenantId, propertyId, firstOfMonth(monthsBack(todayStr, child.monthOff)), rentTpl[0]!.id, child.paid, userIds.owner],
+          $3, $4::date, false, $5, $6, CASE WHEN $6 THEN ($4::date + 3)::timestamptz END, $7)`,
+      [tenantId, propertyId, LANDLORD_RENT_VND, firstOfMonth(monthsBack(todayStr, child.monthOff)), rentTpl[0]!.id, child.paid, userIds.owner],
     );
   }
 
@@ -1094,8 +1098,8 @@ async function main(): Promise<void> {
     // 20) Rent-to-rent (docs/19 §4 Đợt 3 — D3d): cơ sở demo là nhà THUÊ LẠI của chủ
     // nhà gốc → GET /reports/landlord-statement có dữ liệu. landlord_revenue_share_bp
     // = NULL TƯỜNG MINH: khác NULL thì mô hình REVENUE_SHARE đè FIXED_RENT
-    // (reports.service ưu tiên share_bp). monthly_landlord_rent_vnd = 25tr KHỚP
-    // expense RENT_LANDLORD 25tr/tháng bước 13 (một nguồn số, demo không lệch).
+    // (reports.service ưu tiên share_bp). monthly_landlord_rent_vnd = LANDLORD_RENT_VND
+    // KHỚP expense RENT_LANDLORD bước 13 (cùng const — một nguồn số, demo không lệch).
     // Hợp đồng: ngày 01 của 6 tháng trước, thời hạn 24 tháng (SQL date_trunc theo giờ
     // VN). UPDATE toàn hằng số → idempotent, chạy nhiều lần cùng kết quả. Dữ liệu
     // chủ nhà là demo hư cấu (không phải guest PII — không mã hoá).
@@ -1104,12 +1108,12 @@ async function main(): Promise<void> {
          is_rent_to_rent = true,
          landlord_name = 'Bà Trần Thị Lan',
          landlord_phone = '0905123456',
-         monthly_landlord_rent_vnd = 25000000,
+         monthly_landlord_rent_vnd = $2,
          landlord_revenue_share_bp = NULL,
          rent_to_rent_contract_start = (date_trunc('month', now() AT TIME ZONE '${TZ}') - interval '6 months')::date,
          rent_to_rent_contract_end = (date_trunc('month', now() AT TIME ZONE '${TZ}') - interval '6 months' + interval '24 months')::date
        WHERE id = $1`,
-      [propertyId],
+      [propertyId, LANDLORD_RENT_VND],
     );
 
     // 3) Tài khoản demo theo vai trò (cùng mật khẩu).

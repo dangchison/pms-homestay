@@ -1,6 +1,6 @@
 # 📊 Tiến độ triển khai — PMS Homestay
 
-> **Cập nhật:** 2026-06-26 · **Nguồn sự thật phạm vi:** [`docs/14-roadmap-tasks.md`](docs/14-roadmap-tasks.md) (task + acceptance) · [`docs/15-sprint-plan.md`](docs/15-sprint-plan.md) (kế hoạch 6 sprint) · việc hoàn thiện sau MVP: [`docs/18-phase2-backlog.md`](docs/18-phase2-backlog.md).
+> **Cập nhật:** 2026-07-03 · **Nguồn sự thật phạm vi:** [`docs/14-roadmap-tasks.md`](docs/14-roadmap-tasks.md) (task + acceptance) · [`docs/15-sprint-plan.md`](docs/15-sprint-plan.md) (kế hoạch 6 sprint) · việc hoàn thiện sau MVP: [`docs/18-phase2-backlog.md`](docs/18-phase2-backlog.md) · **kế hoạch tổng hoàn thiện Phase 3 (7 Đợt):** [`docs/19-completion-plan.md`](docs/19-completion-plan.md).
 > File này là **bản theo dõi sống** — cập nhật sau mỗi task hoàn thành. Trạng thái lấy theo **commit thật**, không tính việc đang dở.
 
 **Chú thích:** ✅ xong (đã verify) · 🟡 đang làm / một phần · ⬜ chưa bắt đầu
@@ -12,6 +12,7 @@
 | Chỉ số | Trạng thái |
 |---|---|
 | **Roadmap** | **✅ 50 / 50 — toàn bộ EPIC 1–8 đóng** (chi tiết §3–§4). Phần còn lại = hoàn thiện/hardening sau MVP → [`docs/18-phase2-backlog.md`](docs/18-phase2-backlog.md) |
+| **Phase 3 theo Đợt** ([docs/19](docs/19-completion-plan.md)) | 🟡 **Wave-1 BE xong** (PR #57–#61: landlord statement R2R 9.1 · global person identity 9.2 · NA17 9.3 · sổ quỹ ca + anti-fraud 9.4 · voucher/discounts) · **Đợt 4 mock providers M1–M4 merged #62** (mock ZNS/SMS + `outbound_messages` · payment-gateway sandbox B4 · mock OCR CCCD · bank-transfer simulator) · **Đợt 3 seed demo mở rộng XONG** (TASK 9.5 — PR nhánh `feat/dot3-seed-demo-expansion`: 10 nhóm bảng + notifications + R2R, seed chạy kép idempotent) · **Đợt 1–2 FE chưa làm** (6 trang core web-admin + Wave-1 UI) · Đợt 5–7 (ZNS guest messaging/hosted page/OCR bill · Wave-2 · ops creds) chưa bắt đầu |
 | **Backend** | **✅ EPIC 1–5 + 7 + 8** (1.x + 2.1–2.8 + 3.1–3.8 + 4.1–4.7 + 5.1–5.3 + 7.1–7.3 + 8.1–8.6) |
 | **Frontend** | **✅ EPIC 6 (7/7)** — 6.1 API client · 6.2 Calendar · 6.3 Booking form · 6.4 Invoice & Payment · 6.5 Reports · 6.6 web-staff PWA · 6.7 Settings. _(Lưu ý: FE chưa có e2e runtime — xem docs/18 P2-A.)_ |
 | **Chạy được gì** | API (auth, property/room/resource/block + rate-plan/rule + guests + `POST /pricing/quote` + **booking đầy đủ vòng đời** + **hoá đơn cọc/STAY** + **thanh toán** (trigger `paid_vnd` + cọc đủ→CONFIRMED + hoàn tiền + VietQR PNG) + **đối soát webhook Casso/SePay** (HMAC + dedup + tự khớp mã/số tiền → auto-confirm; còn lại → unmatched cho đối soát tay)) + **tài sản & khấu hao** (CRUD + khấu hao đường thẳng: plug tháng cuối/pro-rate/thanh lý) + **chi phí vận hành** (CRUD + định kỳ + auto hoa hồng OTA khi check-out) + **billing thuê tháng** (chỉ số điện nước + invoice MONTHLY_RENT pro-rate /30) + **night-audit** (cron đêm: deposit-timeout/no-show/OVERDUE/rollup + chốt tháng) + **báo cáo P&L/break-even** (đọc rollup + live hôm nay) + **realtime** (Transactional Outbox v2 + SSE `GET /events/stream` — fan-out theo tenant + lọc permission; **mọi mutation booking/payment/invoice/room emit event trong tx**) + **thông báo** (queue `notifications` → in-app + email SMTP; SMS/ZNS stub) + **dọn phòng** (cleaning task auto-sinh khi check-out/đổi phòng; vòng đời PENDING→IN_PROGRESS→COMPLETED→VERIFIED + housekeeping DIRTY→CLEANING→INSPECTION→CLEAN; ảnh before/after qua pre-signed S3) + **vết kiểm toán** (audit_logs partition tháng + interceptor auto-log mutation redact PII + READ_PII + append-only) + **billing-lite SaaS** (vòng đời thuê bao TRIAL→SUSPENDED→CHURNED + guard chặn write khi treo + plan-limit guard + thu phí VietQR + platform confirm), pricing-engine, 2 web app (UI), DB + migrations + seed, CI |
@@ -156,10 +157,26 @@
 
 | Commit | Nội dung |
 |---|---|
-| `(pending)` | Task 9.4d (Wave-1 #4) — đóng e2e discounts + quote-with-discount: HK→403 mọi endpoint quản lý; đối chiếu đủ 15 mục acceptance; typecheck cuối (gồm test/) xanh |
+| `4991942` | Đợt 3/D3d (docs/19 §4) — seed voucher SUMMER10/GIAM50K/HETHAN + kênh iCal (2 channels, 3 mappings, 4 sync_jobs) + 3 CK chưa khớp + 3 thanh toán SaaS `PMSSUB-DEMO-*` + 5 notifications (2 unread) + cờ R2R property demo (landlord + thuê 25tr/tháng) |
+| `8d3d59c` | Đợt 3/D3c — seed thuê tháng MONTHLY (phòng 401 + booking CHECKED_IN −45d→+45d) + chỉ số điện nước + 3 phụ thu + 2 khách nước ngoài NA17 (1 DRAFT + 1 SUBMITTED) |
+| `c2cbc76` | Đợt 3/D3b — seed sổ quỹ ca (2 CLOSED + 1 OPEN, variance −150k) + fixture anti-fraud CANCEL_AFTER_CASH + 8 chi phí vận hành + 3 tài sản (11 kỳ khấu hao) |
+| `9cc27ef` | Đợt 3/D3a — mở rộng RESET theo tenant đúng thứ tự FK cho bảng Đợt 3+ + `makeInvoice` trả invoiceId, `received_at`/`received_by` tuỳ biến |
+| `8631cc2` | PR #64 — fix(e2e): hết flaky audit EXPORT — poll thay assert ngay (CI runner chậm) |
+| `f44505a` | PR #63 — chore: check-in bộ pipeline `.claude` (Planner/Coder/QA/Reviewer) + [`docs/19`](docs/19-completion-plan.md) completion plan |
+| `1d1e2a0` | Đợt 4/M4 (PR #62) — bank transfer simulator dev-only khép vòng đối soát demo (`pnpm demo:bank-transfer`) |
+| `210ce34` | Đợt 4/M3 (PR #62) — tách `OcrProvider` + mock OCR CCCD sandbox |
+| `072d488` | Đợt 4/M2 (PR #62) — cổng thanh toán mock/sandbox billing SaaS — đóng nốt B4 |
+| `7c87bea` | Đợt 4/M1 (PR #62) — `NotificationChannelProvider` + mock ZNS/SMS + migration `0035` `outbound_messages` |
+| `5e73afe` | chore(migrations): renumber 0032→0033 (discount_codes), 0033→0034 (quotes link) — nhường `0032` cho cash_shifts (#60) |
+| `462f156` | Task 9.4d (Wave-1 #4, PR #61) — đóng e2e discounts + quote-with-discount: HK→403 mọi endpoint quản lý; đối chiếu đủ 15 mục acceptance; typecheck cuối (gồm test/) xanh |
 | `2473f03` | Task 9.4c (Wave-1 #4) — wire discount_code vào quote (FIXED/PERCENT, DISCOUNT line âm, persist discount_code_id, 422 DISCOUNT_NOT_APPLICABLE) + GET /:code/validate (booking.read) + verifyQuoteForBooking add-back |
 | `44d7d84` | Task 9.4b (Wave-1 #4) — DiscountsService CRUD + applyDiscount (mọi reason_code, FIXED cap, PERCENT roundVnd) + redeemInTx atomic chống double-spend (migration 0033 quotes.discount_code_id) |
-| `0162e28` | Task 9.4a (Wave-1 #4) — migration 0032 discount_codes (FIXED\|PERCENT, RLS, composite FK, soft-delete) + shared-types Zod đồng bộ CHECK |
+| `0162e28` | Task 9.4a (Wave-1 #4) — migration 0032 discount_codes (FIXED\|PERCENT, RLS, composite FK, soft-delete) + shared-types Zod đồng bộ CHECK _(sau renumber `5e73afe` = 0033)_ |
+| `78ed881` | Wave-1 #11 (PR #60) — báo cáo anti-fraud phát hiện gian lận tiền mặt (`GET /reports/anti-fraud`: CANCEL_AFTER_CASH, variance ca, refund CASH bất thường) |
+| `47e2bc2` | Task 9.4 (docs/16 #10, PR #60) — sổ quỹ ca + bàn giao ca chống thất thoát tiền mặt (migration `0032` cash_shifts + variance GENERATED + emit `shift.variance_detected`) |
+| `44ef5ec` | Task 9.3 (PR #59) — khai báo tạm trú khách nước ngoài NA17/XNC (migration `0031` foreign_residence_declarations + visa enc + NA17 export) |
+| `68183f6` | Task 9.2 (PR #58) — tầng danh tính khách toàn cục xuyên tenant (migration `0030` persons GLOBAL + `recompute_person_counters`) |
+| `8354c5f` | Task 9.1 (PR #57) — landlord statement R2R cho chủ nhà gốc (`GET /reports/landlord-statement`, FIXED_RENT prorate / REVENUE_SHARE bp) — mở Phase 3 Wave-1 |
 | `75891dd` | Task 6.5 — Reports dashboard (BE `GET /reports/occupancy` + FE P&L/break-even/occupancy heatmap, Recharts) |
 | `9612a26` | Task 6.4 — Invoice & Payment UI (BE `GET /invoices` list + `GET /payments?invoice_id` + FE F1/F2/F4 VietQR realtime/refund/unmatched) |
 | `1b749dc` | Task 6.3 — Booking form + live quote (`/bookings/new`: RHF+Zod + quote debounce/cọc + guest picker + Idempotency-Key + 409 PRICE_CHANGED/OVERLAP) |
@@ -210,4 +227,4 @@ pnpm dev                                # api :3001 · web-admin :3000 · web-st
 ```
 Truy cập: **Dashboard** http://localhost:3000 · **Staff** http://localhost:3002 · **API** http://localhost:3001/health/liveness · **Mail** http://localhost:8025
 
-> **Env mới (xem `.env.example`):** `ENABLE_SCHEDULERS=true` bật cron/worker BullMQ (HOLD expiry, đối soát payment, **night-audit 02:00**, **outbox dispatcher LISTEN/poll**, **notification worker**) — test ép `false`; `PAYMENT_WEBHOOK_SECRET` (≥16 ký tự) để nhận webhook Casso/SePay (thiếu → webhook trả 503); `SMTP_HOST/SMTP_PORT` cho email (dev: Mailpit :1025, UI :8025). Migration mới nhất: `0023` (sync_jobs + sync_logs — iCal pull worker). iCal pull cron gated `ENABLE_SCHEDULERS` (queue `ical-pull` 15'). **Env mới 4.7:** `PLATFORM_ADMIN_SECRET` (≥16 ký tự — platform admin xác nhận thanh toán thuê bao; thiếu → confirm 503) + `PLATFORM_BANK_BIN`/`PLATFORM_BANK_ACCOUNT` (TK nhận phí nền tảng cho VietQR). ⚠️ Outbox dispatcher claim CROSS-TENANT trên DB dùng chung → **đừng chạy `pnpm dev` (ENABLE_SCHEDULERS=true) song song với e2e outbox** (dev dispatcher giành claim row của test); CI chạy riêng nên không ảnh hưởng.
+> **Env mới (xem `.env.example`):** `ENABLE_SCHEDULERS=true` bật cron/worker BullMQ (HOLD expiry, đối soát payment, **night-audit 02:00**, **outbox dispatcher LISTEN/poll**, **notification worker**) — test ép `false`; `PAYMENT_WEBHOOK_SECRET` (≥16 ký tự) để nhận webhook Casso/SePay (thiếu → webhook trả 503); `SMTP_HOST/SMTP_PORT` cho email (dev: Mailpit :1025, UI :8025). Migration mới nhất: `0035` (`outbound_messages` — provider ZNS/SMS mock, Đợt 4/M1 PR #62). iCal pull cron gated `ENABLE_SCHEDULERS` (queue `ical-pull` 15'). **Env mới 4.7:** `PLATFORM_ADMIN_SECRET` (≥16 ký tự — platform admin xác nhận thanh toán thuê bao; thiếu → confirm 503) + `PLATFORM_BANK_BIN`/`PLATFORM_BANK_ACCOUNT` (TK nhận phí nền tảng cho VietQR). ⚠️ Outbox dispatcher claim CROSS-TENANT trên DB dùng chung → **đừng chạy `pnpm dev` (ENABLE_SCHEDULERS=true) song song với e2e outbox** (dev dispatcher giành claim row của test); CI chạy riêng nên không ảnh hưởng.

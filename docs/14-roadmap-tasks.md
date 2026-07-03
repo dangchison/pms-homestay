@@ -375,6 +375,16 @@ Chống **thất thoát tiền mặt**: mỗi ca thu ngân của MỘT cơ sở 
 
 _(Follow-up: STAFF thu ngân mở ca (thêm `payment.reconcile` vào STAFF — đổi ma trận docs/04, PR riêng); refund theo ngày refund thay vì refunded_amount_vnd hiện tại; trang web-admin/web-staff mở-đóng ca + báo cáo anti-fraud tổng hợp.)_
 
+### TASK 9.5 — Seed demo mở rộng (Đợt 3 — [docs/19 §4](19-completion-plan.md)) ✅ ĐÃ XONG
+Mở rộng `scripts/seed-dev.ts` để **mọi trang/tính năng Đợt 1–2 (docs/19) có dữ liệu demo ngay** sau `pnpm db:seed:dev` — lấp 10 nhóm bảng trước đây trống: `discount_codes` (SUMMER10/GIAM50K/HETHAN) · `channels` + `channel_resource_mappings` + `sync_jobs` (2 kênh iCal, 1 job FAILED) · `cash_shifts` (2 CLOSED + 1 OPEN, variance −150k + fixture anti-fraud CANCEL_AFTER_CASH) · `operational_expenses` · `assets` + `depreciation_entries` · `foreign_residence_declarations` (NA17: 1 DRAFT + 1 SUBMITTED) · `monthly_meter_readings` (booking MONTHLY CHECKED_IN) · `booking_surcharges` · `unmatched_payments` · `subscription_payments` (`PMSSUB-DEMO-*`); cộng `notifications` (5 in-app owner, 2 unread) + cờ R2R trên property demo (landlord + thuê 25tr/tháng → landlord-statement 9.1 FIXED_RENT có số). **KHÔNG migration, KHÔNG đổi openapi** — chỉ `scripts/seed-dev.ts` + docs.
+**Depends:** 9.1–9.4 + Wave-1 #4 (discounts) + 5.1/5.2 (channels/sync) + 3.4/3.5/3.6/3.8/4.4/4.7 (bảng nguồn)
+**Acceptance:**
+- Cơ chế **RESET theo tenant đúng thứ tự FK** (DELETE bảng con trước cha: `sync_logs→sync_jobs→channel_resource_mappings→channels`; `monthly_meter_readings`/`booking_surcharges`/`foreign_residence_declarations`; `cash_shifts`/`unmatched_payments`/`subscription_payments`; `depreciation_entries→assets`; `operational_expenses`; `discount_codes` sau `quotes`) → **`pnpm db:seed:dev` chạy 2 lần liên tiếp không lỗi** (cả trên DB bẩn lẫn từ `pnpm db:reset`), số dòng bất biến giữa 2 lần (idempotent).
+- **Mọi trang Đợt 1–2 có dữ liệu** (không trang nào trống vì thiếu seed) — smoke bằng token demo owner: `/shifts` ≥3 ca · `/reports/anti-fraud` ≥1 CANCEL_AFTER_CASH (cửa sổ from = hôm nay−7d) · `/reports/landlord-statement` FIXED_RENT payout >0 · `/discount-codes/SUMMER10/validate` valid + `HETHAN` → EXPIRED · `/notifications` 5 (2 unread) · `/channels` 2 kênh (AIRBNB active + BOOKING inactive).
+- ✅ Hoàn thành trong PR nhánh `feat/dot3-seed-demo-expansion` (commit D3a `9cc27ef` RESET-FK/makeInvoice → D3b `c2cbc76` sổ quỹ + anti-fraud + chi phí/tài sản → D3c `8d3d59c` thuê tháng + NA17 → D3d `4991942` voucher + kênh + SaaS + noti + R2R → D3e chạy kép + đối chiếu SQL + docs).
+
+> **Ghi chú đánh số (disambiguation):** PROGRESS.md từng ghi các commit voucher/discounts Wave-1 #4 (PR #61) là "Task 9.4a–d" trong khi docs/14 **TASK 9.4 = Sổ quỹ ca** (PR #60) — từ nay **docs/14 là chuẩn đánh số task EPIC 9**, số mới lấy tiếp theo file này (9.5, 9.6…), không lấy theo nhãn cũ trong PROGRESS.
+
 ---
 
 ## Checklist PR (tự review trước khi submit)
