@@ -36,6 +36,14 @@ const DEMO_BANK = { bin: '970422', account: '0901234567', name: 'DEMO HOMESTAY D
 /** Giá/đêm (VND) — total_amount_vnd của booking là snapshot, độc lập rate_plan. */
 const NIGHTLY_ROOM_VND = 700_000;
 const NIGHTLY_WHOLE_VND = 1_600_000;
+/** Thuê tháng (bước 14) — nguồn số DUY NHẤT cho rate plan MONTHLY, chỉ số công tơ và
+ *  hoá đơn MONTHLY_RENT: quantity/amount/description/total đều dẫn xuất từ đây
+ *  (sửa 1 chỗ, demo không lệch ngầm giữa rate plan ↔ meter ↔ invoice). */
+const MONTHLY_RENT_VND = 6_500_000;
+const ELEC_PER_KWH_VND = 3_500;
+const WATER_PER_M3_VND = 15_000;
+/** Chỉ số công tơ kỳ TRƯỚC (start→end); kỳ NÀY mở đầu bằng đúng chỉ số end kỳ trước. */
+const METER = { elecStart: 1250.0, elecEnd: 1375.5, waterStart: 56.0, waterEnd: 61.5 } as const;
 const TZ = 'Asia/Ho_Chi_Minh';
 
 async function upsertUser(
@@ -356,15 +364,26 @@ async function seedDemoData(
   // 7) Hoá đơn + thanh toán (trigger tự tính total/paid/status).
   //    Mỗi phần tử: booking index, kind, nights, status ban đầu, payment (tỉ lệ trả / method) | overdue.
   //    Trả invoiceId + pay tuỳ biến receivedAt/receivedBy (mặc định now()/owner) — bước 11)–20) Đợt 3 dùng.
+  //    MONTHLY_RENT (bước 14): truyền `billingPeriod` ('YYYY-MM' — guard idempotent
+  //    runMonthlyBilling) + `items` thay item mặc định (display_order 0..n−1; Σ amountVnd
+  //    làm cơ sở pay.ratio). Không truyền → hành vi cũ giữ nguyên (1 item mặc định).
   let invSeq = 0;
   async function makeInvoice(opts: {
     bookingIdx: number;
-    kind: 'STAY' | 'DEPOSIT';
-    nights: number;
-    nightly: number;
+    kind: 'STAY' | 'DEPOSIT' | 'MONTHLY_RENT';
+    nights?: number; // chỉ nuôi item mặc định — BỎ QUA khi truyền `items` (mặc định 0)
+    nightly?: number;
     status: 'ISSUED' | 'OVERDUE';
     issuedOff: number;
     dueOff: number;
+    billingPeriod?: string; // 'YYYY-MM' cho MONTHLY_RENT — ghi invoices.billing_period
+    items?: Array<{
+      itemType: string;
+      description: string;
+      quantity: number;
+      unitPriceVnd: number;
+      amountVnd: number;
+    }>;
     pay?: {
       ratio: number;
       method: string;
@@ -375,33 +394,42 @@ async function seedDemoData(
   }): Promise<string> {
     invSeq += 1;
     const number = `INV-${period}-${String(invSeq).padStart(4, '0')}`;
-    const baseAmount = opts.nights * opts.nightly;
+    const nights = opts.nights ?? 0;
+    const nightly = opts.nightly ?? 0;
+    const baseAmount = nights * nightly;
     const itemAmount = opts.kind === 'DEPOSIT'
       ? Math.round((baseAmount * (opts.depositRatioBp ?? 3000)) / 10000)
       : baseAmount;
     const { rows } = await client.query<{ id: string }>(
-      `INSERT INTO invoices (tenant_id, booking_id, kind, invoice_number, status, issued_at, due_date)
+      `INSERT INTO invoices (tenant_id, booking_id, kind, invoice_number, status, issued_at, due_date, billing_period)
        VALUES ($1, $2, $3::invoice_kind, $4, $5::invoice_status,
-          now() - ($6 || ' days')::interval, ($7)::date)
+          now() - ($6 || ' days')::interval, ($7)::date, $8)
        RETURNING id`,
       [tenantId, bookingIds[opts.bookingIdx], opts.kind, number, opts.status,
-        String(Math.abs(opts.issuedOff)), ymd(anchor, opts.dueOff)],
+        String(Math.abs(opts.issuedOff)), ymd(anchor, opts.dueOff), opts.billingPeriod ?? null],
     );
     const invoiceId = rows[0]!.id;
-    await client.query(
-      `INSERT INTO invoice_items (tenant_id, invoice_id, item_type, description, quantity, unit_price_vnd, amount_vnd)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [
-        tenantId, invoiceId,
-        opts.kind === 'DEPOSIT' ? 'DEPOSIT' : 'ROOM_CHARGE',
-        opts.kind === 'DEPOSIT' ? 'Đặt cọc 30%' : `Tiền phòng ${opts.nights} đêm`,
-        opts.kind === 'DEPOSIT' ? 1 : opts.nights,
-        opts.kind === 'DEPOSIT' ? itemAmount : opts.nightly,
-        itemAmount,
-      ],
-    );
+    // items tuỳ biến hoặc 1 item mặc định như cũ (STAY/DEPOSIT) — display_order 0..n−1.
+    const items = opts.items ?? [{
+      itemType: opts.kind === 'DEPOSIT' ? 'DEPOSIT' : 'ROOM_CHARGE',
+      description: opts.kind === 'DEPOSIT' ? 'Đặt cọc 30%' : `Tiền phòng ${nights} đêm`,
+      quantity: opts.kind === 'DEPOSIT' ? 1 : nights,
+      unitPriceVnd: opts.kind === 'DEPOSIT' ? itemAmount : nightly,
+      amountVnd: itemAmount,
+    }];
+    let order = 0;
+    for (const it of items) {
+      await client.query(
+        `INSERT INTO invoice_items (tenant_id, invoice_id, item_type, description, quantity, unit_price_vnd, amount_vnd, display_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [tenantId, invoiceId, it.itemType, it.description, it.quantity, it.unitPriceVnd, it.amountVnd, order],
+      );
+      order += 1;
+    }
     if (opts.pay) {
-      const amount = Math.round(itemAmount * opts.pay.ratio);
+      // Cơ sở pay.ratio = Σ amount items (items mặc định → đúng bằng itemAmount như cũ).
+      const payBase = items.reduce((sum, it) => sum + it.amountVnd, 0);
+      const amount = Math.round(payBase * opts.pay.ratio);
       // COALESCE: NULL::timestamp AT TIME ZONE '<TZ>' → NULL → fallback now() (giữ y hệt hành vi cũ).
       await client.query(
         `INSERT INTO payments (tenant_id, invoice_id, amount_vnd, method, status, received_by, received_at)
@@ -621,6 +649,215 @@ async function seedDemoData(
     }
   }
 
+  // Helper bước 14)–16): booking ĐANG Ở (CHECKED_IN, actual_check_in = check_in,
+  // source DIRECT, adults 2, created_by owner) + room_occupancy NON_TERMINAL (pattern
+  // bước 5). Cấp số qua bkSeq++ (cùng dãy BK với bước 5 — KHÔNG hardcode thứ tự) và
+  // push bookingIds để giữ index liên tục. Bước 5 KHÔNG dùng được helper này vì cần
+  // đủ mọi status/expires_at/actual_check_out.
+  async function insertCheckedInBooking(opts: {
+    resourceId: string;
+    occupancyRoomIds: string[]; // các phòng vật lý chiếm chỗ (ROOM = 1 phòng)
+    guestId: string;
+    ratePlanId: string;
+    mode: 'DAILY' | 'MONTHLY';
+    checkIn: string; // chuỗi local VN theo quy ước vnLocal
+    checkOut: string;
+    totalVnd: number;
+  }): Promise<string> {
+    bkSeq += 1;
+    const { rows } = await client.query<{ id: string }>(
+      `INSERT INTO bookings (tenant_id, property_id, resource_id, guest_id, booking_code, source,
+          status, mode, rate_plan_id, check_in, check_out, adults, total_amount_vnd, created_by, actual_check_in)
+       VALUES ($1, $2, $3, $4, $5, 'DIRECT', 'CHECKED_IN'::booking_status, $6::booking_mode, $7,
+          $8::timestamp AT TIME ZONE '${TZ}', $9::timestamp AT TIME ZONE '${TZ}',
+          2, $10, $11, $8::timestamp AT TIME ZONE '${TZ}')
+       RETURNING id`,
+      [tenantId, propertyId, opts.resourceId, opts.guestId,
+        `BK-${period}-${String(bkSeq).padStart(4, '0')}`, opts.mode, opts.ratePlanId,
+        opts.checkIn, opts.checkOut, opts.totalVnd, userIds.owner],
+    );
+    const bookingId = rows[0]!.id;
+    bookingIds.push(bookingId);
+    for (const roomId of opts.occupancyRoomIds) {
+      await client.query(
+        `INSERT INTO room_occupancy (tenant_id, room_id, booking_id, period)
+         VALUES ($1, $2, $3, tstzrange($4::timestamp AT TIME ZONE '${TZ}', $5::timestamp AT TIME ZONE '${TZ}', '[)'))`,
+        [tenantId, roomId, bookingId, opts.checkIn, opts.checkOut],
+      );
+    }
+    return bookingId;
+  }
+
+  // 14) Thuê tháng (docs/19 §4 Đợt 3 — D3c): phòng 401 MỚI tạo inline (KHÔNG thêm vào
+  //     const ROOMS — giữ index roomIds/roomResourceIds 0..7 của các bước trên) + rate
+  //     plan MONTHLY default (hợp lệ cạnh DAILY/HOURLY vì uq_rate_plan_default theo
+  //     (tenant, property, mode)) + 1 booking MONTHLY CHECKED_IN vắt qua hôm nay
+  //     [−45d, +45d) + chỉ số điện nước 2 kỳ + hoá đơn MONTHLY_RENT kỳ TRƯỚC đã trả.
+  const { rows: room401 } = await client.query<{ id: string }>(
+    `INSERT INTO rooms (tenant_id, property_id, room_number, display_name, housekeeping_status, capacity_adults)
+     VALUES ($1, $2, '401', 'Phòng 401 — Thuê tháng', 'CLEAN', 2) RETURNING id`,
+    [tenantId, propertyId],
+  );
+  const { rows: res401 } = await client.query<{ id: string }>(
+    `INSERT INTO bookable_resources (tenant_id, property_id, type, name)
+     VALUES ($1, $2, 'ROOM', 'Phòng 401 — Thuê tháng') RETURNING id`,
+    [tenantId, propertyId],
+  );
+  await client.query(
+    `INSERT INTO resource_members (tenant_id, resource_id, room_id) VALUES ($1, $2, $3)`,
+    [tenantId, res401[0]!.id, room401[0]!.id],
+  );
+  const { rows: monthlyPlan } = await client.query<{ id: string }>(
+    `INSERT INTO rate_plans (tenant_id, property_id, name, mode, is_default, base_price_vnd,
+        deposit_type, deposit_value, monthly_includes_utilities,
+        monthly_electricity_per_kwh_vnd, monthly_water_per_m3_vnd, effective_from)
+     VALUES ($1, $2, 'Giá thuê tháng', 'MONTHLY', true, $3, 'NONE', 0, false, $4, $5, $6)
+     RETURNING id`,
+    [tenantId, propertyId, MONTHLY_RENT_VND, ELEC_PER_KWH_VND, WATER_PER_M3_VND, effFrom],
+  );
+  await client.query(
+    `INSERT INTO rate_plan_resources (tenant_id, rate_plan_id, resource_id) VALUES ($1, $2, $3)`,
+    [tenantId, monthlyPlan[0]!.id, res401[0]!.id],
+  );
+
+  // Booking MONTHLY CHECKED_IN [−45d 14:00, +45d 12:00) — phòng 401 mới toanh nên không
+  // thể đụng EXCLUDE room_occupancy. total_amount = 3 tháng thuê (snapshot chốt giá).
+  const monthlyBookingId = await insertCheckedInBooking({
+    resourceId: res401[0]!.id,
+    occupancyRoomIds: [room401[0]!.id],
+    guestId: guestIds[11]!,
+    ratePlanId: monthlyPlan[0]!.id,
+    mode: 'MONTHLY',
+    checkIn: vnLocal(anchor, -45, 14),
+    checkOut: vnLocal(anchor, 45, 12),
+    totalVnd: 3 * MONTHLY_RENT_VND,
+  });
+  const monthlyIdx = bookingIds.length - 1;
+
+  // Chỉ số điện nước 2 kỳ theo METER (UNIQUE (booking, kỳ) — 2 kỳ KHÁC nhau, recorded_by
+  // lễ tân): kỳ TRƯỚC đủ start/end (đầu vào hoá đơn kỳ trước bên dưới); kỳ NÀY mới có
+  // chỉ số ĐẦU = end kỳ trước (end NULL — chờ chốt cuối kỳ, UI "ghi chỉ số" có chỗ demo).
+  const prevP = monthsBack(todayStr, 1);
+  const curP = monthsBack(todayStr, 0);
+  await client.query(
+    `INSERT INTO monthly_meter_readings (tenant_id, booking_id, period_year, period_month,
+        electricity_kwh_start, electricity_kwh_end, water_m3_start, water_m3_end, recorded_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [tenantId, monthlyBookingId, prevP.y, prevP.m,
+      METER.elecStart, METER.elecEnd, METER.waterStart, METER.waterEnd, userIds.letan],
+  );
+  await client.query(
+    `INSERT INTO monthly_meter_readings (tenant_id, booking_id, period_year, period_month,
+        electricity_kwh_start, water_m3_start, recorded_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [tenantId, monthlyBookingId, curP.y, curP.m, METER.elecEnd, METER.waterEnd, userIds.letan],
+  );
+
+  // Hoá đơn MONTHLY_RENT kỳ TRƯỚC — như job billing-cycle (night-audit 4.6) đã chạy
+  // ngày 01 tháng này: billing_period = 'YYYY-MM' kỳ trước (khớp guard idempotent
+  // runMonthlyBilling — gọi lại cho kỳ đó sẽ bỏ qua, không sinh trùng); item format
+  // y hệt billing.service (RENT_MONTHLY full tháng + ELECTRICITY/WATER = tiêu thụ
+  // (end−start) × đơn giá, làm tròn như roundVnd). Thanh toán đủ BANK_TRANSFER
+  // receivedAt=now() (KHÔNG CASH — giữ expected_cash 2 ca CLOSED bước 11) → trigger
+  // đưa PAID 7.021.750 (= 6.5M + 125.5×3.5k + 5.5×15k, dẫn xuất từ METER + đơn giá).
+  // KHÔNG seed invoice kỳ HIỆN TẠI — để night-audit ngày 01 tháng sau tự sinh.
+  const billingPeriod = `${prevP.y}-${String(prevP.m).padStart(2, '0')}`;
+  const dayOfMonth = Number(todayStr.slice(8, 10));
+  const elecQty = METER.elecEnd - METER.elecStart; // kWh tiêu thụ kỳ trước
+  const waterQty = METER.waterEnd - METER.waterStart; // m³ tiêu thụ kỳ trước
+  await makeInvoice({
+    bookingIdx: monthlyIdx,
+    kind: 'MONTHLY_RENT',
+    status: 'ISSUED',
+    issuedOff: -(dayOfMonth - 1), // phát hành ngày 01 tháng này
+    dueOff: 5 - dayOfMonth, // hạn thanh toán ngày 05 tháng này
+    billingPeriod,
+    items: [
+      { itemType: 'RENT_MONTHLY', description: `Tiền thuê tháng ${billingPeriod}`, quantity: 1, unitPriceVnd: MONTHLY_RENT_VND, amountVnd: MONTHLY_RENT_VND },
+      { itemType: 'ELECTRICITY', description: `Tiền điện ${elecQty} kWh × ${ELEC_PER_KWH_VND}đ`, quantity: elecQty, unitPriceVnd: ELEC_PER_KWH_VND, amountVnd: Math.round(elecQty * ELEC_PER_KWH_VND) },
+      { itemType: 'WATER', description: `Tiền nước ${waterQty} m³ × ${WATER_PER_M3_VND}đ`, quantity: waterQty, unitPriceVnd: WATER_PER_M3_VND, amountVnd: Math.round(waterQty * WATER_PER_M3_VND) },
+    ],
+    pay: { ratio: 1, method: 'BANK_TRANSFER' },
+  });
+
+  // 15) Phụ thu lưu trú (docs/09 §4.3) — gắn booking CHECKED_IN phòng 102 trả phòng
+  //     HÔM NAY (bookingIds[7], mới chỉ có DEPOSIT invoice): demo check-out sẽ fold
+  //     3 dòng này vào STAY invoice (đủ 3 item_type theo CHECK). KHÔNG sinh
+  //     invoice/payment ở đây — không ảnh hưởng sổ quỹ/anti-fraud bước 11)–12).
+  const SURCHARGES = [
+    { type: 'SURCHARGE', desc: 'Phụ thu thêm 1 khách người lớn', qty: 1, unit: 150_000 },
+    { type: 'AMENITY', desc: 'Minibar — bia lon (x2)', qty: 2, unit: 30_000 },
+    { type: 'UTILITY', desc: 'Điện lạnh vượt định mức 15 kWh', qty: 15, unit: 3_500 },
+  ] as const;
+  for (const s of SURCHARGES) {
+    await client.query(
+      `INSERT INTO booking_surcharges (tenant_id, booking_id, item_type, description,
+          quantity, unit_price_vnd, amount_vnd, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [tenantId, bookingIds[7], s.type, s.desc, s.qty, s.unit, s.qty * s.unit, userIds.letan],
+    );
+  }
+
+  // 16) Khách NƯỚC NGOÀI + khai báo tạm trú NA17 (docs/12 §2). PASSPORT chỉ ghi last4
+  //     — KHÔNG *_enc/*_hash (không phụ thuộc ENCRYPTION_KEY; NA17 export vẫn chạy,
+  //     tryDecrypt(null) → ô trống). 2 booking DAILY CHECKED_IN đặt vào cửa sổ TRỐNG
+  //     để không vỡ EXCLUDE room_occupancy:
+  //     301 (idx6) đã chiếm [+2d 14:00, +5d) + WHOLE [+13d, +16d) → KR [−1d 15:00, +2d 12:00);
+  //     302 (idx7) đã chiếm [+8d, +11d) + WHOLE [+13d, +16d) → US [−2d 14:00, +1d 12:00).
+  const FOREIGN_GUESTS = [
+    { name: 'Kim Ji-woo', nationality: 'KR', phone: '0905551234', last4: '7842' },
+    { name: 'Michael Anderson', nationality: 'US', phone: '0905556789', last4: '9310' },
+  ] as const;
+  const foreignGuestIds: string[] = [];
+  for (const g of FOREIGN_GUESTS) {
+    const { rows } = await client.query<{ id: string }>(
+      `INSERT INTO guests (tenant_id, full_name, phone, nationality, id_document_type, id_document_last4)
+       VALUES ($1, $2, $3, $4, 'PASSPORT', $5) RETURNING id`,
+      [tenantId, g.name, g.phone, g.nationality, g.last4],
+    );
+    guestIds.push(rows[0]!.id);
+    foreignGuestIds.push(rows[0]!.id);
+  }
+
+  const FOREIGN_BOOKINGS = [
+    { guest: 0, roomIdx: 6, inOff: -1, inH: 15, outOff: 2, outH: 12 }, // KR — phòng 301
+    { guest: 1, roomIdx: 7, inOff: -2, inH: 14, outOff: 1, outH: 12 }, // US — phòng 302
+  ] as const;
+  const foreignBookingIds: string[] = [];
+  for (const fb of FOREIGN_BOOKINGS) {
+    const foreignBookingId = await insertCheckedInBooking({
+      resourceId: roomResourceIds[fb.roomIdx]!,
+      occupancyRoomIds: [roomIds[fb.roomIdx]!],
+      guestId: foreignGuestIds[fb.guest]!,
+      ratePlanId: dailyPlan[0]!.id,
+      mode: 'DAILY',
+      checkIn: vnLocal(anchor, fb.inOff, fb.inH),
+      checkOut: vnLocal(anchor, fb.outOff, fb.outH),
+      totalVnd: NIGHTLY_ROOM_VND * (fb.outOff - fb.inOff),
+    });
+    foreignBookingIds.push(foreignBookingId);
+  }
+
+  // Khai báo NA17 — mỗi khai báo 1 booking RIÊNG (UNIQUE (tenant_id, booking_id));
+  // property_id denormalize từ booking. (a) KR DRAFT visa EXEMPT: đủ entry + departure
+  // + miễn thị thực → demo bấm "Gửi" (submit) sẽ ra SUBMITTED chứ không FAILED.
+  // (b) US SUBMITTED sẵn: visa DL chỉ last4 (enc NULL), kèm mã tiếp nhận XNC.
+  await client.query(
+    `INSERT INTO foreign_residence_declarations (tenant_id, property_id, booking_id, guest_id,
+        visa_type, date_of_entry, port_of_entry, intended_departure, status)
+     VALUES ($1, $2, $3, $4, 'EXEMPT', $5::date, 'Sân bay quốc tế Đà Nẵng', $6::date, 'DRAFT')`,
+    [tenantId, propertyId, foreignBookingIds[0], foreignGuestIds[0], ymd(anchor, -1), ymd(anchor, 2)],
+  );
+  await client.query(
+    `INSERT INTO foreign_residence_declarations (tenant_id, property_id, booking_id, guest_id,
+        visa_type, visa_number_last4, visa_expiry, date_of_entry, port_of_entry, intended_departure,
+        status, submitted_at, submitted_by, xnc_reference)
+     VALUES ($1, $2, $3, $4, 'DL', '0421', $5::date, $6::date, 'Sân bay quốc tế Tân Sơn Nhất', $7::date,
+        'SUBMITTED', $8::timestamp AT TIME ZONE '${TZ}', $9, 'XNC-DEMO-001')`,
+    [tenantId, propertyId, foreignBookingIds[1], foreignGuestIds[1],
+      ymd(anchor, 30), ymd(anchor, -2), ymd(anchor, 1), vnLocal(anchor, -2, 16), userIds.letan],
+  );
+
   // CUỐI) Bump document_counters để booking/hoá đơn tạo qua UI không trùng số.
   // GIỮ LÀ BƯỚC CUỐI CÙNG của seedDemoData: mọi bước 11)–20) cấp số BK/INV
   // (BOOKINGS/makeInvoice) phải nằm TRƯỚC khối này — chèn bước seed mới lên trên,
@@ -636,7 +873,7 @@ async function seedDemoData(
   }
 
   console.log(
-    `   Dữ liệu mẫu: ${ROOMS.length} phòng · ${BOOKINGS.length} booking · ${invSeq} hoá đơn · 4 task dọn · 31 ngày thống kê · 3 ca quỹ · 8 chi phí · ${ASSET_SPECS.length} tài sản (${depEntryCount} kỳ khấu hao)`,
+    `   Dữ liệu mẫu: ${ROOMS.length + 1} phòng · ${bkSeq} booking · ${invSeq} hoá đơn · 4 task dọn · 31 ngày thống kê · 3 ca quỹ · 8 chi phí · ${ASSET_SPECS.length} tài sản (${depEntryCount} kỳ khấu hao) · 2 chỉ số điện nước · ${SURCHARGES.length} phụ thu · ${FOREIGN_BOOKINGS.length} khai báo NA17`,
   );
 }
 
