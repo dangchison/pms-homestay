@@ -26,3 +26,9 @@ blob-report/
 
 # Playwright MCP browser-verify artifacts (snapshots/console logs)
 .playwright-mcp/
+
+# Claude Code local (cá nhân từng máy)
+.claude/settings.local.json
+
+# Codegraph index (tự sinh: codegraph serve)
+.codegraph/
