@@ -444,7 +444,7 @@ async function seedDemoData(
   await makeInvoice({ bookingIdx: 2, kind: 'STAY', nights: 3, nightly: NIGHTLY_ROOM_VND, status: 'ISSUED', issuedOff: -2, dueOff: -2, pay: { ratio: 1, method: 'BANK_TRANSFER' } }); // PAID
   await makeInvoice({ bookingIdx: 3, kind: 'DEPOSIT', nights: 3, nightly: NIGHTLY_ROOM_VND, status: 'ISSUED', issuedOff: -1, dueOff: 0, pay: { ratio: 1, method: 'VIETQR' }, depositRatioBp: 3000 }); // cọc PAID
   await makeInvoice({ bookingIdx: 5, kind: 'STAY', nights: 2, nightly: NIGHTLY_ROOM_VND, status: 'ISSUED', issuedOff: 0, dueOff: 2, pay: { ratio: 0.5, method: 'CASH' } }); // PARTIALLY_PAID
-  await makeInvoice({ bookingIdx: 1, kind: 'STAY', nights: 3, nightly: NIGHTLY_ROOM_VND, status: 'OVERDUE', issuedOff: -5, dueOff: -4 }); // OVERDUE chưa trả
+  const overdueInvoiceId = await makeInvoice({ bookingIdx: 1, kind: 'STAY', nights: 3, nightly: NIGHTLY_ROOM_VND, status: 'OVERDUE', issuedOff: -5, dueOff: -4 }); // OVERDUE chưa trả — id nuôi metadata noti invoice.overdue (bước 19c)
 
   // 8) Task dọn phòng (đồng bộ housekeeping_status đã set ở ROOMS).
   //    102 PENDING (DIRTY) · 202 IN_PROGRESS (CLEANING) · 301 COMPLETED (INSPECTION) · 101 VERIFIED (CLEAN)
@@ -858,6 +858,168 @@ async function seedDemoData(
       ymd(anchor, 30), ymd(anchor, -2), ymd(anchor, 1), vnLocal(anchor, -2, 16), userIds.letan],
   );
 
+  // 17) Mã giảm giá (docs/19 §4 Đợt 3 — D3d): 3 voucher phủ đủ nhánh evaluate
+  //     (discounts.service). applicable_property_ids: NULL THẬT = MỌI cơ sở, KHÁC
+  //     '{}' (mảng rỗng = KHÔNG cơ sở nào) → SUMMER10/HETHAN ghi NULL literal, GIAM50K
+  //     ghi ARRAY[propertyId]::uuid[] đúng 1 phần tử. HETHAN cố ý HẾT HẠN (valid_to
+  //     −10d, valid_from −90d thoả CHECK valid_window) nhưng is_active=true → fail
+  //     đúng nhánh EXPIRED (không phải INACTIVE) khi demo áp mã vào quote.
+  //     PERCENT = basis-point (PERCENT_BP_DIVISOR=10000): 1000 = 10%, 2000 = 20%.
+  await client.query(
+    `INSERT INTO discount_codes (tenant_id, code, discount_type, discount_value, min_order_vnd,
+        max_uses, valid_from, valid_to, applicable_property_ids, is_active)
+     VALUES
+       ($1, 'SUMMER10', 'PERCENT'::discount_type, 1000, 0, NULL,
+          now() - interval '30 days', now() + interval '60 days', NULL, true),
+       ($1, 'GIAM50K', 'FIXED'::discount_type, 50000, 500000, 100,
+          NULL, NULL, ARRAY[$2]::uuid[], true),
+       ($1, 'HETHAN', 'PERCENT'::discount_type, 2000, 0, NULL,
+          now() - interval '90 days', now() - interval '10 days', NULL, true)`,
+    [tenantId, propertyId],
+  );
+
+  // 18) Kênh OTA iCal (docs/19 §4 Đợt 3 — D3d): 2 kênh + 3 mapping + 4 sync job lịch sử.
+  //     ical_pull_url = NULL CẢ 3 mapping (cron pull chỉ chọn mapping CÓ URL —
+  //     ical-sync.service.syncAllActiveMappings → seed không kích HTTP call nào tới
+  //     URL giả); external_listing_url thuần hiển thị. KHÔNG truyền ical_push_token
+  //     (DEFAULT gen_random_bytes tự sinh) → demo copy push-URL hoạt động thật.
+  const { rows: airbnbCh } = await client.query<{ id: string }>(
+    `INSERT INTO channels (tenant_id, property_id, channel_type, display_name, is_active,
+        last_synced_at, last_sync_status)
+     VALUES ($1, $2, 'AIRBNB_ICAL', 'Airbnb — Cơ sở Mỹ Khê', true,
+        now() - interval '1 hour', 'SUCCESS'::sync_job_status)
+     RETURNING id`,
+    [tenantId, propertyId],
+  );
+  const { rows: bookingCh } = await client.query<{ id: string }>(
+    `INSERT INTO channels (tenant_id, property_id, channel_type, display_name, is_active,
+        last_synced_at, last_sync_status)
+     VALUES ($1, $2, 'BOOKING_ICAL', 'Booking.com — Cơ sở Mỹ Khê', false,
+        now() - interval '2 days', 'FAILED'::sync_job_status)
+     RETURNING id`,
+    [tenantId, propertyId],
+  );
+
+  // Mapping listing↔resource: Airbnb→P.102 (khớp booking source AIRBNB_ICAL sẵn có ở
+  // bước 5) + P.201; Booking→P.103. external_listing_id tất định — unique (channel,
+  // resource) an toàn nhờ RESET.
+  const MAPPINGS = [
+    { channelId: airbnbCh[0]!.id, resIdx: 1, listing: 'airbnb-demo-102', url: 'https://www.airbnb.com/rooms/demo-102' },
+    { channelId: airbnbCh[0]!.id, resIdx: 3, listing: 'airbnb-demo-201', url: 'https://www.airbnb.com/rooms/demo-201' },
+    { channelId: bookingCh[0]!.id, resIdx: 2, listing: 'booking-demo-103', url: 'https://www.booking.com/hotel/vn/demo-103.html' },
+  ] as const;
+  const mappingIds: string[] = [];
+  for (const m of MAPPINGS) {
+    const { rows } = await client.query<{ id: string }>(
+      `INSERT INTO channel_resource_mappings (tenant_id, channel_id, resource_id,
+          external_listing_id, external_listing_url, ical_pull_url)
+       VALUES ($1, $2, $3, $4, $5, NULL) RETURNING id`,
+      [tenantId, m.channelId, roomResourceIds[m.resIdx]!, m.listing, m.url],
+    );
+    mappingIds.push(rows[0]!.id);
+  }
+
+  // Lịch sử sync 4 job (job_type theo CHECK 0023; status cast ::sync_job_status).
+  // PARTIAL conflict_count=1 CHỦ ĐÍCH cho badge cảnh báo xung đột OTA (docs/19 §1.6)
+  // — countRecentConflicts cộng conflict_count theo finished_at 7 ngày gần nhất nên
+  // finished_at phải SET (job terminal nào cũng có finished_at).
+  const SYNC_JOBS = [
+    { channelId: airbnbCh[0]!.id, mappingIdx: 1, type: 'PUSH_ICAL', status: 'SUCCESS', ago: '1 hour', processed: 3, created: 0, updated: 0, conflicts: 0, error: null },
+    { channelId: airbnbCh[0]!.id, mappingIdx: 0, type: 'PULL_ICAL', status: 'PARTIAL', ago: '1 day', processed: 8, created: 2, updated: 1, conflicts: 1, error: null },
+    { channelId: airbnbCh[0]!.id, mappingIdx: 0, type: 'PUSH_ICAL', status: 'SUCCESS', ago: '3 days', processed: 3, created: 0, updated: 0, conflicts: 0, error: null },
+    { channelId: bookingCh[0]!.id, mappingIdx: 2, type: 'PULL_ICAL', status: 'FAILED', ago: '2 days', processed: 0, created: 0, updated: 0, conflicts: 0, error: 'HTTP 410 Gone — iCal URL đã bị thu hồi' },
+  ] as const;
+  for (const j of SYNC_JOBS) {
+    await client.query(
+      `INSERT INTO sync_jobs (tenant_id, channel_id, channel_mapping_id, job_type, status,
+          started_at, finished_at, events_processed, events_created, events_updated,
+          conflict_count, error_message)
+       VALUES ($1, $2, $3, $4, $5::sync_job_status,
+          now() - $6::interval, now() - $6::interval + interval '45 seconds',
+          $7, $8, $9, $10, $11)`,
+      [tenantId, j.channelId, mappingIds[j.mappingIdx]!, j.type, j.status, j.ago,
+        j.processed, j.created, j.updated, j.conflicts, j.error],
+    );
+  }
+
+  // 19a) Chuyển khoản chưa khớp (đối soát tay — docs/19 §4 Đợt 3): provider CASSO
+  //      khớp default scripts/simulate-bank-transfer.ts (M4); transaction_ref tất
+  //      định an toàn nhờ RESET (unique (tenant, provider, ref)). GET /payments/
+  //      unmatched CHỈ trả PENDING (reconciliation.service.listUnmatched) → dòng
+  //      IGNORED chỉ thấy qua SQL/lịch sử — đúng thiết kế. raw mô phỏng payload
+  //      webhook; content kiểu nội dung CK không dấu (không chứa mã BK/INV để
+  //      không đánh lừa mắt người đối soát).
+  const UNMATCHED = [
+    { ref: 'DEMO-UM-001', amount: 350_000, content: 'NGUYEN VAN AN CHUYEN TIEN PHONG', agoHours: 24, status: 'PENDING', resolvedBy: null as string | null },
+    { ref: 'DEMO-UM-002', amount: 1_250_000, content: 'TRAN THI BINH TT TIEN COC HOMESTAY', agoHours: 48, status: 'PENDING', resolvedBy: null as string | null },
+    { ref: 'DEMO-UM-003', amount: 99_000, content: 'LE HOANG CUONG CK NHAM TAI KHOAN', agoHours: 72, status: 'IGNORED', resolvedBy: userIds.owner },
+  ] as const;
+  for (const u of UNMATCHED) {
+    await client.query(
+      `INSERT INTO unmatched_payments (tenant_id, provider, transaction_ref, amount_vnd,
+          content, bank_account, received_at, status, resolved_by, resolved_payment_id, raw)
+       VALUES ($1, 'CASSO', $2, $3, $4, $5, now() - ($6 || ' hours')::interval, $7, $8, NULL, $9::jsonb)`,
+      [tenantId, u.ref, u.amount, u.content, DEMO_BANK.account, String(u.agoHours), u.status, u.resolvedBy,
+        JSON.stringify({ event_id: u.ref, amount_vnd: u.amount, content: u.content, bank_account: DEMO_BANK.account })],
+    );
+  }
+
+  // 19b) Thanh toán SaaS (billing M2 — docs/19 §4 Đợt 3): 2 kỳ trước CONFIRMED + kỳ
+  //      hiện tại PENDING. SELECT plan PRO ngay tại bước (không hardcode id; amount =
+  //      monthly_price_vnd 499k theo seed-prod-required). payment_ref
+  //      'PMSSUB-DEMO-YYYYMM' duy nhất TOÀN CỤC (uq_subscription_payments_ref) — an
+  //      toàn nhờ RESET + prefix riêng tenant demo, KHÔNG đổi prefix. confirmed_by
+  //      NULL khớp confirmPayment thật (subscription.service không set cột này).
+  //      created_at tường minh tăng dần theo kỳ → list (ORDER BY created_at DESC) ổn
+  //      định. Demo M2: POST /public/billing/mock-gateway/PMSSUB-DEMO-<YYYYMM nay>/pay
+  //      confirm được kỳ PENDING (update tenants.current_period_end — hành vi đúng).
+  const { rows: proPlans } = await client.query<{ id: string; monthly_price_vnd: string }>(
+    `SELECT id, monthly_price_vnd FROM subscription_plans WHERE code = 'PRO'`,
+  );
+  const proPlan = proPlans[0]!;
+  for (const k of [2, 1, 0]) {
+    const p = monthsBack(todayStr, k);
+    const confirmed = k > 0; // kỳ hiện tại (k=0) PENDING
+    await client.query(
+      `INSERT INTO subscription_payments (tenant_id, plan_id, plan_code, amount_vnd,
+          period_start, period_end, status, payment_ref, confirmed_by, confirmed_at, created_at)
+       VALUES ($1, $2, 'PRO', $3,
+          $4::timestamp AT TIME ZONE '${TZ}', $5::timestamp AT TIME ZONE '${TZ}',
+          $6, $7, NULL,
+          CASE WHEN $8 THEN ($4::timestamp + interval '3 days 10 hours') AT TIME ZONE '${TZ}' END,
+          ($4::timestamp + interval '8 hours') AT TIME ZONE '${TZ}')`,
+      [tenantId, proPlan.id, proPlan.monthly_price_vnd,
+        firstOfMonth(p), firstOfMonth(monthsBack(todayStr, k - 1)),
+        confirmed ? 'CONFIRMED' : 'PENDING',
+        `PMSSUB-DEMO-${p.y}${String(p.m).padStart(2, '0')}`, confirmed],
+    );
+  }
+
+  // 19c) Thông báo in-app cho OWNER (docs/19 §4 Đợt 3): title/body lấy ĐÚNG map
+  //      renderTemplate (notification-targets.ts) để khớp noti thật từ worker;
+  //      event_id NULL (tạo tay — partial unique uq_notifications_event chỉ áp
+  //      WHERE event_id IS NOT NULL, re-run an toàn nhờ RESET). metadata theo shape
+  //      processEvent { event_type, ...payload } → FE điều hướng theo booking_id/
+  //      invoice_id. ĐÚNG 2 dòng mới nhất (−2h/−5h) chưa đọc → badge chuông = 2.
+  const NOTIFICATIONS = [
+    { type: 'booking.created', title: 'Đặt phòng mới', body: 'Có một đặt phòng mới vừa được tạo.', agoHours: 2, read: false, meta: { booking_id: bookingIds[5]! } },
+    { type: 'payment.received', title: 'Nhận thanh toán', body: 'Vừa ghi nhận một khoản thanh toán.', agoHours: 5, read: false, meta: { booking_id: bookingIds[0]! } },
+    { type: 'invoice.overdue', title: 'Hoá đơn quá hạn', body: 'Một hoá đơn đã quá hạn thanh toán.', agoHours: 24, read: true, meta: { invoice_id: overdueInvoiceId, booking_id: bookingIds[1]! } },
+    { type: 'booking.cancelled', title: 'Đặt phòng đã huỷ', body: 'Một đặt phòng vừa bị huỷ.', agoHours: 48, read: true, meta: { booking_id: bookingIds[17]! } },
+    { type: 'booking.checked_in', title: 'Khách đã nhận phòng', body: 'Một khách vừa check-in.', agoHours: 72, read: true, meta: { booking_id: bookingIds[3]! } },
+  ] as const;
+  for (const n of NOTIFICATIONS) {
+    await client.query(
+      `INSERT INTO notifications (tenant_id, user_id, channel, event_id, title, body,
+          metadata, is_read, read_at, created_at)
+       VALUES ($1, $2, 'IN_APP', NULL, $3, $4, $5::jsonb, $6,
+          CASE WHEN $6 THEN now() - ($7 || ' hours')::interval + interval '30 minutes' END,
+          now() - ($7 || ' hours')::interval)`,
+      [tenantId, userIds.owner, n.title, n.body,
+        JSON.stringify({ event_type: n.type, ...n.meta }), n.read, String(n.agoHours)],
+    );
+  }
+
   // CUỐI) Bump document_counters để booking/hoá đơn tạo qua UI không trùng số.
   // GIỮ LÀ BƯỚC CUỐI CÙNG của seedDemoData: mọi bước 11)–20) cấp số BK/INV
   // (BOOKINGS/makeInvoice) phải nằm TRƯỚC khối này — chèn bước seed mới lên trên,
@@ -873,7 +1035,7 @@ async function seedDemoData(
   }
 
   console.log(
-    `   Dữ liệu mẫu: ${ROOMS.length + 1} phòng · ${bkSeq} booking · ${invSeq} hoá đơn · 4 task dọn · 31 ngày thống kê · 3 ca quỹ · 8 chi phí · ${ASSET_SPECS.length} tài sản (${depEntryCount} kỳ khấu hao) · 2 chỉ số điện nước · ${SURCHARGES.length} phụ thu · ${FOREIGN_BOOKINGS.length} khai báo NA17`,
+    `   Dữ liệu mẫu: ${ROOMS.length + 1} phòng · ${bkSeq} booking · ${invSeq} hoá đơn · 4 task dọn · 31 ngày thống kê · 3 ca quỹ · 8 chi phí · ${ASSET_SPECS.length} tài sản (${depEntryCount} kỳ khấu hao) · 2 chỉ số điện nước · ${SURCHARGES.length} phụ thu · ${FOREIGN_BOOKINGS.length} khai báo NA17 · 3 voucher · 2 kênh iCal (${MAPPINGS.length} mapping, ${SYNC_JOBS.length} sync job) · ${UNMATCHED.length} CK chưa khớp · 3 thanh toán SaaS · ${NOTIFICATIONS.length} thông báo`,
   );
 }
 
@@ -927,6 +1089,27 @@ async function main(): Promise<void> {
     await client.query(
       `UPDATE properties SET bank_bin = $2, bank_account_number = $3, bank_account_name = $4 WHERE id = $1`,
       [propertyId, DEMO_BANK.bin, DEMO_BANK.account, DEMO_BANK.name],
+    );
+
+    // 20) Rent-to-rent (docs/19 §4 Đợt 3 — D3d): cơ sở demo là nhà THUÊ LẠI của chủ
+    // nhà gốc → GET /reports/landlord-statement có dữ liệu. landlord_revenue_share_bp
+    // = NULL TƯỜNG MINH: khác NULL thì mô hình REVENUE_SHARE đè FIXED_RENT
+    // (reports.service ưu tiên share_bp). monthly_landlord_rent_vnd = 25tr KHỚP
+    // expense RENT_LANDLORD 25tr/tháng bước 13 (một nguồn số, demo không lệch).
+    // Hợp đồng: ngày 01 của 6 tháng trước, thời hạn 24 tháng (SQL date_trunc theo giờ
+    // VN). UPDATE toàn hằng số → idempotent, chạy nhiều lần cùng kết quả. Dữ liệu
+    // chủ nhà là demo hư cấu (không phải guest PII — không mã hoá).
+    await client.query(
+      `UPDATE properties SET
+         is_rent_to_rent = true,
+         landlord_name = 'Bà Trần Thị Lan',
+         landlord_phone = '0905123456',
+         monthly_landlord_rent_vnd = 25000000,
+         landlord_revenue_share_bp = NULL,
+         rent_to_rent_contract_start = (date_trunc('month', now() AT TIME ZONE '${TZ}') - interval '6 months')::date,
+         rent_to_rent_contract_end = (date_trunc('month', now() AT TIME ZONE '${TZ}') - interval '6 months' + interval '24 months')::date
+       WHERE id = $1`,
+      [propertyId],
     );
 
     // 3) Tài khoản demo theo vai trò (cùng mật khẩu).
