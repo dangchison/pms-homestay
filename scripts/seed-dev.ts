@@ -156,6 +156,22 @@ async function seedDemoData(
 
   // 1) RESET dữ liệu giao dịch của tenant demo (thứ tự FK an toàn).
   for (const sql of [
+    // ── Bảng Đợt 3+ (docs/19 §4): xoá TRƯỚC bookings/guests/rooms/channels vì FK ──
+    `DELETE FROM outbound_messages WHERE tenant_id = $1`, // FK bookings + guests (0035)
+    `DELETE FROM notifications WHERE tenant_id = $1`, // FK users — users chỉ upsert, xoá noti để demo tươi
+    `DELETE FROM sync_logs WHERE tenant_id = $1`, // FK sync_jobs (có CASCADE — vẫn xoá tường minh cho tự-tài-liệu)
+    `DELETE FROM sync_jobs WHERE tenant_id = $1`, // FK channels
+    `DELETE FROM channel_resource_mappings WHERE tenant_id = $1`, // FK channels + bookable_resources
+    `DELETE FROM channels WHERE tenant_id = $1`,
+    `DELETE FROM monthly_meter_readings WHERE tenant_id = $1`, // FK bookings
+    `DELETE FROM booking_surcharges WHERE tenant_id = $1`, // FK bookings
+    `DELETE FROM foreign_residence_declarations WHERE tenant_id = $1`, // FK bookings + guests
+    `DELETE FROM cash_shifts WHERE tenant_id = $1`, // FK properties (properties chỉ upsert)
+    `DELETE FROM unmatched_payments WHERE tenant_id = $1`, // chỉ FK tenants — resolved_payment_id KHÔNG có FK (0012)
+    `DELETE FROM subscription_payments WHERE tenant_id = $1`, // chỉ FK tenants (bảng global, không RLS)
+    `DELETE FROM depreciation_entries WHERE tenant_id = $1`, // FK assets
+    `DELETE FROM assets WHERE tenant_id = $1`, // FK rooms
+    `DELETE FROM operational_expenses WHERE tenant_id = $1`, // FK bookings (source_booking_id) + rooms
     `DELETE FROM payment_attempts WHERE tenant_id = $1`,
     `DELETE FROM payments WHERE tenant_id = $1`,
     `DELETE FROM invoice_items WHERE tenant_id = $1`,
@@ -169,6 +185,10 @@ async function seedDemoData(
     // FK tới rate_plans + bookable_resources → phải xoá TRƯỚC chúng, nếu không reseed
     // trên DB đã dùng sẽ vỡ FK quotes_*_rate_plan_id_fkey (bug re-run trước đây).
     `DELETE FROM quotes WHERE tenant_id = $1`,
+    // discount_codes phải SAU quotes: quotes.discount_code_id FK composite
+    // quotes_discount_code_fkey (0034) — xoá voucher trước sẽ vỡ FK trên DB có
+    // quote dùng voucher (cùng lớp bug re-run như quotes↔rate_plans ở trên).
+    `DELETE FROM discount_codes WHERE tenant_id = $1`,
     `DELETE FROM rate_plan_resources WHERE tenant_id = $1`,
     `DELETE FROM rate_plan_rules WHERE tenant_id = $1`,
     `DELETE FROM rate_plans WHERE tenant_id = $1`,
@@ -319,6 +339,7 @@ async function seedDemoData(
 
   // 7) Hoá đơn + thanh toán (trigger tự tính total/paid/status).
   //    Mỗi phần tử: booking index, kind, nights, status ban đầu, payment (tỉ lệ trả / method) | overdue.
+  //    Trả invoiceId + pay tuỳ biến receivedAt/receivedBy (mặc định now()/owner) — bước 11)–20) Đợt 3 dùng.
   let invSeq = 0;
   async function makeInvoice(opts: {
     bookingIdx: number;
@@ -328,9 +349,14 @@ async function seedDemoData(
     status: 'ISSUED' | 'OVERDUE';
     issuedOff: number;
     dueOff: number;
-    pay?: { ratio: number; method: string };
+    pay?: {
+      ratio: number;
+      method: string;
+      receivedAt?: string; // chuỗi local VN 'YYYY-MM-DD HH:mm:ss' (quy ước vnLocal) — mặc định now()
+      receivedBy?: string; // user id — mặc định owner
+    };
     depositRatioBp?: number; // basis-point cho DEPOSIT
-  }): Promise<void> {
+  }): Promise<string> {
     invSeq += 1;
     const number = `INV-${period}-${String(invSeq).padStart(4, '0')}`;
     const baseAmount = opts.nights * opts.nightly;
@@ -360,12 +386,14 @@ async function seedDemoData(
     );
     if (opts.pay) {
       const amount = Math.round(itemAmount * opts.pay.ratio);
+      // COALESCE: NULL::timestamp AT TIME ZONE '<TZ>' → NULL → fallback now() (giữ y hệt hành vi cũ).
       await client.query(
         `INSERT INTO payments (tenant_id, invoice_id, amount_vnd, method, status, received_by, received_at)
-         VALUES ($1, $2, $3, $4, 'SUCCEEDED', $5, now())`,
-        [tenantId, invoiceId, amount, opts.pay.method, userIds.owner],
+         VALUES ($1, $2, $3, $4, 'SUCCEEDED', $5, COALESCE($6::timestamp AT TIME ZONE '${TZ}', now()))`,
+        [tenantId, invoiceId, amount, opts.pay.method, opts.pay.receivedBy ?? userIds.owner, opts.pay.receivedAt ?? null],
       );
     }
+    return invoiceId;
   }
 
   await makeInvoice({ bookingIdx: 0, kind: 'STAY', nights: 3, nightly: NIGHTLY_ROOM_VND, status: 'ISSUED', issuedOff: -7, dueOff: -7, pay: { ratio: 1, method: 'CASH' } }); // PAID
