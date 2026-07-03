@@ -91,7 +91,7 @@ type BookingSpec = {
   outOff: number;
   inH: number; // giờ nhận (VN)
   outH: number; // giờ trả (VN)
-  status: 'HOLD' | 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'CHECKED_OUT';
+  status: 'HOLD' | 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'CHECKED_OUT' | 'CANCELLED';
   source: string;
   guest: number;
 };
@@ -123,6 +123,13 @@ const BOOKINGS: BookingSpec[] = [
   { room: 2, inOff: 10, outOff: 12, inH: 14, outH: 12, status: 'HOLD', source: 'DIRECT', guest: 4 },
   // ── Nguyên căn (301+302) — CONFIRMED, cửa sổ 301/302 đều rảnh ──
   { room: 'WHOLE', inOff: 13, outOff: 16, inH: 14, outH: 12, status: 'CONFIRMED', source: 'DIRECT', guest: 5 },
+  // ── Fixture anti-fraud Đợt 3 (docs/19 §4) — status terminal nên KHÔNG sinh
+  //    room_occupancy → không thể vỡ EXCLUDE dù trùng phòng/ngày với booking khác. ──
+  // F1 (idx 17): hủy SAU khi đã thu cọc CASH → finding CANCEL_AFTER_CASH (bước 12).
+  { room: 3, inOff: 1, outOff: 3, inH: 14, outH: 12, status: 'CANCELLED', source: 'DIRECT', guest: 9 },
+  // F2 (idx 18): đã trả phòng rồi hoàn TOÀN BỘ tiền mặt — cố ý dưới ngưỡng
+  //    REFUND_ANOMALY_BY_STAFF để không sinh finding nhiễu (bước 12).
+  { room: 7, inOff: -6, outOff: -4, inH: 14, outH: 12, status: 'CHECKED_OUT', source: 'DIRECT', guest: 10 },
 ];
 
 const NON_TERMINAL = new Set(['HOLD', 'PENDING', 'CONFIRMED', 'CHECKED_IN']);
@@ -137,6 +144,15 @@ function ymd(anchor: Date, offsetDays: number): string {
 /** Chuỗi timestamp local VN 'YYYY-MM-DD HH:00:00' — insert kèm ::timestamp AT TIME ZONE TZ. */
 function vnLocal(anchor: Date, offsetDays: number, hour: number): string {
   return `${ymd(anchor, offsetDays)} ${String(hour).padStart(2, '0')}:00:00`;
+}
+/** Kỳ tháng {y, m(1-12)} lùi `k` tháng so với todayStr 'YYYY-MM-DD' — thuần số học, không Date/TZ. */
+function monthsBack(todayStr: string, k: number): { y: number; m: number } {
+  const idx = Number(todayStr.slice(0, 4)) * 12 + Number(todayStr.slice(5, 7)) - 1 - k;
+  return { y: Math.floor(idx / 12), m: (idx % 12) + 1 };
+}
+/** Ngày 01 của kỳ, dạng 'YYYY-MM-01' (insert kèm ::date). */
+function firstOfMonth(p: { y: number; m: number }): string {
+  return `${p.y}-${String(p.m).padStart(2, '0')}-01`;
 }
 
 async function seedDemoData(
@@ -443,7 +459,172 @@ async function seedDemoData(
     );
   }
 
-  // 10) Bump document_counters để booking/hoá đơn tạo qua UI không trùng số.
+  // 11) Sổ quỹ ca (docs/19 §4 Đợt 3): 2 ca CLOSED hôm qua + 1 ca OPEN hôm nay.
+  //     3 payment CASH mới (received_by lễ tân) neo vào cửa sổ ca. Cửa sổ ca inclusive
+  //     CẢ 2 đầu (received_at BETWEEN opened_at AND closed_at — shifts.service) nên
+  //     KHÔNG đặt payment tại mốc biên 15:00; expected_cash_vnd ca CLOSED phải tự tay
+  //     khớp công thức float + Σ(amount − refunded) CASH trong ca (computeExpectedCashInTx),
+  //     nếu không trang chi tiết ca sẽ vênh với danh sách payment.
+  await makeInvoice({ bookingIdx: 8, kind: 'STAY', nights: 2, nightly: NIGHTLY_ROOM_VND, status: 'ISSUED', issuedOff: -1, dueOff: 0, pay: { ratio: 1, method: 'CASH', receivedAt: vnLocal(anchor, -1, 9), receivedBy: userIds.letan } }); // 1.400.000 → ca A
+  await makeInvoice({ bookingIdx: 7, kind: 'DEPOSIT', nights: 3, nightly: NIGHTLY_ROOM_VND, status: 'ISSUED', issuedOff: -1, dueOff: 0, pay: { ratio: 1, method: 'CASH', receivedAt: vnLocal(anchor, -1, 11), receivedBy: userIds.letan }, depositRatioBp: 3000 }); // 630.000 → ca A
+  await makeInvoice({ bookingIdx: 4, kind: 'STAY', nights: 3, nightly: NIGHTLY_ROOM_VND, status: 'ISSUED', issuedOff: -1, dueOff: 1, pay: { ratio: 0.5, method: 'CASH', receivedAt: vnLocal(anchor, -1, 18), receivedBy: userIds.letan } }); // 1.050.000 → ca B
+
+  // variance_vnd là GENERATED ALWAYS STORED (counted − expected) → TUYỆT ĐỐI không
+  // liệt kê trong column-list. Ca A: float 500k + 1.4M + 630k = expected 2.530.000,
+  // đếm 2.380.000 → variance −150.000 (demo lệch quỹ).
+  await client.query(
+    `INSERT INTO cash_shifts (tenant_id, property_id, opened_by, opened_at, opening_float_vnd,
+        closed_by, closed_at, closing_counted_vnd, expected_cash_vnd, status, note)
+     VALUES ($1, $2, $3, $4::timestamp AT TIME ZONE '${TZ}', 500000,
+        $3, $5::timestamp AT TIME ZONE '${TZ}', 2380000, 2530000, 'CLOSED', 'Ca sáng hôm qua — đếm két thiếu 150.000đ')`,
+    [tenantId, propertyId, userIds.letan, vnLocal(anchor, -1, 7), vnLocal(anchor, -1, 15)],
+  );
+  // Ca B: float 300k + 1.05M = expected 1.350.000 = đếm → variance 0 (khớp quỹ).
+  await client.query(
+    `INSERT INTO cash_shifts (tenant_id, property_id, opened_by, opened_at, opening_float_vnd,
+        closed_by, closed_at, closing_counted_vnd, expected_cash_vnd, status, note)
+     VALUES ($1, $2, $3, $4::timestamp AT TIME ZONE '${TZ}', 300000,
+        $3, $5::timestamp AT TIME ZONE '${TZ}', 1350000, 1350000, 'CLOSED', 'Ca chiều hôm qua — khớp quỹ')`,
+    [tenantId, propertyId, userIds.letan, vnLocal(anchor, -1, 15), vnLocal(anchor, -1, 22)],
+  );
+  // Ca C — ca OPEN duy nhất (partial unique uq_cash_shift_open_per_property). LEAST
+  // giữ opened_at không rơi vào tương lai khi seed chạy 00:00–07:00 VN. 2 payment CASH
+  // bước 7 (received_at = now()) rơi vào cửa sổ ca này → chi tiết ca OPEN có dữ liệu.
+  await client.query(
+    `INSERT INTO cash_shifts (tenant_id, property_id, opened_by, opened_at, opening_float_vnd, status, note)
+     VALUES ($1, $2, $3, LEAST(now(), $4::timestamp AT TIME ZONE '${TZ}'), 400000, 'OPEN', 'Ca hôm nay — đang mở')`,
+    [tenantId, propertyId, userIds.letan, vnLocal(anchor, 0, 7)],
+  );
+
+  // 12) Fixture anti-fraud (docs/19 §4). F1 (idx 17): thu cọc CASH 420k (−3d 10:00)
+  //     rồi hủy (−3d 18:00) → báo cáo chống thất thoát ra đúng 1 finding
+  //     CANCEL_AFTER_CASH 420.000đ trong cửa sổ [hôm nay−7, hôm nay].
+  await makeInvoice({ bookingIdx: 17, kind: 'DEPOSIT', nights: 2, nightly: NIGHTLY_ROOM_VND, status: 'ISSUED', issuedOff: -3, dueOff: -2, pay: { ratio: 1, method: 'CASH', receivedAt: vnLocal(anchor, -3, 10), receivedBy: userIds.letan }, depositRatioBp: 3000 }); // 420.000 → PAID
+  // booking_status_history KHÔNG có DB trigger tự ghi (đã verify 0009 — chỉ app
+  // service bookings.service/night-audit ghi) → seed INSERT tay đúng 1 dòng chuyển
+  // trạng thái. Nếu sau này thêm trigger ghi history thì GỠ insert này (tránh double).
+  const f1Reason = 'Khách hủy đột xuất sau khi đã đóng cọc tiền mặt';
+  await client.query(
+    `INSERT INTO booking_status_history (tenant_id, booking_id, from_status, to_status, changed_by, reason, created_at)
+     VALUES ($1, $2, 'CONFIRMED'::booking_status, 'CANCELLED'::booking_status, $3, $4, $5::timestamp AT TIME ZONE '${TZ}')`,
+    [tenantId, bookingIds[17], userIds.letan, f1Reason, vnLocal(anchor, -3, 18)],
+  );
+  await client.query(
+    `UPDATE bookings SET cancelled_at = $3::timestamp AT TIME ZONE '${TZ}', cancelled_by = $4, cancellation_reason = $5
+     WHERE tenant_id = $1 AND id = $2`,
+    [tenantId, bookingIds[17], vnLocal(anchor, -3, 18), userIds.letan, f1Reason],
+  );
+
+  // F2 (idx 18): thu CASH 1.4M (−4d 11:00) rồi hoàn TOÀN BỘ (−2d 19:00). CỐ Ý dưới
+  // ngưỡng REFUND_ANOMALY_BY_STAFF (1 lần < 3 lần, 1.4M < 2M, chỉ 1 staff → z-score
+  // không kích hoạt) → KHÔNG sinh finding nhiễu. Trigger recompute_invoice_paid (0011)
+  // tự chuyển invoice PAID → REFUNDED khi payment REFUNDED.
+  const f2InvoiceId = await makeInvoice({ bookingIdx: 18, kind: 'STAY', nights: 2, nightly: NIGHTLY_ROOM_VND, status: 'ISSUED', issuedOff: -6, dueOff: -4, pay: { ratio: 1, method: 'CASH', receivedAt: vnLocal(anchor, -4, 11), receivedBy: userIds.letan } }); // 1.400.000
+  await client.query(
+    `UPDATE payments SET status = 'REFUNDED', refunded_amount_vnd = amount_vnd,
+        refunded_at = $3::timestamp AT TIME ZONE '${TZ}',
+        refund_reason = 'Khách khiếu nại chất lượng phòng — hoàn toàn bộ tiền mặt'
+     WHERE tenant_id = $1 AND invoice_id = $2`,
+    [tenantId, f2InvoiceId, vnLocal(anchor, -2, 19)],
+  );
+
+  // 13) Chi phí vận hành + tài sản & khấu hao (P&L / báo cáo tài chính có số liệu).
+  //     KHÔNG seed OTA_COMMISSION — đường ghi độc quyền của checkout (0014).
+  // Template thuê nhà định kỳ (neo ngày 01 của tháng nay − 2) + 2 child đã sinh:
+  // tháng trước (đã trả) và THÁNG NÀY (chưa trả). Child tháng này BẮT BUỘC có
+  // expense_date trong tháng hiện tại (ngày 01) — guard của generateRecurringExpenses
+  // (night-audit) lọc child theo expense_date trong kỳ → thấy kỳ này đã sinh, không
+  // tạo dòng trùng đêm nay.
+  const { rows: rentTpl } = await client.query<{ id: string }>(
+    `INSERT INTO operational_expenses (tenant_id, property_id, expense_type, description,
+        amount_vnd, expense_date, is_recurring, recurrence_pattern, is_paid, paid_at, created_by)
+     VALUES ($1, $2, 'RENT_LANDLORD', 'Tiền thuê nhà trả chủ (định kỳ hằng tháng)',
+        25000000, $3::date, true, 'MONTHLY', true, ($3::date + 3)::timestamptz, $4)
+     RETURNING id`,
+    [tenantId, propertyId, firstOfMonth(monthsBack(todayStr, 2)), userIds.owner],
+  );
+  for (const child of [
+    { monthOff: 1, paid: true }, // tháng trước — đã trả
+    { monthOff: 0, paid: false }, // tháng NÀY — chưa trả (nằm trong kỳ hiện tại)
+  ]) {
+    await client.query(
+      `INSERT INTO operational_expenses (tenant_id, property_id, expense_type, description,
+          amount_vnd, expense_date, is_recurring, parent_expense_id, is_paid, paid_at, created_by)
+       VALUES ($1, $2, 'RENT_LANDLORD', 'Tiền thuê nhà trả chủ (sinh từ định kỳ)',
+          25000000, $3::date, false, $4, $5, CASE WHEN $5 THEN ($3::date + 3)::timestamptz END, $6)`,
+      [tenantId, propertyId, firstOfMonth(monthsBack(todayStr, child.monthOff)), rentTpl[0]!.id, child.paid, userIds.owner],
+    );
+  }
+
+  // 5 chi phí đơn lẻ trải ~60 ngày — MAINTENANCE gắn phòng 203 (roomIds[5], khớp block bảo trì bước 6).
+  const SINGLE_EXPENSES: Array<{
+    type: string;
+    desc: string;
+    amount: number;
+    off: number;
+    paid: boolean;
+    roomIdx?: number;
+    createdBy: string;
+  }> = [
+    { type: 'ELECTRICITY', desc: 'Tiền điện kỳ gần nhất', amount: 4_500_000, off: -20, paid: true, createdBy: userIds.owner },
+    { type: 'WATER', desc: 'Tiền nước kỳ gần nhất', amount: 800_000, off: -20, paid: true, createdBy: userIds.owner },
+    { type: 'CLEANING_SUPPLIES', desc: 'Vật tư buồng phòng (nước giặt, khăn, amenities)', amount: 650_000, off: -12, paid: true, createdBy: userIds.letan },
+    { type: 'MAINTENANCE', desc: 'Sửa điều hòa Phòng 203', amount: 1_200_000, off: -7, paid: false, roomIdx: 5, createdBy: userIds.owner },
+    { type: 'MARKETING', desc: 'Chạy quảng cáo fanpage', amount: 2_000_000, off: -45, paid: true, createdBy: userIds.owner },
+  ];
+  for (const e of SINGLE_EXPENSES) {
+    await client.query(
+      `INSERT INTO operational_expenses (tenant_id, property_id, room_id, expense_type, description,
+          amount_vnd, expense_date, is_paid, paid_at, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::date, $8, CASE WHEN $8 THEN ($7::date)::timestamptz END, $9)`,
+      [tenantId, propertyId, e.roomIdx == null ? null : roomIds[e.roomIdx], e.type, e.desc, e.amount, ymd(anchor, e.off), e.paid, e.createdBy],
+    );
+  }
+
+  // Tài sản + sổ khấu hao: kỳ = các tháng ĐỦ liền trước tháng hiện tại (monthsBack —
+  // thuần số học); purchase_date = ngày 01 của kỳ sớm nhất; nguyên giá chọn chia hết
+  // cho số tháng khấu hao → amount/kỳ tròn (10.8M/36 = 300k · 9M/36 = 250k ·
+  // 14.4M/48 = 300k). UNIQUE (asset_id, year, month) an toàn khi re-run vì RESET đã xoá.
+  const ASSET_SPECS: Array<{
+    name: string;
+    category: string;
+    roomIdx: number | null;
+    value: number;
+    months: number;
+    periods: number;
+  }> = [
+    { name: 'Điều hòa Daikin — P.203', category: 'APPLIANCE', roomIdx: 5, value: 10_800_000, months: 36, periods: 4 },
+    { name: 'Máy giặt LG — khu chung', category: 'APPLIANCE', roomIdx: null, value: 9_000_000, months: 36, periods: 3 },
+    { name: 'Bộ sofa gỗ sảnh', category: 'FURNITURE', roomIdx: null, value: 14_400_000, months: 48, periods: 4 },
+  ];
+  let depEntryCount = 0;
+  for (const a of ASSET_SPECS) {
+    const perPeriod = a.value / a.months; // chia hết theo thiết kế trên
+    const { rows: assetRows } = await client.query<{ id: string }>(
+      `INSERT INTO assets (tenant_id, property_id, room_id, name, category, purchase_value_vnd,
+          purchase_date, depreciation_months)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::date, $8) RETURNING id`,
+      [tenantId, propertyId, a.roomIdx == null ? null : roomIds[a.roomIdx], a.name, a.category,
+        a.value, firstOfMonth(monthsBack(todayStr, a.periods)), a.months],
+    );
+    let accumulated = 0;
+    for (let k = a.periods; k >= 1; k--) {
+      const p = monthsBack(todayStr, k);
+      accumulated += perPeriod;
+      await client.query(
+        `INSERT INTO depreciation_entries (tenant_id, asset_id, period_year, period_month,
+            amount_vnd, accumulated_vnd, book_value_vnd)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [tenantId, assetRows[0]!.id, p.y, p.m, perPeriod, accumulated, a.value - accumulated],
+      );
+      depEntryCount += 1;
+    }
+  }
+
+  // CUỐI) Bump document_counters để booking/hoá đơn tạo qua UI không trùng số.
+  // GIỮ LÀ BƯỚC CUỐI CÙNG của seedDemoData: mọi bước 11)–20) cấp số BK/INV
+  // (BOOKINGS/makeInvoice) phải nằm TRƯỚC khối này — chèn bước seed mới lên trên,
+  // nếu không counter < số chứng từ đã seed → UI cấp số trùng (unique violation).
   for (const [type, value] of [['BK', bkSeq], ['INV', invSeq]] as const) {
     await client.query(
       `INSERT INTO document_counters (tenant_id, document_type, period, current_value)
@@ -454,7 +635,9 @@ async function seedDemoData(
     );
   }
 
-  console.log(`   Dữ liệu mẫu: ${ROOMS.length} phòng · ${BOOKINGS.length} booking · ${invSeq} hoá đơn · 4 task dọn · 31 ngày thống kê`);
+  console.log(
+    `   Dữ liệu mẫu: ${ROOMS.length} phòng · ${BOOKINGS.length} booking · ${invSeq} hoá đơn · 4 task dọn · 31 ngày thống kê · 3 ca quỹ · 8 chi phí · ${ASSET_SPECS.length} tài sản (${depEntryCount} kỳ khấu hao)`,
+  );
 }
 
 async function main(): Promise<void> {
