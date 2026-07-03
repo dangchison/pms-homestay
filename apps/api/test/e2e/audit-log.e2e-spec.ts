@@ -4,7 +4,7 @@ import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 import { Client } from 'pg';
 import request, { type Response } from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AppModule } from '@/app.module';
 import { configureApp } from '@/app.setup';
 import { loadEnv } from '@core/config/env.schema';
@@ -242,8 +242,19 @@ describe('Audit log (task 4.5)', () => {
       .responseType('blob')
       .expect(200);
 
-    const rows = await auditList('action=EXPORT');
-    expect(rows.length).toBe(1); // chỉ 1 lần export trong spec này
+    // Handler export dùng @Res() + res.send() → client nhận 200 TRƯỚC khi
+    // AuditInterceptor kịp INSERT (ghi sau handler — chủ đích, ADR-0002), nên
+    // poll thay vì assert ngay để không flaky trên runner chậm. Các action khác
+    // không cần poll: LOGIN/LOGOUT/READ_PII được await trong service, mutation
+    // được interceptor await trước khi response gửi đi.
+    const rows = await vi.waitFor(
+      async () => {
+        const rows = await auditList('action=EXPORT');
+        expect(rows.length).toBe(1); // chỉ 1 lần export trong spec này
+        return rows;
+      },
+      { timeout: 5000, interval: 100 },
+    );
     const row = rows[0]!;
     expect(row.action).toBe('EXPORT');
     expect(row.entity_type).toBe('reports');
