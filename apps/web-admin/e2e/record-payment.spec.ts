@@ -12,19 +12,24 @@ test('thu tiền một hoá đơn còn nợ → còn lại về 0₫', async ({ 
   await page.getByRole('link', { name: 'Hoá đơn', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Hoá đơn' })).toBeVisible();
 
-  // Tìm dòng có cột "Còn lại" (ô cuối) khác "0₫".
+  // Tìm dòng vừa CÒN NỢ (cột "Còn lại" ≠ 0₫) vừa THU ĐƯỢC (trạng thái payable). Chỉ
+  // xét "còn nợ" là chưa đủ: dữ liệu demo có hoá đơn REFUNDED (đã hoàn tiền → balance
+  // khôi phục ≠ 0) đứng đầu danh sách nhưng KHÔNG có nút "Thu tiền" → phải bỏ qua.
+  // Nhãn badge trạng thái xem components/invoices/badges.tsx.
+  const PAYABLE_LABELS = ['Đã phát hành', 'Trả một phần', 'Quá hạn'];
   const rows = page.locator('tbody tr');
   await expect(rows.first()).toBeVisible();
   const count = await rows.count();
   let target = -1;
   for (let i = 0; i < count; i++) {
+    const status = (await rows.nth(i).locator('td').nth(2).innerText()).trim();
     const balance = (await rows.nth(i).locator('td').last().innerText()).trim();
-    if (balance !== '0₫') {
+    if (PAYABLE_LABELS.includes(status) && balance !== '0₫') {
       target = i;
       break;
     }
   }
-  expect(target, 'cần ít nhất 1 hoá đơn còn nợ trong dữ liệu demo').toBeGreaterThanOrEqual(0);
+  expect(target, 'cần ít nhất 1 hoá đơn còn nợ & thu được trong dữ liệu demo').toBeGreaterThanOrEqual(0);
 
   await rows.nth(target).click();
   await expect(page).toHaveURL(/\/invoices\/[0-9a-f-]+$/);
