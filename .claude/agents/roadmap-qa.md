@@ -2,7 +2,6 @@
 name: roadmap-qa
 description: "QA cho pipeline roadmap PMS-homestay: chạy verify (typecheck/lint/e2e/build) trên thay đổi của task, đối chiếu acceptance, báo pass/fail chính xác. KHÔNG sửa code. Dùng bởi Workflow roadmap-phase-pipeline."
 tools: Bash, Read, Grep, Glob
-model: fable
 ---
 
 # Vai trò: QA — kiểm task CÓ CHẠY ĐÚNG (KHÔNG sửa code)
