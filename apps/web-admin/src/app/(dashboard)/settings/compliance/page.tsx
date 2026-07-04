@@ -2,35 +2,22 @@
 
 import { useState } from 'react';
 import {
-  Badge,
   Button,
   Card,
   CardContent,
   type DateRange,
   DateRangePicker,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
   Input,
   Label,
-  Separator,
   toast,
 } from '@pms/ui';
 import { Download, FileSpreadsheet, Loader2, Search, ShieldAlert } from 'lucide-react';
-import type { DataErasureResponse, GuestResponse } from '@pms/shared-types';
+import type { GuestResponse } from '@pms/shared-types';
 import { ApiClientError } from '@/lib/api-client';
+import { GuestDataRightsSection } from '@/components/compliance/GuestDataRightsSection';
 import { useGuestsSearch } from '@/lib/hooks/use-guests';
 import { useProperties } from '@/lib/hooks/use-properties';
-import {
-  useConsents,
-  useDownloadGuestExport,
-  useDownloadPoliceReport,
-  useEraseGuest,
-  useRevokeConsent,
-} from '@/lib/hooks/use-compliance';
+import { useDownloadPoliceReport } from '@/lib/hooks/use-compliance';
 import { usePropertyStore } from '@/stores/property.store';
 
 /** S6 /settings/compliance — báo cáo lưu trú TT56 + quyền chủ thể dữ liệu NĐ13. */
@@ -135,23 +122,6 @@ function GuestDataRightsCard() {
 }
 
 function GuestActions({ guest, onClear }: { guest: GuestResponse; onClear: () => void }) {
-  const { data: consents } = useConsents(guest.id);
-  const revoke = useRevokeConsent(guest.id);
-  const exportData = useDownloadGuestExport();
-  const erase = useEraseGuest();
-  const [confirmErase, setConfirmErase] = useState(false);
-  const [eraseResult, setEraseResult] = useState<DataErasureResponse | null>(null);
-
-  const doErase = async () => {
-    try {
-      const res = await erase.mutateAsync(guest.id);
-      setEraseResult(res);
-      setConfirmErase(false);
-    } catch (err) {
-      toast.error(err instanceof ApiClientError ? err.message : 'Ẩn danh thất bại');
-    }
-  };
-
   return (
     <div className="grid gap-3 rounded-md border border-border p-3">
       <div className="flex items-center justify-between">
@@ -159,78 +129,8 @@ function GuestActions({ guest, onClear }: { guest: GuestResponse; onClear: () =>
         <Button variant="ghost" size="sm" onClick={onClear}>Đổi khách</Button>
       </div>
 
-      <div className="grid gap-1">
-        <Label className="text-xs">Đồng ý xử lý dữ liệu</Label>
-        {(consents?.length ?? 0) === 0 ? (
-          <p className="text-sm text-muted-foreground">Chưa có ghi nhận consent.</p>
-        ) : (
-          consents!.map((c) => (
-            <div key={c.id} className="flex items-center justify-between text-sm">
-              <span>
-                {c.consent_type}{' '}
-                {c.revoked_at ? <Badge variant="outline" className="text-[10px]">đã thu hồi</Badge> : <Badge variant="secondary" className="text-[10px]">hiệu lực</Badge>}
-              </span>
-              {!c.revoked_at && (
-                <Button variant="ghost" size="sm" className="text-destructive" disabled={revoke.isPending} onClick={() => void revoke.mutateAsync(c.id)}>
-                  Thu hồi
-                </Button>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-
-      <Separator />
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" disabled={exportData.isPending} onClick={() => void exportData.mutateAsync(guest.id)}>
-          {exportData.isPending ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-          Tải dữ liệu (zip)
-        </Button>
-        <Button variant="outline" size="sm" className="text-destructive" onClick={() => setConfirmErase(true)}>
-          Ẩn danh khách
-        </Button>
-      </div>
-
-      {/* Xác nhận ẩn danh */}
-      <Dialog open={confirmErase} onOpenChange={setConfirmErase}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Ẩn danh dữ liệu khách?</DialogTitle>
-          </DialogHeader>
-          <DialogDescription>
-            Thao tác xoá/ẩn danh thông tin cá nhân theo NĐ13. Dữ liệu còn nghĩa vụ lưu trữ theo luật (hồ sơ công an,
-            hoá đơn) sẽ được GIỮ tới hết hạn (legal-hold). Không thể hoàn tác.
-          </DialogDescription>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmErase(false)}>Huỷ</Button>
-            <Button className="text-destructive" disabled={erase.isPending} onClick={doErase}>
-              {erase.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-              Xác nhận ẩn danh
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Kết quả ẩn danh */}
-      <Dialog open={!!eraseResult} onOpenChange={(o) => !o && setEraseResult(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Kết quả ẩn danh</DialogTitle>
-            <DialogDescription>Tóm tắt thao tác ẩn danh dữ liệu khách.</DialogDescription>
-          </DialogHeader>
-          {eraseResult && (
-            <div className="grid gap-2 text-sm">
-              <p>{eraseResult.anonymized ? 'Đã ẩn danh thông tin cá nhân.' : 'Chưa thể ẩn danh hoàn toàn do còn nghĩa vụ lưu trữ.'}</p>
-              {eraseResult.legal_hold_until && (
-                <p className="text-warning-foreground">Giữ hồ sơ tới: {eraseResult.legal_hold_until}</p>
-              )}
-              {eraseResult.kept.length > 0 && (
-                <p className="text-muted-foreground">Dữ liệu giữ lại: {eraseResult.kept.join(', ')}</p>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <Label className="text-xs">Đồng ý xử lý dữ liệu</Label>
+      <GuestDataRightsSection guestId={guest.id} />
     </div>
   );
 }
