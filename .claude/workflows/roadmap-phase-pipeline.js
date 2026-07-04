@@ -3,10 +3,10 @@ export const meta = {
   description: 'Tự động hoá 1 Phase roadmap PMS-homestay: Planner→Coder→QA(≤3)→Reviewer(≤3)→commit dồn→1 PR (KHÔNG merge). Phi-tương-tác, Planner quyết thay user, chống treo (timeout+fail-fast+resumable).',
   phases: [
     { title: 'Setup', detail: 'preflight DB + chốt phạm vi Phase + tạo nhánh' },
-    { title: 'Plan', detail: 'spec từng task (Planner fable/max)' },
-    { title: 'Implement', detail: 'code theo cadence repo (Coder fable/max)' },
-    { title: 'QA', detail: 'typecheck+lint+e2e+build (QA fable/max), retry ≤3' },
-    { title: 'Review', detail: 'chất lượng DRY/design (Reviewer fable/max), retry ≤3' },
+    { title: 'Plan', detail: 'spec từng task (Planner session/max)' },
+    { title: 'Implement', detail: 'code theo cadence repo (Coder session/max)' },
+    { title: 'QA', detail: 'typecheck+lint+e2e+build (QA session/max), retry ≤3' },
+    { title: 'Review', detail: 'chất lượng DRY/design (Reviewer session/max), retry ≤3' },
     { title: 'Ship', detail: 'commit dồn → 1 PR (không merge)' },
   ],
 }
@@ -200,15 +200,15 @@ function escalate(scope, tasksDone, stage, failedTask, reason, details) {
 }
 
 phase('Setup')
-const pre = await agent(preflightPrompt(), { label: 'preflight-db', phase: 'Setup', model: 'fable', effort: 'low', schema: S_PREFLIGHT })
+const pre = await agent(preflightPrompt(), { label: 'preflight-db', phase: 'Setup', effort: 'low', schema: S_PREFLIGHT })
 if (!pre || !pre.ok) return escalate(null, [], 'preflight', null, pre ? pre.detail : 'preflight agent chết')
 
-const scope = await agent(scopePrompt(userScope), { label: 'phase-scope', phase: 'Setup', model: 'fable', effort: 'max', schema: S_SCOPE })
+const scope = await agent(scopePrompt(userScope), { label: 'phase-scope', phase: 'Setup', effort: 'max', schema: S_SCOPE })
 if (!scope) return escalate(null, [], 'scope', null, 'planner (scope) chết')
 if (scope.blocked || !scope.tasks || scope.tasks.length === 0) return escalate(scope, [], 'scope', null, scope.blockedReason || 'không có task an toàn để làm')
 log(`Phase "${scope.phase}" — ${scope.tasks.length} task trên nhánh ${scope.branch}`)
 
-const br = await agent(branchPrompt(scope), { label: 'setup-branch', phase: 'Setup', model: 'fable', effort: 'low', schema: S_BRANCH })
+const br = await agent(branchPrompt(scope), { label: 'setup-branch', phase: 'Setup', effort: 'low', schema: S_BRANCH })
 if (!br || !br.ok) return escalate(scope, [], 'branch', null, br ? br.detail : 'setup-branch chết')
 
 const tasksDone = []
@@ -218,11 +218,11 @@ for (let i = 0; i < scope.tasks.length; i++) {
   const tag = t.id
 
   phase('Plan')
-  const spec = await agent(specPrompt(scope, t), { label: `spec:${tag}`, phase: 'Plan', model: 'fable', effort: 'max', schema: S_SPEC })
+  const spec = await agent(specPrompt(scope, t), { label: `spec:${tag}`, phase: 'Plan', effort: 'max', schema: S_SPEC })
   if (!spec) return escalate(scope, tasksDone, 'spec', tag, 'planner (spec) chết')
 
   phase('Implement')
-  const impl = await agent(implPrompt(scope, spec), { label: `impl:${tag}`, phase: 'Implement', model: 'fable', effort: 'max', schema: S_IMPL })
+  const impl = await agent(implPrompt(scope, spec), { label: `impl:${tag}`, phase: 'Implement', effort: 'max', schema: S_IMPL })
   if (!impl) return escalate(scope, tasksDone, 'implement', tag, 'coder (implement) chết')
 
   // QA loop ≤3 — fail sau 3 vòng → escalate (không ship code hỏng)
@@ -230,10 +230,10 @@ for (let i = 0; i < scope.tasks.length; i++) {
   let qaOk = false
   let lastQa = null
   for (let r = 1; r <= 3; r++) {
-    lastQa = await agent(qaPrompt(spec, impl), { label: `qa:${tag}#${r}`, phase: 'QA', model: 'fable', effort: 'max', schema: S_QA })
+    lastQa = await agent(qaPrompt(spec, impl), { label: `qa:${tag}#${r}`, phase: 'QA', effort: 'max', schema: S_QA })
     if (lastQa && lastQa.pass) { qaOk = true; break }
     if (r === 3) break
-    await agent(fixPrompt('QA', spec, lastQa), { label: `fix-qa:${tag}#${r}`, phase: 'QA', model: 'fable', effort: 'max' })
+    await agent(fixPrompt('QA', spec, lastQa), { label: `fix-qa:${tag}#${r}`, phase: 'QA', effort: 'max' })
   }
   if (!qaOk) return escalate(scope, tasksDone, 'qa', tag, 'QA fail sau 3 vòng', lastQa)
 
@@ -241,17 +241,17 @@ for (let i = 0; i < scope.tasks.length; i++) {
   phase('Review')
   let reviewNotes = []
   for (let r = 1; r <= 3; r++) {
-    const rev = await agent(reviewPrompt(spec), { label: `review:${tag}#${r}`, phase: 'Review', model: 'fable', effort: 'max', schema: S_REVIEW })
+    const rev = await agent(reviewPrompt(spec), { label: `review:${tag}#${r}`, phase: 'Review', effort: 'max', schema: S_REVIEW })
     if (!rev || !rev.mustFix || rev.mustFix.length === 0) break
     if (r === 3) { reviewNotes = rev.mustFix; log(`Task ${tag}: còn ${rev.mustFix.length} mục chất lượng sau 3 vòng — ship kèm notes`); break }
-    await agent(fixPrompt('Review', spec, rev), { label: `fix-rev:${tag}#${r}`, phase: 'Review', model: 'fable', effort: 'max' })
-    const recheck = await agent(qaPrompt(spec, impl), { label: `reqa:${tag}#${r}`, phase: 'Review', model: 'fable', effort: 'max', schema: S_QA })
+    await agent(fixPrompt('Review', spec, rev), { label: `fix-rev:${tag}#${r}`, phase: 'Review', effort: 'max' })
+    const recheck = await agent(qaPrompt(spec, impl), { label: `reqa:${tag}#${r}`, phase: 'Review', effort: 'max', schema: S_QA })
     if (!recheck || !recheck.pass) return escalate(scope, tasksDone, 'review-reqa', tag, 'fix review làm vỡ QA', recheck)
   }
 
   // Commit task (KHÔNG push)
   phase('Ship')
-  const ship = await agent(commitPrompt(scope, spec, reviewNotes), { label: `commit:${tag}`, phase: 'Ship', model: 'fable', effort: 'max', schema: S_SHIP })
+  const ship = await agent(commitPrompt(scope, spec, reviewNotes), { label: `commit:${tag}`, phase: 'Ship', effort: 'max', schema: S_SHIP })
   if (!ship || !ship.committed) return escalate(scope, tasksDone, 'commit', tag, 'commit thất bại', ship)
   tasksDone.push({ id: t.id, name: t.name, sha: ship.sha, reviewNotes })
   log(`✔ Task ${tag} committed (${ship.sha || '?'}) — ${tasksDone.length}/${scope.tasks.length}`)
@@ -259,7 +259,7 @@ for (let i = 0; i < scope.tasks.length; i++) {
 
 // Phase xong → mở ĐÚNG 1 PR (KHÔNG merge)
 phase('Ship')
-const pr = await agent(prPrompt(scope, tasksDone), { label: 'open-pr', phase: 'Ship', model: 'fable', effort: 'max', schema: S_PR })
+const pr = await agent(prPrompt(scope, tasksDone), { label: 'open-pr', phase: 'Ship', effort: 'max', schema: S_PR })
 if (!pr || !pr.prUrl) return escalate(scope, tasksDone, 'pr', null, 'mở PR thất bại (đã commit đủ task, cần push/PR tay)')
 
 return { ok: true, phase: scope.phase, branch: scope.branch, tasksDone, prUrl: pr.prUrl, prNumber: pr.prNumber || null }

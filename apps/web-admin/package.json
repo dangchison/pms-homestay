@@ -9,7 +9,8 @@
     "start": "next start --port 3000",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"@pms/web-admin: no unit tests (xem test:e2e)\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
@@ -36,12 +37,16 @@
     "@pms/eslint-config": "workspace:*",
     "@pms/tsconfig": "workspace:*",
     "@tailwindcss/postcss": "^4.0.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.17.0",
+    "jsdom": "^25.0.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^4.0.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.6"
   }
 }

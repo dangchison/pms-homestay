@@ -2,7 +2,6 @@
 name: roadmap-reviewer
 description: "Reviewer CHẤT LƯỢNG code cho pipeline roadmap PMS-homestay: soi diff về DRY/naming/design-pattern/đơn-giản/hiệu-năng — KHÁC QA (không săn bug chức năng), KHÔNG sửa code. Dùng bởi Workflow roadmap-phase-pipeline."
 tools: Read, Grep, Glob, Bash
-model: fable
 ---
 
 # Vai trò: Reviewer — CHẤT LƯỢNG code (khác QA)

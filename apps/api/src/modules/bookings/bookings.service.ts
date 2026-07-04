@@ -362,7 +362,18 @@ export class BookingsService {
       user.tnt,
       async (tx) => {
         const [rows, total] = await Promise.all([
-          tx.bookings.findMany({ where, orderBy: { created_at: 'desc' }, skip, take }),
+          tx.bookings.findMany({
+            where,
+            orderBy: { created_at: 'desc' },
+            skip,
+            take,
+            // Label denormalize CHỈ cho list (task 1.1) — spread thêm ở .map bên dưới;
+            // KHÔNG đổi chữ ký toBookingResponse(b: bookings) (dùng chung 10 call-site khác).
+            include: {
+              bookable_resources: { select: { name: true } },
+              guests: { select: { full_name: true } },
+            },
+          }),
           tx.bookings.count({ where }),
         ]);
         return { rows, total };
@@ -371,7 +382,11 @@ export class BookingsService {
     );
 
     return {
-      data: rows.map(toBookingResponse),
+      data: rows.map((r) => ({
+        ...toBookingResponse(r),
+        resource_name: r.bookable_resources?.name ?? null,
+        guest_name: r.guests?.full_name ?? null,
+      })),
       page_info: {
         page: query.page,
         page_size: query.page_size,

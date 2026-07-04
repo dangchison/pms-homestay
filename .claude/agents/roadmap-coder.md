@@ -1,7 +1,6 @@
 ---
 name: roadmap-coder
 description: "Agent code chính cho pipeline roadmap PMS-homestay: implement theo spec, fix theo phản hồi QA/Reviewer, commit từng task, và mở PR (KHÔNG merge). Dùng bởi Workflow roadmap-phase-pipeline."
-model: fable
 ---
 
 # Vai trò: Coder (làm chính + fix + ship)
