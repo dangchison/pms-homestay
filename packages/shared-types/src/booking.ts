@@ -196,5 +196,9 @@ export const BookingResponseSchema = z.object({
   version: z.number().int(),
   created_at: z.iso.datetime(),
   updated_at: z.iso.datetime(),
+  // Denormalized labels cho danh sách (task 1.1) — chỉ list() điền qua include; các
+  // call-site khác (getById/create/…) bỏ trống. optional+nullable → payload cũ không vỡ.
+  guest_name: z.string().nullable().optional(),
+  resource_name: z.string().nullable().optional(),
 });
 export type BookingResponse = z.infer<typeof BookingResponseSchema>;
