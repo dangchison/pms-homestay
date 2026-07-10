@@ -14,6 +14,7 @@ import {
   Home,
   LayoutDashboard,
   type LucideIcon,
+  Package,
   ReceiptText,
   Settings,
   Share2,
@@ -63,6 +64,7 @@ const SECTIONS: NavSection[] = [
       // Sổ quỹ ca: chỉ role report.financial (OWNER/MANAGER/ACCOUNTANT) — STAFF/HOUSEKEEPER ẩn.
       { href: '/shifts', label: 'Sổ quỹ ca', icon: Banknote, roles: ['OWNER', 'MANAGER', 'ACCOUNTANT'] },
       { href: '/expenses', label: 'Chi phí', icon: Coins, roles: ['OWNER', 'MANAGER', 'ACCOUNTANT'] },
+      { href: '/assets', label: 'Tài sản', icon: Package, roles: ['OWNER', 'MANAGER'] },
     ],
   },
   {
