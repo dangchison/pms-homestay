@@ -10,6 +10,7 @@ import {
   BedDouble,
   Building2,
   CalendarDays,
+  Coins,
   Home,
   LayoutDashboard,
   type LucideIcon,
@@ -61,6 +62,7 @@ const SECTIONS: NavSection[] = [
       { href: '/reports', label: 'Báo cáo', icon: BarChart3 },
       // Sổ quỹ ca: chỉ role report.financial (OWNER/MANAGER/ACCOUNTANT) — STAFF/HOUSEKEEPER ẩn.
       { href: '/shifts', label: 'Sổ quỹ ca', icon: Banknote, roles: ['OWNER', 'MANAGER', 'ACCOUNTANT'] },
+      { href: '/expenses', label: 'Chi phí', icon: Coins, roles: ['OWNER', 'MANAGER', 'ACCOUNTANT'] },
     ],
   },
   {
