@@ -1,5 +1,11 @@
 import { useMutation, useQueries, useQuery } from '@tanstack/react-query';
-import type { BreakEvenResponse, OccupancyReportResponse, PnlResponse } from '@pms/shared-types';
+import type {
+  AntiFraudResponse,
+  BreakEvenResponse,
+  LandlordStatementResponse,
+  OccupancyReportResponse,
+  PnlResponse,
+} from '@pms/shared-types';
 import { apiClient } from '@/lib/api-client';
 import { downloadBlob } from '@/lib/download';
 
@@ -48,6 +54,42 @@ export function useOccupancyReport(propertyId: string | null, from: string, to: 
     queryFn: () =>
       apiClient
         .get<{ data: OccupancyReportResponse }>(`/reports/occupancy?property_id=${propertyId}&from=${from}&to=${to}`)
+        .then((r) => r.data),
+    enabled: !!propertyId,
+  });
+}
+
+/**
+ * #14 Bảng kê chủ nhà gốc (R2R) cho [from,to]. Chỉ gọi khi cơ sở `is_rent_to_rent`
+ * (tham số `enabled`) — tránh 422 NOT_RENT_TO_RENT với cơ sở thường.
+ */
+export function useLandlordStatement(
+  propertyId: string | null,
+  from: string,
+  to: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ['reports', 'landlord-statement', propertyId ?? '', from, to],
+    queryFn: () =>
+      apiClient
+        .get<{ data: LandlordStatementResponse }>(
+          `/reports/landlord-statement?property_id=${propertyId}&from=${from}&to=${to}`,
+        )
+        .then((r) => r.data),
+    enabled: !!propertyId && enabled,
+  });
+}
+
+/** #11 Anti-fraud — dấu hiệu thất thoát tiền mặt cho [from,to] (KHÔNG PII khách). */
+export function useAntiFraud(propertyId: string | null, from: string, to: string) {
+  return useQuery({
+    queryKey: ['reports', 'anti-fraud', propertyId ?? '', from, to],
+    queryFn: () =>
+      apiClient
+        .get<{ data: AntiFraudResponse }>(
+          `/reports/anti-fraud?property_id=${propertyId}&from=${from}&to=${to}`,
+        )
         .then((r) => r.data),
     enabled: !!propertyId,
   });
