@@ -10,9 +10,14 @@ export const useRealtimeStore = create<{ connected: boolean; setConnected: (b: b
   (set) => ({ connected: false, setConnected: (connected) => set({ connected }) }),
 );
 
-/** event_type → queryKey cần invalidate (REST là nguồn sự thật — docs/10 §4). */
-function invalidateForEvent(qc: QueryClient, eventType: string): void {
-  const keys: string[][] = [];
+/**
+ * event_type → queryKey cần invalidate (REST là nguồn sự thật — docs/10 §4).
+ * Seed sẵn ['notifications']: KHÔNG có event_type "notification.dot" trong outbox
+ * (EVENT_TYPES ở packages/shared-types/events.ts) — dòng IN_APP do notification
+ * worker sinh TỪ MỌI domain event, nên mọi event đều phải làm mới chuông TopBar.
+ */
+export function invalidateForEvent(qc: QueryClient, eventType: string): void {
+  const keys: string[][] = [['notifications']];
   if (eventType.startsWith('booking.')) keys.push(['bookings'], ['occupancy'], ['today'], ['channels']);
   else if (eventType.startsWith('payment.')) keys.push(['payments'], ['invoices'], ['today']);
   else if (eventType.startsWith('invoice.')) keys.push(['invoices']);

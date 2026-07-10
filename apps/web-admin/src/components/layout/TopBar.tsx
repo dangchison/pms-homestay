@@ -2,12 +2,13 @@
 
 import { useRouter } from 'next/navigation';
 import { Button, cn, toast } from '@pms/ui';
-import { Bell, Globe, LogOut, Plus } from 'lucide-react';
+import { Globe, LogOut, Plus } from 'lucide-react';
 import { useT } from '@/lib/i18n';
 import { logout } from '@/lib/auth';
 import { useRealtimeStore } from '@/lib/hooks/use-events';
 import { useAuthStore } from '@/stores/auth.store';
 import { useLocaleStore } from '@/stores/locale.store';
+import { NotificationBell } from './NotificationBell';
 import { PropertySwitcher } from './PropertySwitcher';
 
 /**
@@ -51,14 +52,7 @@ export function TopBar() {
           {locale.toUpperCase()}
         </button>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={t('topbar.notifications')}
-          onClick={() => toast.info('Notifications — task 6.7')}
-        >
-          <Bell className="size-4.5" />
-        </Button>
+        <NotificationBell />
         <Button onClick={() => toast.info('Đặt phòng nhanh mở từ calendar — task 6.2/6.3')}>
           <Plus className="size-4" />
           {t('topbar.newBooking')}
