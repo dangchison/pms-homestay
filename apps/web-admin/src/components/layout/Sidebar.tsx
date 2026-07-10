@@ -5,12 +5,14 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@pms/ui';
 import {
   ArrowLeftRight,
+  Banknote,
   BarChart3,
   BedDouble,
   Building2,
   CalendarDays,
   Home,
   LayoutDashboard,
+  type LucideIcon,
   ReceiptText,
   Settings,
   Share2,
@@ -18,9 +20,23 @@ import {
   Users,
   Wallet,
 } from 'lucide-react';
+import { type UserRole } from '@pms/shared-types';
+import { useAuthStore } from '@/stores/auth.store';
 
-/** Menu theo role matrix docs/ui/00 §5 — render đủ cho OWNER ở scaffold. */
-const SECTIONS = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  /** Nếu có: chỉ hiện khi role hiện tại thuộc danh sách (RBAC menu). Không có → luôn hiện. */
+  roles?: UserRole[];
+}
+interface NavSection {
+  label: string | null;
+  items: NavItem[];
+}
+
+/** Menu theo role matrix docs/ui/00 §5 — mục có `roles` lọc theo role hiện tại. */
+const SECTIONS: NavSection[] = [
   {
     label: null,
     items: [
@@ -43,6 +59,8 @@ const SECTIONS = [
       { href: '/payments', label: 'Thanh toán', icon: Wallet },
       { href: '/payments/unmatched', label: 'Đối soát', icon: ArrowLeftRight },
       { href: '/reports', label: 'Báo cáo', icon: BarChart3 },
+      // Sổ quỹ ca: chỉ role report.financial (OWNER/MANAGER/ACCOUNTANT) — STAFF/HOUSEKEEPER ẩn.
+      { href: '/shifts', label: 'Sổ quỹ ca', icon: Banknote, roles: ['OWNER', 'MANAGER', 'ACCOUNTANT'] },
     ],
   },
   {
@@ -53,7 +71,7 @@ const SECTIONS = [
       { href: '/settings', label: 'Cài đặt', icon: Settings },
     ],
   },
-] as const;
+];
 
 // href đang active = href dài nhất là tiền tố của pathname (đúng cả /payments vs
 // /payments/unmatched — chọn cái cụ thể hơn). '/' chỉ active đúng tại '/'.
@@ -70,6 +88,7 @@ function activeHrefFor(pathname: string): string {
 export function Sidebar() {
   const pathname = usePathname();
   const activeHref = activeHrefFor(pathname);
+  const role = useAuthStore((s) => s.user?.role);
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface md:flex">
@@ -84,35 +103,43 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
-        {SECTIONS.map((section) => (
-          <div key={section.label ?? 'main'}>
-            {section.label && (
-              <div className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-                {section.label}
+        {SECTIONS.map((section) => {
+          // Lọc mục có `roles`: chỉ giữ khi role hiện tại thuộc danh sách. Mục không có
+          // `roles` luôn hiện. Section rỗng sau lọc → bỏ (không render tiêu đề trống).
+          const items = section.items.filter(
+            (item) => !item.roles || (role != null && item.roles.includes(role)),
+          );
+          if (items.length === 0) return null;
+          return (
+            <div key={section.label ?? 'main'}>
+              {section.label && (
+                <div className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                  {section.label}
+                </div>
+              )}
+              <div className="grid gap-0.5">
+                {items.map(({ href, label, icon: Icon }) => {
+                  const active = href === activeHref;
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      className={cn(
+                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                        active
+                          ? 'bg-primary-muted font-medium text-primary'
+                          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                      )}
+                    >
+                      <Icon className="size-4 shrink-0" />
+                      {label}
+                    </Link>
+                  );
+                })}
               </div>
-            )}
-            <div className="grid gap-0.5">
-              {section.items.map(({ href, label, icon: Icon }) => {
-                const active = href === activeHref;
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                      active
-                        ? 'bg-primary-muted font-medium text-primary'
-                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-                    )}
-                  >
-                    <Icon className="size-4 shrink-0" />
-                    {label}
-                  </Link>
-                );
-              })}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
 
       <div className="border-t border-border p-3">
