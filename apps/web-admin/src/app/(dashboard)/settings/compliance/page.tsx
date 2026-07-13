@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import {
   Button,
   Card,
@@ -11,13 +12,21 @@ import {
   Label,
   toast,
 } from '@pms/ui';
-import { Download, FileSpreadsheet, Loader2, Search, ShieldAlert } from 'lucide-react';
+import {
+  Download,
+  FileSpreadsheet,
+  Loader2,
+  Search,
+  Send,
+  ShieldAlert,
+  UserRoundCheck,
+} from 'lucide-react';
 import type { GuestResponse } from '@pms/shared-types';
 import { ApiClientError } from '@/lib/api-client';
 import { GuestDataRightsSection } from '@/components/compliance/GuestDataRightsSection';
 import { useGuestsSearch } from '@/lib/hooks/use-guests';
 import { useProperties } from '@/lib/hooks/use-properties';
-import { useDownloadPoliceReport } from '@/lib/hooks/use-compliance';
+import { useDownloadPoliceReport, useSubmitPoliceReport } from '@/lib/hooks/use-compliance';
 import { usePropertyStore } from '@/stores/property.store';
 
 /** S6 /settings/compliance — báo cáo lưu trú TT56 + quyền chủ thể dữ liệu NĐ13. */
@@ -34,24 +43,45 @@ function PoliceReportCard() {
   const propertyId = usePropertyStore((s) => s.selectedId);
   const { data: properties } = useProperties();
   const download = useDownloadPoliceReport();
+  const submitB6 = useSubmitPoliceReport();
   const [range, setRange] = useState<DateRange | undefined>();
   const propName = properties?.find((p) => p.id === propertyId)?.name;
   const pad = (n: number) => String(n).padStart(2, '0');
   const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-  const submit = async () => {
+  /** Validate cơ sở + khoảng ngày (xác định, KHÔNG gọi BE). null nếu thiếu → đã toast. */
+  const requireRange = (): { propertyId: string; from: string; to: string } | null => {
     if (!propertyId) {
       toast.error('Chọn cơ sở ở thanh trên');
-      return;
+      return null;
     }
     if (!range?.from || !range?.to) {
       toast.error('Chọn khoảng thời gian');
-      return;
+      return null;
     }
+    return { propertyId, from: ymd(range.from), to: ymd(range.to) };
+  };
+
+  const onDownload = async () => {
+    const r = requireRange();
+    if (!r) return;
     try {
-      await download.mutateAsync({ propertyId, from: ymd(range.from), to: ymd(range.to) });
+      await download.mutateAsync(r);
     } catch (err) {
       toast.error(err instanceof ApiClientError ? err.message : 'Tải báo cáo thất bại');
+    }
+  };
+
+  const onSubmitB6 = async () => {
+    const r = requireRange();
+    if (!r) return;
+    try {
+      const res = await submitB6.mutateAsync(r);
+      toast.success(
+        `Gửi B6: tổng ${res.total}, đã gửi ${res.submitted}, lỗi ${res.failed}, bỏ qua ${res.skipped}`,
+      );
+    } catch (err) {
+      toast.error(err instanceof ApiClientError ? err.message : 'Gửi B6 thất bại');
     }
   };
 
@@ -63,18 +93,30 @@ function PoliceReportCard() {
           <h2 className="font-semibold">Báo cáo lưu trú (TT56)</h2>
         </div>
         <p className="text-sm text-muted-foreground">
-          Xuất Excel danh sách khách lưu trú theo cơ sở <strong>{propName ?? '(chưa chọn)'}</strong> để khai báo công an.
+          Xuất Excel danh sách khách lưu trú theo cơ sở <strong>{propName ?? '(chưa chọn)'}</strong> để khai báo công an. Hoặc gửi khai báo (B6) lên dịch vụ công.
         </p>
         <div className="flex flex-wrap items-end gap-2">
           <div className="grid gap-1.5">
             <Label className="text-xs">Khoảng thời gian</Label>
             <DateRangePicker className="w-[18rem]" value={range} onChange={setRange} />
           </div>
-          <Button onClick={submit} disabled={download.isPending}>
+          <Button onClick={onDownload} disabled={download.isPending}>
             {download.isPending ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
             Tải Excel
           </Button>
+          <Button variant="outline" onClick={onSubmitB6} disabled={submitB6.isPending}>
+            {submitB6.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+            Gửi B6
+          </Button>
         </div>
+
+        <Link
+          href="/settings/compliance/foreign-residence"
+          className="mt-1 flex items-center gap-2 border-t border-border pt-3 text-sm font-medium text-primary hover:underline"
+        >
+          <UserRoundCheck className="size-4" />
+          Khai báo tạm trú khách nước ngoài (NA17)
+        </Link>
       </CardContent>
     </Card>
   );
