@@ -24,8 +24,9 @@ import {
   cn,
   toast,
 } from '@pms/ui';
-import type { BookingMode, BookingResponse, BookingStatus, UpdateBookingRequest } from '@pms/shared-types';
+import type { BookingMode, BookingResponse, UpdateBookingRequest } from '@pms/shared-types';
 import { ApiClientError } from '@/lib/api-client';
+import { BOOKING_TRANSITIONS, isTerminal } from '@/lib/booking-status';
 import { maskEmail, maskPhone, vnd } from '@/lib/format';
 import {
   useBooking,
@@ -39,23 +40,8 @@ import {
 import { useResources } from '@/lib/hooks/use-resources';
 import { PageContainer, PageHeader } from '@/components/layout/page';
 import { InvoiceKindBadge, InvoiceStatusBadge } from '@/components/invoices/badges';
-
-/**
- * BẢN SAO client của state machine (apps/api/src/modules/bookings/booking-status-machine.ts
- * L14) — shared-types KHÔNG export map này nên copy tại đây; nếu BE đổi transitions,
- * SỬA cả hai (reviewer bắt drift). Chỉ để gate hiển thị nút, BE vẫn là nguồn chân lý.
- */
-const BOOKING_TRANSITIONS: Record<BookingStatus, readonly BookingStatus[]> = {
-  HOLD: ['PENDING', 'CONFIRMED', 'CANCELLED'],
-  PENDING: ['CONFIRMED', 'CANCELLED'],
-  CONFIRMED: ['CHECKED_IN', 'CANCELLED', 'NO_SHOW'],
-  CHECKED_IN: ['CHECKED_OUT'],
-  CHECKED_OUT: [],
-  CANCELLED: [],
-  NO_SHOW: [],
-};
-const TERMINAL: readonly BookingStatus[] = ['CHECKED_OUT', 'CANCELLED', 'NO_SHOW'];
-const isTerminal = (s: BookingStatus): boolean => TERMINAL.includes(s);
+import { SurchargesCard } from '@/components/bookings/SurchargesCard';
+import { MeterReadingsCard } from '@/components/bookings/MeterReadingsCard';
 
 const MODE_LABEL: Record<BookingMode, string> = {
   HOURLY: 'Theo giờ',
@@ -116,6 +102,8 @@ export default function BookingDetailPage() {
         <div className="space-y-4">
           <InfoCard booking={booking} />
           <InvoicesCard bookingId={booking.id} />
+          <SurchargesCard booking={booking} />
+          {booking.mode === 'MONTHLY' && <MeterReadingsCard bookingId={booking.id} />}
           <TimelineCard booking={booking} />
         </div>
 
