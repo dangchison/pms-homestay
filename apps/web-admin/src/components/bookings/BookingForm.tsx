@@ -23,6 +23,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ApiClientError } from '@/lib/api-client';
 import { isoToLocalInput, localInputToIso } from '@/lib/datetime';
+import { discountReasonMessage } from '@/lib/discount-format';
 import { useCreateBooking } from '@/lib/hooks/use-bookings';
 import { useQuote } from '@/lib/hooks/use-quote';
 import { useResources } from '@/lib/hooks/use-resources';
@@ -39,6 +40,8 @@ const FormSchema = z.object({
   source: z.enum(['DIRECT', 'WALK_IN']),
   hold: z.boolean(),
   notes: z.string().max(1000).optional(),
+  /** Mã giảm giá (tuỳ chọn) — KHÔNG vào CreateBookingRequest (booking dùng quote_id); chỉ gửi kèm /pricing/quote. */
+  discount_code: z.string().optional(),
 });
 type FormValues = z.infer<typeof FormSchema>;
 
@@ -95,6 +98,7 @@ export function BookingForm({ propertyId, prefill }: Props) {
       source: 'DIRECT',
       hold: false,
       notes: '',
+      discount_code: '',
     },
   });
 
@@ -110,8 +114,10 @@ export function BookingForm({ propertyId, prefill }: Props) {
       check_out: co,
       adults: Number(v.adults) || 1,
       children: Number(v.children) || 0,
+      // Mã giảm giá (uppercase+trim); rỗng → undefined (báo giá chạy như không có mã).
+      discount_code: v.discount_code?.trim().toUpperCase() || undefined,
     };
-  }, [v.resource_id, v.mode, v.check_in, v.check_out, v.adults, v.children]);
+  }, [v.resource_id, v.mode, v.check_in, v.check_out, v.adults, v.children, v.discount_code]);
 
   const [debouncedInput, setDebouncedInput] = useState<QuoteRequest | null>(null);
   useEffect(() => {
@@ -121,6 +127,15 @@ export function BookingForm({ propertyId, prefill }: Props) {
 
   const { data: quote, isFetching: quoteLoading, error: quoteError } = useQuote(debouncedInput);
   useEffect(() => setPriceChanged(false), [quote?.quote_id]);
+
+  // Mã KHÔNG hợp lệ: /pricing/quote trả 422 DISCOUNT_NOT_APPLICABLE + detail = reason_code.
+  // Suy ra thông điệp ĐỎ hiển thị dưới ô mã (KHÔNG có quote hợp lệ ⇒ nút tạo tự disabled).
+  const discountError = useMemo(() => {
+    if (!(quoteError instanceof ApiClientError) || quoteError.body?.code !== 'DISCOUNT_NOT_APPLICABLE')
+      return null;
+    return discountReasonMessage(quoteError.body.detail);
+  }, [quoteError]);
+  const appliedCode = quote?.discount_code;
 
   const onSubmit = async (values: FormValues) => {
     if (!quote) {
@@ -291,6 +306,22 @@ export function BookingForm({ propertyId, prefill }: Props) {
           <Textarea id="notes" rows={2} {...register('notes')} />
         </div>
 
+        <div className="grid gap-1.5">
+          <Label htmlFor="discount_code">Mã giảm giá (tuỳ chọn)</Label>
+          <Input
+            id="discount_code"
+            className="uppercase"
+            placeholder="VD SUMMER10"
+            autoCapitalize="characters"
+            {...register('discount_code')}
+          />
+          {discountError ? (
+            <p className="text-sm text-destructive">{discountError}</p>
+          ) : appliedCode ? (
+            <p className="text-sm text-emerald-600">Đã áp mã {appliedCode}</p>
+          ) : null}
+        </div>
+
         <Controller
           control={control}
           name="hold"
@@ -305,7 +336,13 @@ export function BookingForm({ propertyId, prefill }: Props) {
 
       {/* ── Cột phải: báo giá + submit ── */}
       <div className="space-y-3">
-        <QuoteBreakdown quote={quote} isLoading={quoteLoading} error={quoteError} enabled={!!debouncedInput} />
+        {/* Lỗi mã giảm giá đã hiển thị ĐỎ dưới ô mã → suppress khỏi QuoteBreakdown (tránh trùng thông điệp). */}
+        <QuoteBreakdown
+          quote={quote}
+          isLoading={quoteLoading}
+          error={discountError ? undefined : quoteError}
+          enabled={!!debouncedInput}
+        />
 
         {priceChanged && (
           <p className="rounded-md border border-booking-pending/40 bg-booking-pending/12 p-3 text-sm">
