@@ -108,7 +108,7 @@ async refresh(presented: string) {
 | `OWNER` | Toàn tenant | Mọi thao tác, mời user, billing |
 | `MANAGER` | Property được gán | Booking, pricing, expense; không user/billing |
 | `ACCOUNTANT` | Property được gán | Invoice, payment, expense, report; không sửa booking |
-| `STAFF` (lễ tân) | Property được gán | Booking, check-in/out, thu tiền; không xem P&L |
+| `STAFF` (lễ tân) | Property được gán | Booking, check-in/out, thu tiền, đối soát unmatched + mở/đóng ca thu ngân; không xem P&L |
 | `HOUSEKEEPER` | Property được gán | Cleaning tasks; đổi housekeeping_status CLEANING→CLEAN |
 
 ### Permission matrix
@@ -131,7 +131,7 @@ async refresh(presented: string) {
 | `invoice.void` | ✓ | — | ✓ | — | — |
 | `payment.record` | ✓ | ✓ | ✓ | ✓ | — |
 | `payment.refund` | ✓ | — | ✓ | — | — |
-| `payment.reconcile` (unmatched) | ✓ | — | ✓ | — | — |
+| `payment.reconcile` (unmatched) | ✓ | — | ✓ | ✓ | — |
 | `expense.crud` | ✓ | ✓ | ✓ | — | — |
 | `asset.crud` | ✓ | ✓ | — | — | — |
 | `report.financial` | ✓ | ✓ | ✓ | — | — |
