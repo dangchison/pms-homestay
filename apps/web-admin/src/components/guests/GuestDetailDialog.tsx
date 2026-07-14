@@ -26,6 +26,7 @@ import {
   useUnblacklistGuest,
 } from '@/lib/hooks/use-guests';
 import { GuestDataRightsSection } from '@/components/compliance/GuestDataRightsSection';
+import { GuestPlatformChips } from '@/components/guests/GuestPlatformChips';
 
 /** Một dòng thông tin (label trái, giá trị phải). */
 function Field({ label, value }: { label: string; value: ReactNode }) {
@@ -95,6 +96,8 @@ function GuestDetailBody({ guest, onClose }: { guest: GuestResponse; onClose: ()
               Blacklist
             </Badge>
           )}
+          {/* Chip cross-tenant (task 2.9): "Blacklist nơi khác" ≠ badge "Blacklist" nội bộ ở trên. */}
+          <GuestPlatformChips guestId={g.id} />
         </DialogTitle>
         <DialogDescription>Hồ sơ khách — thông tin cá nhân được che theo mặc định.</DialogDescription>
       </DialogHeader>

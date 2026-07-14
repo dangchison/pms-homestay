@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Check, Search, UserPlus, X } from 'lucide-react';
 import { Button, Input, Label } from '@pms/ui';
 import { useCreateGuest, useGuestsSearch } from '@/lib/hooks/use-guests';
+import { GuestPlatformChips } from '@/components/guests/GuestPlatformChips';
 
 export interface PickedGuest {
   id: string;
@@ -34,7 +35,10 @@ export function GuestPicker({
   if (value) {
     return (
       <div className="flex items-center justify-between rounded-md border border-border bg-surface px-3 py-2 text-sm">
-        <span className="font-medium">{value.name}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-medium">{value.name}</span>
+          <GuestPlatformChips guestId={value.id} />
+        </span>
         <Button type="button" variant="ghost" size="sm" onClick={() => onChange(null)}>
           Đổi khách
         </Button>
