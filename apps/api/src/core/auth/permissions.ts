@@ -99,6 +99,7 @@ const STAFF: Permission[] = [
   'booking.switch_resource',
   'invoice.read',
   'payment.record',
+  'payment.reconcile', // đối soát unmatched + mở/đóng ca thu ngân (docs/04 §matrix; task 2.10a)
   'report.operational',
   'cleaning_task.assign',
   'cleaning_task.complete',

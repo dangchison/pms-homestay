@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { createHmac, randomUUID } from 'node:crypto';
+import * as argon2 from 'argon2';
 import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { type PaymentWebhook } from '@pms/shared-types';
@@ -20,6 +21,7 @@ import { loadEnv } from '@core/config/env.schema';
 const RUN = `${process.pid}${Date.now() % 100000}`;
 const PASSWORD = 'S3cure!Passw0rd-dev';
 const tenantSlug = `rec-${RUN}`;
+const staffEmail = `staff-${RUN}@e2e.test`;
 const WEBHOOK_SECRET = `test-webhook-secret-${RUN}-0123456789`;
 const BANK_ACCOUNT = '0123456789';
 process.env.PAYMENT_WEBHOOK_SECRET = WEBHOOK_SECRET; // trước loadEnv() ở beforeAll
@@ -31,9 +33,13 @@ describe('Payment reconciliation — Casso/SePay webhook (task 3.4)', () => {
   let http: ReturnType<INestApplication['getHttpServer']>;
   let admin: Client;
   let token: string;
+  let staffToken: string; // STAFF trong tenant (có payment.reconcile) — đối soát unmatched
   let resDeposit: string;
+  let tenantId: string;
+  let propertyId: string;
 
   const auth = () => ({ Authorization: `Bearer ${token}` });
+  const staffAuth = () => ({ Authorization: `Bearer ${staffToken}` });
 
   const postWebhook = (provider: string, payload: PaymentWebhook, signature?: string) => {
     const body = JSON.stringify(payload);
@@ -98,8 +104,9 @@ describe('Payment reconciliation — Casso/SePay webhook (task 3.4)', () => {
         .send({ email: `owner-${RUN}@e2e.test`, password: PASSWORD })
         .expect(200)
     ).body.data.access_token;
+    tenantId = (await admin.query(`SELECT id FROM tenants WHERE slug = $1`, [tenantSlug])).rows[0].id as string;
 
-    const propertyId = (
+    propertyId = (
       await request(http)
         .post('/api/v1/properties')
         .set(auth())
@@ -130,6 +137,30 @@ describe('Payment reconciliation — Casso/SePay webhook (task 3.4)', () => {
         resource_ids: [resDeposit],
       })
       .expect(201);
+
+    // STAFF trong tenant (có payment.reconcile — task 2.10a) để đối soát unmatched.
+    // unmatched chỉ gate pha-1 role-perm + RLS tenant (KHÔNG authorizeOnProperty) →
+    // seed role trên propertyId để trung thực, nhưng qua được kể cả không cần property-scope.
+    const staffHash = await argon2.hash(PASSWORD, { type: argon2.argon2id });
+    const staffId = (
+      await admin.query(
+        `INSERT INTO users (tenant_id, email, password_hash, full_name, default_role)
+         VALUES ($1, $2, $3, 'Thu ngân', 'STAFF') RETURNING id`,
+        [tenantId, staffEmail, staffHash],
+      )
+    ).rows[0].id as string;
+    await admin.query(
+      `INSERT INTO user_property_roles (tenant_id, user_id, property_id, role)
+       VALUES ($1, $2, $3, 'STAFF')`,
+      [tenantId, staffId, propertyId],
+    );
+    staffToken = (
+      await request(http)
+        .post('/api/v1/auth/login')
+        .set('X-Tenant-Slug', tenantSlug)
+        .send({ email: staffEmail, password: PASSWORD })
+        .expect(200)
+    ).body.data.access_token;
   });
 
   afterAll(async () => {
@@ -236,5 +267,37 @@ describe('Payment reconciliation — Casso/SePay webhook (task 3.4)', () => {
     expect(inv.status).toBe('PAID');
     const booking = (await request(http).get(`/api/v1/bookings/${bk.bookingId}`).set(auth()).expect(200)).body.data;
     expect(booking.status).toBe('CONFIRMED');
+  });
+
+  it('STAFF (có payment.reconcile) GET /payments/unmatched → 200, không 403', async () => {
+    await request(http).get('/api/v1/payments/unmatched').set(staffAuth()).expect(200);
+  });
+
+  it('★ STAFF đối soát unmatched (ambiguous) → 200 RESOLVED + invoice PAID', async () => {
+    const bk = await bookWithDeposit('2027-08-01T07:00:00.000Z', '2027-08-03T05:00:00.000Z');
+    const payload: PaymentWebhook = {
+      event_id: `evt-${RUN}-staff`,
+      amount_vnd: bk.depositAmount,
+      content: 'chuyen khoan khong ghi noi dung', // không có mã → unmatched
+      bank_account: BANK_ACCOUNT,
+    };
+    await postWebhook('casso', payload).expect(200);
+    expect((await app.get(ReconciliationService).reconcile('casso', payload)).matched).toBe(false);
+
+    // STAFF xem + resolve unmatched (chỉ gate pha-1 + RLS → STAFF trong tenant qua được).
+    const unmatched = (await request(http).get('/api/v1/payments/unmatched').set(staffAuth()).expect(200)).body
+      .data as Array<{ id: string; transaction_ref: string }>;
+    const um = unmatched.find((u) => u.transaction_ref === payload.event_id)!;
+    expect(um).toBeTruthy();
+
+    const resolved = await request(http)
+      .post(`/api/v1/payments/unmatched/${um.id}/resolve`)
+      .set(staffAuth())
+      .send({ invoice_id: bk.depositId })
+      .expect(200);
+    expect(resolved.body.data.status).toBe('RESOLVED');
+
+    const inv = (await request(http).get(`/api/v1/invoices/${bk.depositId}`).set(auth()).expect(200)).body.data;
+    expect(inv.status).toBe('PAID');
   });
 });

@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ConsentResponse, DataErasureResponse } from '@pms/shared-types';
+import type {
+  ConsentResponse,
+  DataErasureResponse,
+  SubmitPoliceReportResponse,
+} from '@pms/shared-types';
 import { apiClient } from '@/lib/api-client';
 import { downloadBlob } from '@/lib/download';
 
@@ -11,6 +15,24 @@ export function useDownloadPoliceReport() {
         `/compliance/police-report?property_id=${propertyId}&from=${from}&to=${to}`,
         `bao-cao-luu-tru-${from}_${to}.xlsx`,
       ),
+  });
+}
+
+/**
+ * B6 (task 2.8, docs/12 §2 Phase 2) — "Gửi" khai báo lưu trú công an cho khách đã lưu
+ * trú trong [from, to] (cùng {property_id, from, to} với TT56). Idempotent: đã SUBMITTED
+ * → skipped. Trả tóm tắt {total, submitted, failed, skipped}. Không mutate cache list nào.
+ */
+export function useSubmitPoliceReport() {
+  return useMutation({
+    mutationFn: ({ propertyId, from, to }: { propertyId: string; from: string; to: string }) =>
+      apiClient
+        .post<{ data: SubmitPoliceReportResponse }>('/compliance/police-report/submit', {
+          property_id: propertyId,
+          from,
+          to,
+        })
+        .then((r) => r.data),
   });
 }
 

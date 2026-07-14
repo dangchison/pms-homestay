@@ -14,8 +14,10 @@ import { loadEnv } from '@core/config/env.schema';
  * ★ Acceptance TASK 9.4 (docs/16 #10 — Wave 1 chống thất thoát tiền mặt): sổ quỹ ca.
  * Mở ca (float) → thu tiền mặt trong ca (payment CASH gắn cơ sở qua booking) → đóng
  * ca đếm tiền → expected = float + Σ CASH − Σ refund; variance = counted − expected;
- * chênh lệch != 0 → outbox 'shift.variance_detected'. RBAC payment.reconcile (mở/đóng)
- * + report.financial (đọc); partial-unique 1 ca OPEN/cơ sở; If-Match optimistic khi đóng.
+ * chênh lệch != 0 → outbox 'shift.variance_detected'. RBAC mở/đóng ca: payment.reconcile
+ * — nay gồm cả STAFF thu ngân (task 2.10a), ngoài OWNER/ACCOUNTANT; đọc (list/detail) cần
+ * report.financial nên STAFF vẫn KHÔNG đọc được ca. Partial-unique 1 ca OPEN/cơ sở;
+ * If-Match optimistic khi đóng.
  *
  * Payment CASH chính xác số tiền: ad-hoc ADJUSTMENT invoice GẮN booking (để có
  * property qua invoices→bookings.property_id) → pay CASH đúng số. received_at = now()
@@ -29,6 +31,7 @@ const slugB = `shift-b-${RUN}`;
 const ownerA = `owner-a-${RUN}@e2e.test`;
 const ownerB = `owner-b-${RUN}@e2e.test`;
 const hkEmail = `hk-${RUN}@e2e.test`;
+const staffEmail = `staff-${RUN}@e2e.test`;
 
 describe('Cash shifts (task 9.4, docs/16 #10)', () => {
   let app: INestApplication;
@@ -36,6 +39,7 @@ describe('Cash shifts (task 9.4, docs/16 #10)', () => {
   let admin: Client;
   let token: string; // owner tenant A (có payment.reconcile + report.financial)
   let hkToken: string; // HOUSEKEEPER tenant A (thiếu cả hai quyền)
+  let staffToken: string; // STAFF tenant A (có payment.reconcile — thu ngân; thiếu report.financial)
   let tokenB: string; // owner tenant B (cross-tenant)
   let propertyId: string;
   let resDeposit: string;
@@ -170,6 +174,20 @@ describe('Cash shifts (task 9.4, docs/16 #10)', () => {
       propertyId,
     ]);
     hkToken = (await login(slugA, hkEmail)).body.data.access_token;
+
+    // STAFF thu ngân tenant A gán ĐÚNG property (có payment.reconcile → mở/đóng ca;
+    // thiếu report.financial → không đọc ca). Seed trên propertyId để qua cả pha-2
+    // authorizeOnProperty (task 2.10a).
+    const staff = await admin.query(
+      `INSERT INTO users (tenant_id, email, password_hash, full_name, default_role) VALUES ($1,$2,$3,'Thu ngân','STAFF') RETURNING id`,
+      [tenantId, staffEmail, hash],
+    );
+    await admin.query(`INSERT INTO user_property_roles (tenant_id, user_id, property_id, role) VALUES ($1,$2,$3,'STAFF')`, [
+      tenantId,
+      staff.rows[0].id,
+      propertyId,
+    ]);
+    staffToken = (await login(slugA, staffEmail)).body.data.access_token;
   });
 
   afterAll(async () => {
@@ -295,6 +313,38 @@ describe('Cash shifts (task 9.4, docs/16 #10)', () => {
       .set({ ...auth(hkToken), 'If-Match': String(shift.version) })
       .send({ closing_counted_vnd: 0 })
       .expect(403);
+
+    await closeShift(shift.id, 0, shift.version).expect(200); // dọn
+  });
+
+  it('STAFF (thu ngân, có payment.reconcile) mở ca → 201 OPEN', async () => {
+    const shift = (await openShift(100_000, staffToken).expect(201)).body.data;
+    expect(shift.status).toBe('OPEN');
+    expect(shift.opening_float_vnd).toBe(100_000);
+    await closeShift(shift.id, 100_000, shift.version, staffToken).expect(200); // dọn (STAFF đóng được)
+  });
+
+  it('★ STAFF đóng ca tính variance đúng: float 100k + CASH 200k (owner setup) → đếm 300k → variance 0, KHÔNG outbox', async () => {
+    const shift = (await openShift(100_000, staffToken).expect(201)).body.data;
+    // payCash tạo ad-hoc ADJUSTMENT invoice (cần invoice.create_adhoc — STAFF KHÔNG có) → dùng owner token.
+    await payCash(200_000);
+
+    const closed = (await closeShift(shift.id, 300_000, shift.version, staffToken).expect(200)).body.data;
+    expect(closed.status).toBe('CLOSED');
+    expect(closed.expected_cash_vnd).toBe(300_000); // 100k float + 200k CASH
+    expect(closed.variance_vnd).toBe(0);
+
+    const { rows } = await outboxVariance(shift.id);
+    expect(rows.length).toBe(0); // variance 0 → KHÔNG emit (ca đã CLOSED nên không kẹt OPEN)
+  });
+
+  it('STAFF vẫn KHÔNG đọc được ca (thiếu report.financial): GET /shifts và /shifts/:id → 403 AUTHZ_NO_PERMISSION', async () => {
+    const shift = (await openShift(0).expect(201)).body.data; // ca hợp lệ do owner mở để có id đọc thử
+
+    const list = await request(http).get('/api/v1/shifts').set(auth(staffToken)).expect(403);
+    expect(list.body.error.code).toBe('AUTHZ_NO_PERMISSION');
+    const detail = await request(http).get(`/api/v1/shifts/${shift.id}`).set(auth(staffToken)).expect(403);
+    expect(detail.body.error.code).toBe('AUTHZ_NO_PERMISSION');
 
     await closeShift(shift.id, 0, shift.version).expect(200); // dọn
   });

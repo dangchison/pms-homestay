@@ -43,10 +43,13 @@ const S_SPEC = {
   },
 }
 const S_IMPL = {
-  type: 'object', additionalProperties: false, required: ['summary', 'changedFiles', 'migrationAdded', 'e2eSpec'],
+  // required tối thiểu = 2 string đơn giản (chỉ e2eSpec được QA dùng downstream). changedFiles/
+  // migrationAdded hạ thành STRING tuỳ chọn (KHÔNG array/boolean): model hay serialize field
+  // typed thành string → StructuredOutput fail 5× → crash cả workflow (đã dính Đợt 2/2.3).
+  type: 'object', additionalProperties: false, required: ['summary', 'e2eSpec'],
   properties: {
-    summary: { type: 'string' }, e2eSpec: { type: 'string' }, migrationAdded: { type: 'boolean' },
-    changedFiles: { type: 'array', items: { type: 'string' } }, notes: { type: 'string' },
+    summary: { type: 'string' }, e2eSpec: { type: 'string' },
+    migrationAdded: { type: 'string' }, changedFiles: { type: 'string' }, notes: { type: 'string' },
   },
 }
 const S_QA = {
@@ -111,7 +114,7 @@ function scopePrompt(userScope) {
   return roleIntro('roadmap-planner') + [
     'CHẾ ĐỘ: CHỐT PHẠM VI PHASE (bạn là Planner — quyết thay chủ dự án, KHÔNG hỏi người).',
     `Scope người dùng truyền vào: ${userScope ? '"' + userScope + '"' : '(TRỐNG — bạn TỰ chọn phase giá trị & an toàn nhất)'}.`,
-    `Đọc: docs/14-roadmap-tasks.md (EPIC 9 + Checklist PR), docs/16-product-roadmap.md, PROGRESS.md, \`git log --oneline -15\`, ${MEM}/MEMORY.md + pms-homestay-status.md.`,
+    `Đọc: docs/19-completion-plan.md (KẾ HOẠCH 7 ĐỢT — nguồn chính cho phần việc còn lại), docs/14-roadmap-tasks.md (EPIC 9 + Checklist PR), docs/16-product-roadmap.md, PROGRESS.md, \`git log --oneline -15\`, ${MEM}/MEMORY.md + pms-homestay-status.md.`,
     'Chọn 2–6 task LIÊN QUAN (hoặc đúng số task người dùng yêu cầu), codeable KHÔNG cần creds ngoài, migration backward-compatible, không tạo lỗ hổng bảo mật/RLS/PII.',
     'Trả {phase, branch (feat/<kebab-slug>), rationale, blocked, tasks[]{id,name,summary}}. Không có task an toàn → blocked:true + blockedReason.',
   ].join('\n')
@@ -122,7 +125,7 @@ function specPrompt(scope, t) {
     `CHẾ ĐỘ: VIẾT SPEC 1 TASK (skill writing-plans). Phase "${scope.phase}".`,
     `Task: id=${t.id} · name=${t.name} · summary=${t.summary}.`,
     'Xem repo hiện tại: `git log --oneline main..HEAD` (task trước trong phase đã commit) + mục task tương ứng trong docs/14 nếu có.',
-    'Tự quyết mọi lựa chọn thiết kế (proxy CEO). Trả {taskId, name, acceptance[] (test được), files[], risks[], e2eScope}.',
+    'Tự quyết mọi lựa chọn thiết kế (proxy CEO). e2eScope: task FE → Playwright `apps/<app>/e2e/<name>.spec.ts`; task BE → vitest `apps/api/test/e2e/<name>`. Trả {taskId, name, acceptance[] (test được), files[], risks[], e2eScope}.',
   ].join('\n')
 }
 
@@ -130,16 +133,22 @@ function implPrompt(scope, spec) {
   return roleIntro('roadmap-coder') + [
     `CHẾ ĐỘ: IMPLEMENT (skill executing-plans + cadence repo). Phase "${scope.phase}".`,
     'SPEC:', JSON.stringify(spec),
-    'Theo cadence: migration→shared-types(+build)→module(RBAC authorizeOnProperty)→`pnpm --filter @pms/api db:migrate`→e2e. Tuân Checklist PR (docs/14) + gotchas (typecheck cuối; $executeRaw cho void; field PII mới→redact audit.redact+pino; money BigInt+roundVnd; e2e cleanup FK order).',
-    'KHÔNG commit ở bước này. KHÔNG lệnh tương tác. Trả {summary, changedFiles[], migrationAdded, e2eSpec (đường dẫn file spec), notes}.',
+    'Chọn cadence THEO LỚP bị chạm (task có thể BE, FE, hoặc cả hai):',
+    '• BE (apps/api): migration→shared-types(+build)→module (RBAC + authorizeOnProperty)→`pnpm --filter @pms/api db:migrate`→e2e vitest. Gotchas: typecheck cuối; $executeRaw cho SQL trả void; field PII mới→redact CẢ audit.redact LẪN pino; money BigInt + roundVnd; e2e cleanup đúng FK order.',
+    '• FE (apps/web-admin | apps/web-staff): hook `lib/hooks/use-*.ts` (TanStack Query, queryKey + invalidate)→page/component (@pms/ui; PageContainer+PageHeader; toast từ @pms/ui KHÔNG sonner; Tabs native; Radix Select `value={x ?? ""}`)→e2e Playwright `apps/<app>/e2e` (loginDemo; read-only/idempotent, KHÔNG mutate seed). Thêm type vào shared-types PHẢI `pnpm --filter @pms/shared-types build`.',
+    'Tuân Checklist PR (docs/14 §7).',
+    'KHÔNG commit ở bước này. KHÔNG lệnh tương tác. Trả {summary, e2eSpec (đường dẫn file spec e2e)} — 2 field string BẮT BUỘC; tuỳ chọn changedFiles/migrationAdded/notes đều là STRING thường (KHÔNG mảng/boolean).',
   ].join('\n')
 }
 
 function qaPrompt(spec, impl) {
   return roleIntro('roadmap-qa') + [
     'CHẾ ĐỘ: QA (skill verification-before-completion). Verify task WORKS — KHÔNG sửa code.',
-    `e2e spec cần chạy: ${impl && impl.e2eSpec ? impl.e2eSpec : '(tự tìm spec mới trong apps/api/test/e2e; nếu task không có e2e — vd doc-only — ghi rõ và bỏ qua bước e2e)'}.`,
-    'Chạy (timeout mỗi lệnh): preflight `nc -z localhost 5432` → (nếu shared-types đổi) build shared-types → `pnpm --filter @pms/api typecheck` → `pnpm --filter @pms/api lint` → e2e spec (`cd apps/api && ENABLE_SCHEDULERS=false LOG_LEVEL=fatal pnpm exec vitest run <spec> --no-file-parallelism`) → `pnpm --filter @pms/api build`.',
+    `e2e spec (nếu có): ${impl && impl.e2eSpec ? impl.e2eSpec : '(tự tìm spec mới; task doc-only/không e2e → ghi rõ, bỏ qua)'}.`,
+    'Xác định LỚP bị chạm từ `git status --porcelain` (thay đổi bước impl CHƯA commit). Verify MỌI app bị chạm (timeout mỗi lệnh):',
+    '• apps/api → BE: `nc -z localhost 5432` → (nếu shared-types đổi) `pnpm --filter @pms/shared-types build` → `pnpm --filter @pms/api typecheck` → `pnpm --filter @pms/api lint` → e2e (`cd apps/api && ENABLE_SCHEDULERS=false LOG_LEVEL=fatal pnpm exec vitest run <spec> --no-file-parallelism`) → `pnpm --filter @pms/api build`.',
+    '• apps/web-admin → FE: (nếu shared-types đổi) `pnpm --filter @pms/shared-types build` → `pnpm --filter web-admin exec tsc --noEmit` → `pnpm --filter web-admin lint` → `pnpm --filter web-admin build` (KHÔNG dùng rtk cho next build — rtk không để lại .next startable). Playwright cần full stack → để CI/verify tay, KHÔNG bắt buộc ở QA.',
+    '• apps/web-staff → FE: như web-admin nhưng `--filter web-staff`.',
     'Đối chiếu acceptance với coverage:', JSON.stringify(spec.acceptance),
     'pass=true CHỈ khi mọi lệnh (áp dụng được) xanh. Trả {pass, ran[], failures[]{kind,detail}, coverageGaps[]}.',
   ].join('\n')

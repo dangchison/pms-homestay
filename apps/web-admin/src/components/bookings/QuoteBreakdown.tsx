@@ -40,10 +40,15 @@ export function QuoteBreakdown({ quote, isLoading, error, enabled }: Props) {
   }
   if (!quote) return null;
 
+  // Dedupe voucher: discount_vnd (dòng tổng "Giảm giá" bên dưới) ĐÃ = tổng các dòng
+  // line_items type DISCOUNT (pricing-engine/builder + pricing.service). Lọc chúng khỏi
+  // vòng lặp itemized để KHÔNG hiển thị hai lần (một lần itemized + một lần dòng tổng).
+  const itemized = quote.line_items.filter((li) => li.type !== 'DISCOUNT');
+
   return (
     <div className="rounded-lg border border-border bg-surface p-4 text-sm">
       <ul className="divide-y divide-border/60">
-        {quote.line_items.map((li, i) => (
+        {itemized.map((li, i) => (
           <li key={`${li.type}-${i}`} className="flex items-center justify-between gap-3 py-1.5">
             <span className="text-muted-foreground">
               {li.description}

@@ -19,6 +19,7 @@ import {
   Settings,
   Share2,
   Sparkles,
+  TicketPercent,
   Users,
   Wallet,
 } from 'lucide-react';
@@ -72,6 +73,8 @@ const SECTIONS: NavSection[] = [
     items: [
       { href: '/properties', label: 'Cơ sở & Phòng', icon: Building2 },
       { href: '/channels', label: 'Kênh OTA', icon: Share2 },
+      // Mã giảm giá: cấu hình giá ⇒ rate_plan.manage (OWNER/MANAGER) — khác role ẩn.
+      { href: '/discounts', label: 'Mã giảm giá', icon: TicketPercent, roles: ['OWNER', 'MANAGER'] },
       { href: '/settings', label: 'Cài đặt', icon: Settings },
     ],
   },

@@ -8,7 +8,8 @@ import { ShiftsService } from './shifts.service';
 /**
  * /api/v1/shifts (task 9.4, docs/16 #10 — Wave 1 chống thất thoát tiền mặt). Sổ quỹ ca:
  * mở/đóng ca cần `payment.reconcile` (+ pha-2 authorizeOnProperty) — người mở/đóng ca
- * là OWNER/ACCOUNTANT; đọc (list/detail) cần `report.financial`.
+ * là OWNER/ACCOUNTANT và STAFF (thu ngân, task 2.10a); đọc (list/detail) cần
+ * `report.financial` nên STAFF vẫn KHÔNG đọc được ca.
  */
 @Controller('shifts')
 export class ShiftsController {
