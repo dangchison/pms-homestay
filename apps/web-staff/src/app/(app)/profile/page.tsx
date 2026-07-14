@@ -17,6 +17,7 @@ import {
 import { KeyRound, LogOut, Radio, Wifi, WifiOff } from 'lucide-react';
 import type { UserRole } from '@pms/shared-types';
 import { apiClient } from '@/lib/api-client';
+import { ShiftCard } from '@/components/ShiftCard';
 import { logout } from '@/lib/auth';
 import { useRealtimeStore } from '@/lib/hooks/use-events';
 import { useSelectedProperty } from '@/lib/hooks/use-properties';
@@ -70,6 +71,8 @@ export default function ProfilePage() {
           </div>
         </CardContent>
       </Card>
+
+      <ShiftCard />
 
       {properties.length > 1 && (
         <Card>
