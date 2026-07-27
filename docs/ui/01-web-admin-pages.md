@@ -1,6 +1,8 @@
-# UI/01 — WEB-ADMIN: PAGE INVENTORY (35 page)
+# UI/01 — WEB-ADMIN: PAGE INVENTORY (30 route)
 
 > Mỗi page: route · mục đích · thành phần chính · API chính · quyền. Dialog/drawer thuộc page chứa nó. Trạng thái loading/empty/error/realtime bắt buộc theo [`00-ui-overview.md`](00-ui-overview.md) §2.6 + §6. Quyền ghi theo ma trận `04` §4 — bảng dưới ghi role được *vào trang*.
+>
+> **Bản này đã đồng bộ với code thật.** Ba chỗ triển khai gộp route so với thiết kế ban đầu — ghi rõ tại từng nhóm: nhóm **P** gộp 6 route con thành tab trong `/properties`, nhóm **R** gộp 3 route thành tab trong `/reports`, và **G2** dùng dialog thay cho route riêng. Mục nào chưa dựng được thì có cột/ghi chú **Trạng thái** nêu rõ lý do.
 
 ## Nhóm A — Auth (4 page, layout riêng không sidebar)
 
@@ -60,43 +62,50 @@
 | ID | Route | Mục đích | API | Roles |
 |----|-------|----------|-----|-------|
 | G1 | `/guests` | List + search (tên trgm / SĐT / **4 số cuối giấy tờ**); badge blacklist | `GET /guests?q=` | OWNER, MANAGER, STAFF |
-| G2 | `/guests/[id]` | Hồ sơ: thông tin (PII mask), lịch sử lưu trú, tổng chi tiêu, consent NĐ13, blacklist toggle (lý do); nút "Xem giấy tờ" (decrypt + audit READ_PII, pre-signed ảnh 15') | `GET /guests/:id`, `GET /guests/:id/document` | như G1 |
+| G2 | *(dialog trong `/guests`, không phải route riêng)* | Hồ sơ: thông tin (PII mask), consent NĐ13, blacklist toggle (lý do); nút "Xem giấy tờ" (decrypt + audit READ_PII). **Chưa có lịch sử lưu trú + tổng chi tiêu** — `GET /bookings` chưa lọc được theo `guest_id`, phải mở rộng BE trước (ghi chú tại `components/guests/GuestDetailDialog.tsx`) | `GET /guests/:id`, `GET /guests/:id/id-document` | như G1 |
 
 ## Nhóm F — Finance (4 page)
 
 | ID | Route | Mục đích & thành phần | API | Roles |
 |----|-------|------------------------|-----|-------|
 | F1 | `/invoices` | List + filter (status, kind, property, kỳ); badge OVERDUE đỏ; tổng theo filter | `GET /invoices` | OWNER, MANAGER, ACCOUNTANT, STAFF(read) |
-| F2 | `/invoices/[id]` | Chi tiết: items (DEPOSIT_APPLIED âm hiện rõ "Cấn cọc"), paid/balance, payments list, PDF. **Dialogs:** Record payment (method, amount mặc định = balance) · **VietQrPanel** (QR + realtime tick xanh khi `payment.received`) · Refund (ConfirmDanger + reason) · Void (giữ số — ConfirmDanger) | `GET /invoices/:id`, `POST /payments`, `POST /payments/:id/refund`, `POST /invoices/:id/void` | như F1 (void/refund theo quyền) |
+| F2 | `/invoices/[id]` | Chi tiết: items (DEPOSIT_APPLIED âm hiện rõ "Cấn cọc"), paid/balance, payments list. *Chưa có xuất PDF* — `modules/invoices` chưa có endpoint render PDF nào. **Dialogs:** Record payment (method, amount mặc định = balance) · **VietQrPanel** (QR + realtime tick xanh khi `payment.received`) · Refund (ConfirmDanger + reason) · Void (giữ số — ConfirmDanger) | `GET /invoices/:id`, `POST /payments`, `POST /payments/:id/refund`, `POST /invoices/:id/void` | như F1 (void/refund theo quyền) |
 | F3 | `/payments` | Sổ thu: list payment + filter (method, status, người nhận, ngày); export CSV | `GET /payments` | OWNER, ACCOUNTANT, MANAGER |
-| F4 | `/payments/unmatched` | **Đối soát:** bảng biến động chưa khớp (nội dung CK gốc, số tiền, thời gian); panel phải gợi ý match (confidence + lý do); hành động Match → chọn invoice/payment · Ignore (lý do). Realtime khi webhook về | `GET /payments/unmatched`, `POST /payments/unmatched/:id/resolve\|ignore` | OWNER, ACCOUNTANT (`payment.reconcile`) |
+| F4 | `/payments/unmatched` | **Đối soát:** bảng biến động chưa khớp (nội dung CK gốc, số tiền, thời gian); hành động Match → chọn invoice/payment · Ignore (lý do). Realtime khi webhook về. *Chưa có panel gợi ý match* — điểm tin cậy nằm trong worker `payments/reconciliation.service.ts`, chưa lộ ra API | `GET /payments/unmatched`, `POST /payments/unmatched/:id/resolve\|ignore` | OWNER, ACCOUNTANT (`payment.reconcile`) |
 
-## Nhóm P — Properties & Pricing (7 page)
+## Nhóm P — Properties & Pricing (1 route, 5 tab)
 
-| ID | Route | Mục đích & thành phần | API | Roles |
+**Triển khai gộp:** tất cả nằm trong route `/properties`, chuyển bằng tab; cơ sở đang thao tác lấy từ `PropertySwitcher` ở TopBar chứ không từ `[id]` trên URL. Lý do: mọi tab đều thao tác trên đúng một cơ sở đang chọn, nên `[id]` lặp lại thông tin đã có ở thanh trên. Nút **"Thêm cơ sở"** nằm ở `PageHeader`, hiện **cả khi chưa chọn cơ sở nào** — nếu không, tenant vừa đăng ký không có đường tạo cơ sở đầu tiên.
+
+| ID | Tab trong `/properties` | Mục đích & thành phần | API | Roles |
 |----|-------|------------------------|-----|-------|
-| P1 | `/properties` | Cards property (ảnh, số phòng, occupancy nay); nút tạo (check plan limit → 422 dialog nâng gói) | `GET/POST /properties` | OWNER, MANAGER(read) |
-| P2 | `/properties/[id]` | Tab "Thông tin": địa chỉ (province bắt buộc — báo cáo công an), TZ, R2R config (landlord, hợp đồng, tiền thuê), police_business_code | `GET/PATCH /properties/:id` | OWNER, MANAGER |
-| P3 | `/properties/[id]/rooms` | Bảng phòng: số, sức chứa, buffer_minutes, housekeeping dot, active; drawer tạo/sửa room (ảnh, tiện nghi); soft-delete + restore | `GET/POST/PATCH/DELETE /rooms` | OWNER, MANAGER |
-| P4 | `/properties/[id]/resources` | **Cấu hình đơn vị bán:** list resource (ROOM auto, badge); tạo/sửa **WHOLE** — chọn phòng thành viên (checkbox), preview "đặt nguyên căn sẽ chặn N phòng"; cảnh báo khi phòng thuộc nhiều WHOLE | `GET/POST/PATCH /resources` | OWNER, MANAGER |
-| P5 | `/properties/[id]/blocks` | room_blocks: list + tạo (phòng, khoảng, lý do); 409 nếu trùng booking — hiện conflict | `GET/POST/DELETE /room-blocks` | OWNER, MANAGER |
-| P6 | `/properties/[id]/rate-plans` | List plan theo mode (badge default); gán resources; deposit policy hiển thị | `GET/POST /rate-plans` | OWNER, MANAGER |
-| P7 | `/properties/[id]/rate-plans/[planId]` | **Editor:** giá cơ bản + config theo mode (HOURLY: gói/block/đêm; DAILY: giờ in/out, phí sớm/trễ; MONTHLY: điện nước — cảnh báo giá EVN `12` §7) + bảng rules (mùa/thứ/lễ, priority — validate chồng priority ngay trên UI) + **Tester:** nhập khoảng ở thử → QuoteBreakdown xem giá tính ra | `GET/PATCH /rate-plans/:id`, `POST /pricing/quote` | OWNER, MANAGER |
+| P1 | *(nút "Thêm cơ sở" ở header)* | Dialog tạo cơ sở; 422 `PLAN_LIMIT_REACHED` → hộp thoại mời nâng gói + link `/settings/billing`. **Không** hiện nguyên văn `detail` của BE (chuỗi đó viết cho lập trình viên) | `POST /properties` | OWNER |
+| P2 | Thông tin cơ sở | Bảng thuộc tính + dialog sửa: địa chỉ (tỉnh/thành bắt buộc — báo cáo công an), múi giờ, cấu hình thuê lại cho thuê, `police_business_code`. Hai mô hình trả chủ nhà (tiền thuê cố định / chia % doanh thu) **loại trừ nhau** — UI cho chọn một, chỉ gửi field tương ứng | `GET/PATCH /properties/:id` | OWNER, MANAGER |
+| P3 | Phòng | Bảng phòng + tạo phòng + đổi trạng thái buồng phòng. *Chưa có:* sửa/xoá/khôi phục phòng, `buffer_minutes`, ảnh & tiện nghi | `GET/POST /rooms`, `PATCH /rooms/:id/housekeeping` | OWNER, MANAGER |
+| P4 | Bookable unit | List resource (ROOM tự sinh) + tạo **WHOLE** chọn phòng thành viên. *Chưa có:* sửa resource, preview "đặt nguyên căn sẽ chặn N phòng" | `GET/POST /bookable-resources` | OWNER, MANAGER |
+| P6+P7 | Gói giá | List gói theo phương thức (badge mặc định, cọc, số đơn vị áp dụng). **Dialogs:** tạo/sửa gói (nhóm field theo mode; `mode` khoá khi sửa vì `UpdateRatePlanRequestSchema` không nhận) · luật giá (mùa/thứ/lễ, độ ưu tiên) · gán đơn vị bán (PUT thay thế toàn bộ) · **Thử giá** gọi đúng `POST /pricing/quote` của luồng đặt phòng | `GET/POST/PATCH/DELETE /rate-plans`, `PUT /rate-plans/:id/resources`, `/rate-plans/:id/rules`, `POST /pricing/quote` | OWNER, MANAGER |
+| P5 | Block bảo trì | room_blocks: chọn phòng → list + tạo + xoá; 409 nếu trùng booking | `GET/POST/DELETE /room-blocks` | OWNER, MANAGER |
 
-## Nhóm R — Reports (3 page)
+> **Đơn vị phần trăm:** mọi giá trị % trong hệ thống lưu **basis point** (10000 = 100%) — `rate_plans.deposit_value`, `rate_plan_rules.price_modifier_value`, `discount_codes.discount_value`, `properties.landlord_revenue_share_bp`. Người dùng luôn nhập/đọc theo %; quy đổi tập trung ở `apps/web-admin/src/lib/rate-plan-format.ts`, KHÔNG rải `/100` trong component.
 
-| ID | Route | Mục đích | API | Roles |
+## Nhóm R — Reports (1 route, 5 tab)
+
+**Triển khai gộp:** R1–R3 là tab trong route `/reports` (không tách 3 route), cộng 2 tab ngoài thiết kế ban đầu.
+
+| ID | Tab trong `/reports` | Mục đích | API | Roles |
 |----|-------|----------|-----|-------|
-| R1 | `/reports/pnl` | P&L theo property + khoảng tháng: bảng cấu trúc `09` §8 + chart revenue/cost/profit; export PDF/Excel; chú thích "doanh thu ghi nhận khi check-out" | `GET /reports/pnl` | OWNER, MANAGER, ACCOUNTANT |
-| R2 | `/reports/break-even` | 3 kịch bản (cards) + đường occupancy hiện tại so với điểm hoà vốn; input chỉnh F_fixed giả định | `GET /reports/break-even` | như R1 |
-| R3 | `/reports/occupancy` | Heatmap occupancy theo ngày × property; ADR/RevPAR trend | `GET /reports/occupancy` | OWNER, MANAGER, ACCOUNTANT, STAFF (operational) |
+| R1 | Lãi lỗ | P&L theo property + khoảng tháng: bảng cấu trúc `09` §8 + chart revenue/cost/profit; chú thích "doanh thu ghi nhận khi check-out" | `GET /reports/pnl` | OWNER, MANAGER, ACCOUNTANT |
+| R2 | Điểm hoà vốn | 3 kịch bản (cards) + đường occupancy hiện tại so với điểm hoà vốn | `GET /reports/break-even` | như R1 |
+| R3 | Công suất | Heatmap occupancy theo ngày × property; ADR/RevPAR trend | `GET /reports/occupancy` | OWNER, MANAGER, ACCOUNTANT, STAFF (operational) |
+| R4 | Bảng kê chủ nhà | Kỳ kê cho chủ nhà gốc mô hình thuê lại cho thuê (doanh thu, chi phí, tiền thuê, chia %) | `GET /reports/landlord-statement` | OWNER, ACCOUNTANT |
+| R5 | Chống thất thoát | Dấu hiệu bất thường: huỷ sau thu tiền mặt, hoàn tiền bất thường theo nhân viên, sửa giá sau nhận phòng | `GET /reports/anti-fraud` | OWNER, ACCOUNTANT |
 
 ## Nhóm CH — Channels (2 page)
 
 | ID | Route | Mục đích | API | Roles |
 |----|-------|----------|-----|-------|
 | CH1 | `/channels` | List kênh per property; mapping resource ↔ listing (external id, pull URL); **push URL + token** (copy, regenerate — ConfirmDanger); trạng thái sync gần nhất, nút "Sync now" | `GET/POST /channels`, `/channel-mappings`, `POST /sync/trigger` | OWNER, MANAGER |
-| CH2 | `/channels/sync-logs` | Bảng sync_jobs (status, counts, conflicts) + drill sync_logs; **conflict center:** danh sách overbooking_detected chưa xử lý → link booking liên quan | `GET /sync-jobs`, `GET /sync-logs` | OWNER, MANAGER |
+| CH2 | `/channels/sync-logs` | **CHƯA DỰNG.** Bảng sync_jobs + drill sync_logs; **conflict center:** danh sách overbooking_detected chưa xử lý → link booking. Chặn ở BE: mới có `GET /channels/:id/sync-jobs` và `GET /channels/conflict-count` (chỉ đếm), **chưa có endpoint liệt kê xung đột chi tiết và chưa có `/sync-logs` cấp cao**. Hiện `/channels` chỉ hiện badge đếm xung đột | *(cần bổ sung BE)* | OWNER, MANAGER |
 
 ## Nhóm CL — Cleaning (1 page)
 
@@ -108,17 +117,30 @@
 
 | ID | Route | Mục đích | API |
 |----|-------|----------|-----|
-| N1 | `/notifications` | Trung tâm thông báo in-app (badge đếm trên TopBar realtime); mark read; click → deep-link entity | `GET/PATCH /notifications` |
+| N1 | `/notifications` | Trung tâm thông báo in-app (badge đếm trên TopBar realtime); lọc chưa đọc; đánh dấu đã đọc. Vào từ link "Xem tất cả" trong popover chuông — **không** có mục sidebar riêng. Chỉ render title/body/thời gian, KHÔNG hiện `metadata` (có thể chứa PII khách).<br>**Giới hạn:** BE chỉ nhận `unread_only` + `limit` ≤100, không có phân trang con trỏ → trang lấy trọn 100 dòng gần nhất và nói rõ khi chạm mốc | `GET /notifications`, **`POST`** `/notifications/:id/read` (không phải PATCH) |
 
 ## Nhóm S — Settings (6 page)
 
 | ID | Route | Mục đích & thành phần | API | Roles |
 |----|-------|------------------------|-----|-------|
-| S1 | `/settings` | Hồ sơ tenant: tên, slug (read-only), logo, TZ/locale mặc định, chính sách (hạn cọc PENDING, giờ no-show) | `GET/PATCH /tenant` | OWNER |
+| S1 | `/settings` | Hồ sơ tenant: tên, slug (read-only), múi giờ, tiền tệ. *Chưa có logo, locale mặc định, chính sách (hạn cọc PENDING, giờ no-show)* — `UpdateTenantRequestSchema` ở BE chưa có các field này | `GET/PATCH /tenant` | OWNER |
 | S2 | `/settings/users` | List user + role; **mời user** (email, default role); per-property roles editor (gán property × role, override grant/deny); deactivate | `GET/POST /users`, `/user-property-roles` | OWNER |
 | S3 | `/settings/billing` | Gói hiện tại + usage bars (rooms/users/properties so với max_*); lịch sử thanh toán SaaS; nâng gói → **VietQrPanel** thanh toán; trạng thái TRIAL đếm ngược / SUSPENDED banner toàn app | `GET /billing`, `POST /billing/upgrade` | OWNER |
 | S4 | `/settings/security` | Đổi password; bật/tắt 2FA (QR TOTP + backup codes — bắt buộc OWNER/ACCOUNTANT); sessions list + revoke | `/auth/2fa/*`, `/auth/sessions` | mọi user (tự mình) |
 | S5 | `/settings/audit-logs` | Bảng audit (filter entity/action/user/ngày); diff viewer before/after (đã redact); export | `GET /audit-logs` | OWNER, ACCOUNTANT |
 | S6 | `/settings/compliance` | **Báo cáo lưu trú:** chọn property + khoảng → preview + download Excel (TT56); consents log; data-export/erasure request cho khách (có cảnh báo legal-hold) | `GET /compliance/police-report`, `POST /guests/:id/data-*` | OWNER, MANAGER |
+
+## Nhóm W — Trang thêm ngoài thiết kế ban đầu (Đợt 2, 6 route)
+
+Sáu route dựng trong Đợt 2 nhưng chưa có trong bản inventory gốc.
+
+| Route | Mục đích | API | Roles |
+|-------|----------|-----|-------|
+| `/assets` | Tài sản cố định + lịch khấu hao + thanh lý | `GET/POST/PATCH/DELETE /assets` | OWNER, ACCOUNTANT |
+| `/expenses` | Chi phí vận hành 14 loại + chi phí định kỳ; hoa hồng OTA chỉ đọc (auto sinh khi trả phòng) | `GET/POST/PATCH/DELETE /expenses` | OWNER, MANAGER, ACCOUNTANT |
+| `/discounts` | Mã giảm giá / voucher (FIXED / PERCENT basis-point, phạm vi theo cơ sở, hạn dùng) | `GET/POST/PATCH/DELETE /discount-codes` | OWNER, MANAGER |
+| `/shifts` | Sổ quỹ ca thu ngân: mở/đóng ca, đếm tiền, lệch so với thu tiền mặt trong ca | `GET/POST /shifts`, `POST /shifts/:id/close` | OWNER, ACCOUNTANT, STAFF |
+| `/reports` | Route chứa 5 tab báo cáo — xem nhóm R | — | như nhóm R |
+| `/settings/compliance/foreign-residence` | NA17 khai báo tạm trú khách nước ngoài + tải mẫu xlsx | `/compliance/foreign-residence*` | OWNER, MANAGER |
 
 > **Platform admin console** (quản lý tenants/plans cho chính chúng ta): MVP dùng API + scripts nội bộ (`platform_users` auth riêng) — chưa build UI. Phase 2: console riêng tối giản.
