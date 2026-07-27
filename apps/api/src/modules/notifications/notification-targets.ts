@@ -1,4 +1,4 @@
-import { type UserRole } from '@pms/shared-types';
+import { type EventType, type UserRole } from '@pms/shared-types';
 
 export type DeliveryChannel = 'IN_APP' | 'EMAIL' | 'SMS' | 'ZNS';
 
@@ -58,22 +58,67 @@ export function channelsFor(eventType: string): DeliveryChannel[] {
   return EMAIL_EVENTS.has(eventType) ? ['IN_APP', 'EMAIL'] : ['IN_APP'];
 }
 
-/** Tiêu đề/nội dung tiếng Việt theo event_type (MVP chuỗi tĩnh; MJML/Handlebars sau). */
+/**
+ * Tiêu đề/nội dung tiếng Việt theo event_type (MVP chuỗi tĩnh; MJML/Handlebars sau).
+ *
+ * Kiểu `Record<EventType, …>` là CỐ Ý: thêm event vào EVENT_TYPES mà quên nhãn ở đây
+ * sẽ lỗi biên dịch, thay vì âm thầm rơi xuống nhánh mặc định và hiện chuỗi kỹ thuật
+ * cho chủ homestay đọc (đã từng xảy ra với cleaning_task.assigned,
+ * room.housekeeping_changed, shift.variance_detected).
+ */
+const TEMPLATES: Record<EventType, { title: string; body: string }> = {
+  'booking.created': { title: 'Đặt phòng mới', body: 'Có một đặt phòng mới vừa được tạo.' },
+  'booking.confirmed': { title: 'Đặt phòng đã xác nhận', body: 'Một đặt phòng đã được xác nhận.' },
+  'booking.cancelled': { title: 'Đặt phòng đã huỷ', body: 'Một đặt phòng vừa bị huỷ.' },
+  'booking.no_show': { title: 'Khách không đến', body: 'Một đặt phòng đã chuyển sang không đến.' },
+  'booking.checked_in': { title: 'Khách đã nhận phòng', body: 'Một khách vừa nhận phòng.' },
+  'booking.checked_out': { title: 'Khách đã trả phòng', body: 'Một khách vừa trả phòng.' },
+  'booking.resource_switched': { title: 'Đổi phòng', body: 'Một đặt phòng vừa được đổi sang phòng khác.' },
+  'booking.rescheduled': { title: 'Đổi ngày ở', body: 'Một đặt phòng vừa được đổi ngày nhận hoặc trả phòng.' },
+  'booking.overbooking_detected': {
+    title: 'Cảnh báo trùng phòng',
+    body: 'Lịch từ kênh bán ngoài đụng một đặt phòng đang có — cần xử lý ngay.',
+  },
+  'room.housekeeping_changed': {
+    title: 'Đổi trạng thái buồng phòng',
+    body: 'Một phòng vừa đổi trạng thái dọn dẹp.',
+  },
+  'room.blocked': { title: 'Chặn phòng', body: 'Một phòng vừa bị chặn để bảo trì.' },
+  'room.unblocked': { title: 'Bỏ chặn phòng', body: 'Một phòng vừa được mở bán trở lại.' },
+  'payment.received': { title: 'Nhận thanh toán', body: 'Vừa ghi nhận một khoản thanh toán.' },
+  'payment.refunded': { title: 'Hoàn tiền', body: 'Vừa thực hiện một khoản hoàn tiền.' },
+  'invoice.issued': { title: 'Hoá đơn phát hành', body: 'Một hoá đơn vừa được phát hành.' },
+  'invoice.overdue': { title: 'Hoá đơn quá hạn', body: 'Một hoá đơn đã quá hạn thanh toán.' },
+  'cleaning_task.assigned': {
+    title: 'Có việc dọn phòng mới',
+    body: 'Bạn vừa được giao một phòng cần dọn.',
+  },
+  'cleaning_task.completed': {
+    title: 'Dọn phòng xong',
+    body: 'Một phòng vừa dọn xong, chờ nghiệm thu.',
+  },
+  'shift.variance_detected': {
+    title: 'Lệch quỹ ca thu ngân',
+    body: 'Một ca vừa đóng với số tiền đếm được khác số ghi nhận trên hệ thống.',
+  },
+  'sync_job.completed': {
+    title: 'Đồng bộ kênh xong',
+    body: 'Vừa đồng bộ xong lịch với một kênh bán ngoài.',
+  },
+  'sync_job.failed': {
+    title: 'Đồng bộ kênh thất bại',
+    body: 'Không đồng bộ được lịch với một kênh bán ngoài.',
+  },
+};
+
 export function renderTemplate(eventType: string): { title: string; body: string } {
-  const map: Record<string, { title: string; body: string }> = {
-    'booking.created': { title: 'Đặt phòng mới', body: 'Có một đặt phòng mới vừa được tạo.' },
-    'booking.confirmed': { title: 'Đặt phòng đã xác nhận', body: 'Một đặt phòng đã được xác nhận.' },
-    'booking.cancelled': { title: 'Đặt phòng đã huỷ', body: 'Một đặt phòng vừa bị huỷ.' },
-    'booking.no_show': { title: 'Khách không đến (no-show)', body: 'Một đặt phòng đã chuyển sang NO_SHOW.' },
-    'booking.checked_in': { title: 'Khách đã nhận phòng', body: 'Một khách vừa check-in.' },
-    'booking.checked_out': { title: 'Khách đã trả phòng', body: 'Một khách vừa check-out.' },
-    'booking.resource_switched': { title: 'Đổi phòng', body: 'Một đặt phòng vừa được đổi phòng.' },
-    'payment.received': { title: 'Nhận thanh toán', body: 'Vừa ghi nhận một khoản thanh toán.' },
-    'payment.refunded': { title: 'Hoàn tiền', body: 'Vừa thực hiện một khoản hoàn tiền.' },
-    'invoice.issued': { title: 'Hoá đơn phát hành', body: 'Một hoá đơn vừa được phát hành.' },
-    'invoice.overdue': { title: 'Hoá đơn quá hạn', body: 'Một hoá đơn đã quá hạn thanh toán.' },
-    'room.blocked': { title: 'Chặn phòng', body: 'Một phòng vừa bị chặn (bảo trì).' },
-    'room.unblocked': { title: 'Bỏ chặn phòng', body: 'Một phòng vừa được bỏ chặn.' },
-  };
-  return map[eventType] ?? { title: 'Thông báo', body: `Sự kiện ${eventType}.` };
+  // Nhánh mặc định chỉ chạm tới khi outbox có event NGOÀI catalog (dữ liệu cũ, rollback
+  // dở dang). Cố ý KHÔNG in `eventType`: người đọc là chủ cơ sở, không phải lập trình viên
+  // — tên sự kiện đã có trong outbox_events và audit log cho việc điều tra.
+  return (
+    TEMPLATES[eventType as EventType] ?? {
+      title: 'Cập nhật từ hệ thống',
+      body: 'Có một thay đổi vừa được ghi nhận.',
+    }
+  );
 }
