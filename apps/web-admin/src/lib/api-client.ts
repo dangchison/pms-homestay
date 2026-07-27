@@ -49,11 +49,25 @@ function baseHeaders(extra?: HeadersInit): Headers {
   return h;
 }
 
+/**
+ * CSRF token cho double-submit. Store in-memory là nguồn chính, nhưng nó RỖNG sau
+ * mỗi lần tải lại trang — lúc đó phải đọc từ cookie, nếu không `/auth/refresh` trả
+ * 403 và người dùng bị đăng xuất mỗi lần F5. BE đặt cookie này `httpOnly: false`,
+ * `path: '/'` đúng để đọc được (xem csrfCookieOptions ở auth.controller.ts).
+ */
+export function readCsrfToken(): string | null {
+  const inMemory = useAuthStore.getState().csrfToken;
+  if (inMemory) return inMemory;
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
 // ── Refresh interceptor (1 lock dùng chung) ─────────────────────────────────
 let refreshing: Promise<boolean> | null = null;
 
 async function refreshSession(): Promise<boolean> {
-  const csrf = useAuthStore.getState().csrfToken;
+  const csrf = readCsrfToken();
   const headers = new Headers({ 'X-Request-Id': crypto.randomUUID() });
   const slug = getTenantSlug();
   if (slug) headers.set('X-Tenant-Slug', slug);

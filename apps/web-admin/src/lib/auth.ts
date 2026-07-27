@@ -1,6 +1,6 @@
 import { type AuthTokensResponse, type LoginRequest } from '@pms/shared-types';
 import { useAuthStore } from '@/stores/auth.store';
-import { apiClient, ensureRefreshed } from './api-client';
+import { apiClient, ensureRefreshed, readCsrfToken } from './api-client';
 import { getQueryClient } from './query-client';
 import { rememberTenantSlug } from './tenant';
 
@@ -27,7 +27,7 @@ export async function login(input: LoginRequest, tenantSlug?: string): Promise<v
 
 /** Đăng xuất → thu hồi refresh token (CSRF double-submit) + xoá session in-memory. */
 export async function logout(): Promise<void> {
-  const csrf = useAuthStore.getState().csrfToken;
+  const csrf = readCsrfToken(); // in-memory rỗng sau reload → lấy từ cookie
   await apiClient
     .post('/auth/logout', undefined, csrf ? { headers: { 'X-CSRF-Token': csrf } } : undefined)
     .catch(() => undefined); // best-effort: vẫn xoá local dù BE lỗi

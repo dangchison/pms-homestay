@@ -31,12 +31,14 @@ import {
 
 const REFRESH_COOKIE = 'refresh_token';
 const CSRF_COOKIE = 'csrf_token';
+const REFRESH_COOKIE_PATH = '/api/v1/auth';
 const REFRESH_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * /api/v1/auth/* (docs/04 §2 endpoints).
  * Refresh token: cookie HttpOnly, Path=/api/v1/auth; CSRF double-submit trên
  * endpoint dùng cookie (refresh/logout): header X-CSRF-Token phải khớp cookie.
+ * Cookie CSRF cố ý KHÔNG HttpOnly và đặt ở Path=/ — xem csrfCookieOptions().
  */
 @Controller('auth')
 export class AuthController {
@@ -177,24 +179,57 @@ export class AuthController {
     }
   }
 
-  private cookieOptions(): CookieOptions {
+  /** Thuộc tính dùng chung cho cả hai cookie auth. */
+  private baseCookieOptions(): CookieOptions {
     return {
-      httpOnly: true,
       secure: this.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      path: '/api/v1/auth',
       ...(this.env.COOKIE_DOMAIN ? { domain: this.env.COOKIE_DOMAIN } : {}),
     };
   }
 
+  /** Refresh token: bí mật thật — HttpOnly, chỉ gửi tới /api/v1/auth. */
+  private refreshCookieOptions(): CookieOptions {
+    return { ...this.baseCookieOptions(), httpOnly: true, path: REFRESH_COOKIE_PATH };
+  }
+
+  /**
+   * CSRF token: `httpOnly: false` + `path: '/'` là CỐ Ý, không phải sơ suất.
+   *
+   * Double-submit đòi hỏi trình duyệt đọc được cookie để gửi lại qua header
+   * `X-CSRF-Token` — token này không phải bí mật chống XSS (dưới XSS thì access
+   * token in-memory đã mất trước rồi). Refresh token vẫn HttpOnly, không đổi.
+   *
+   * `path` phải là '/' chứ không phải '/api/v1/auth': `document.cookie` chỉ trả về
+   * cookie path-match với document HIỆN TẠI, mà trang chạy ở '/'. Để nguyên path cũ
+   * thì dù bỏ HttpOnly, JS vẫn không đọc được — và mọi lần tải lại trang đều mất
+   * phiên vì /auth/refresh trả 403 AUTH_CSRF_MISMATCH.
+   */
+  private csrfCookieOptions(): CookieOptions {
+    return { ...this.baseCookieOptions(), httpOnly: false, path: '/' };
+  }
+
   private setAuthCookies(res: Response, issued: IssuedTokens): void {
-    const opts = { ...this.cookieOptions(), maxAge: REFRESH_COOKIE_MAX_AGE_MS };
-    res.cookie(REFRESH_COOKIE, issued.refreshCookie, opts);
-    res.cookie(CSRF_COOKIE, issued.body.csrf_token, opts);
+    res.cookie(REFRESH_COOKIE, issued.refreshCookie, {
+      ...this.refreshCookieOptions(),
+      maxAge: REFRESH_COOKIE_MAX_AGE_MS,
+    });
+    // Xoá cookie CSRF ở path CŨ trước khi set path mới. Trình duyệt của người dùng
+    // hiện tại đang giữ csrf_token ở Path=/api/v1/auth; nếu không xoá thì tồn tại
+    // HAI cookie trùng tên, request tới /api/v1/auth/refresh gửi cả hai, và cookie
+    // có path cụ thể hơn đứng TRƯỚC — cookie-parser lấy đúng cái cũ đã stale nên
+    // assertCsrf hỏng vĩnh viễn. Giữ dòng này tối thiểu một chu kỳ refresh token
+    // (REFRESH_COOKIE_MAX_AGE_MS = 30 ngày) rồi mới gỡ được.
+    res.clearCookie(CSRF_COOKIE, { ...this.baseCookieOptions(), path: REFRESH_COOKIE_PATH });
+    res.cookie(CSRF_COOKIE, issued.body.csrf_token, {
+      ...this.csrfCookieOptions(),
+      maxAge: REFRESH_COOKIE_MAX_AGE_MS,
+    });
   }
 
   private clearAuthCookies(res: Response): void {
-    res.clearCookie(REFRESH_COOKIE, this.cookieOptions());
-    res.clearCookie(CSRF_COOKIE, this.cookieOptions());
+    res.clearCookie(REFRESH_COOKIE, this.refreshCookieOptions());
+    res.clearCookie(CSRF_COOKIE, this.csrfCookieOptions());
+    res.clearCookie(CSRF_COOKIE, { ...this.baseCookieOptions(), path: REFRESH_COOKIE_PATH });
   }
 }
