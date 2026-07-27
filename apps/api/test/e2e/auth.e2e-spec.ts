@@ -186,6 +186,23 @@ describe('Auth e2e (task 1.7)', () => {
       expect(refresh).toContain('Path=/api/v1/auth');
     });
 
+    /**
+     * Trong lúc cookie csrf chuyển từ Path=/api/v1/auth sang Path=/, client có thể
+     * gửi HAI cookie trùng tên và cái cũ/rỗng đứng trước. cookie-parser chỉ giữ lần
+     * đầu tiên, nên đọc qua nó sẽ hỏng vĩnh viễn dù cookie đúng nằm ngay sau.
+     */
+    it('csrf vẫn khớp khi client gửi kèm cookie cũ rỗng đứng trước', async () => {
+      const loginRes = await login().expect(200);
+      const jar = cookiesOf(loginRes);
+      const csrf = loginRes.body.data.csrf_token as string;
+
+      await request(http)
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', `refresh_token=${jar.refresh_token}; csrf_token=; csrf_token=${csrf}`)
+        .set('X-CSRF-Token', csrf)
+        .expect(200);
+    });
+
     it('full flow: login → sessions → refresh rotation → grace → reuse detection', async () => {
       // 1) Login
       const loginRes = await login().expect(200);

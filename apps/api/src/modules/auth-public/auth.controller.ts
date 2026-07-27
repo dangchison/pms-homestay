@@ -165,12 +165,42 @@ export class AuthController {
     return (req.cookies as Record<string, string> | undefined)?.[REFRESH_COOKIE];
   }
 
-  /** CSRF double-submit (docs/04 §2): header phải khớp cookie. */
+  /**
+   * Mọi giá trị của một cookie trong header thô, bỏ giá trị rỗng.
+   *
+   * `req.cookies` (cookie-parser) chỉ giữ lần xuất hiện ĐẦU TIÊN. Trong lúc cookie
+   * csrf chuyển từ Path=/api/v1/auth sang Path=/, một client có thể gửi hai cookie
+   * trùng tên; cái đứng trước lại là cái cũ/rỗng, nên đọc qua cookie-parser sẽ
+   * hỏng vĩnh viễn dù cookie đúng vẫn nằm ngay sau đó.
+   */
+  private cookieValues(req: Request, name: string): string[] {
+    const prefix = `${name}=`;
+    return (req.headers.cookie ?? '')
+      .split(';')
+      .map((part) => part.trim())
+      .filter((part) => part.startsWith(prefix))
+      .map((part) => {
+        const raw = part.slice(prefix.length);
+        try {
+          return decodeURIComponent(raw);
+        } catch {
+          return raw; // giá trị không phải URL-encoding hợp lệ — dùng nguyên văn
+        }
+      })
+      .filter(Boolean);
+  }
+
+  /**
+   * CSRF double-submit (docs/04 §2): header phải khớp cookie.
+   *
+   * Khớp với BẤT KỲ giá trị csrf_token nào client gửi lên. Điều này không nới lỏng
+   * bảo vệ: sức mạnh của double-submit nằm ở chỗ trang khác site KHÔNG đặt được
+   * header tuỳ chỉnh (CORS chặn), chứ không nằm ở việc cookie chỉ có một giá trị.
+   */
   private assertCsrf(req: Request): void {
-    const cookie = (req.cookies as Record<string, string> | undefined)?.[CSRF_COOKIE];
     const header = req.headers['x-csrf-token'];
     const headerValue = Array.isArray(header) ? header[0] : header;
-    if (!cookie || !headerValue || cookie !== headerValue) {
+    if (!headerValue || !this.cookieValues(req, CSRF_COOKIE).includes(headerValue)) {
       throw new AppException({
         code: 'AUTH_CSRF_MISMATCH',
         title: 'CSRF token không hợp lệ',
