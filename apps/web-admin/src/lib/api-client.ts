@@ -18,7 +18,17 @@ export class ApiClientError extends Error {
     readonly status: number,
     readonly body: ApiError['error'] | undefined,
   ) {
-    super(body?.title ?? `API error ${status}`);
+    // VALIDATION_FAILED có title chung chung ("Dữ liệu không hợp lệ") còn nguyên
+    // nhân thật nằm trong `fields[]`. Chỉ hiện title thì người dùng không biết ô
+    // nào sai — phải tự dò từng ô.
+    super(ApiClientError.describe(status, body));
+  }
+
+  private static describe(status: number, body: ApiError['error'] | undefined): string {
+    const title = body?.title ?? `API error ${status}`;
+    const fields = body?.fields;
+    if (!fields?.length) return title;
+    return `${title}: ${fields.map((f) => f.message).join('; ')}`;
   }
 }
 

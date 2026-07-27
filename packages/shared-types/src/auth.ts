@@ -32,27 +32,39 @@ export const LoginRequestSchema = z.object({
 });
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 
+/**
+ * Mọi ràng buộc PHẢI kèm thông điệp tiếng Việt: schema này chạy ở CẢ hai phía —
+ * zodResolver hiện thẳng message dưới ô nhập, và BE trả nguyên message trong
+ * `error.fields[]`. Bỏ trống thì người đăng ký nhận mặc định tiếng Anh của Zod
+ * ("Too small: expected string to have >=10 characters") ngay trên form tiếng Việt.
+ */
 export const RegisterTenantRequestSchema = z.object({
   tenant_slug: z
     .string()
-    .min(2)
-    .max(64)
-    .regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/),
-  tenant_display_name: z.string().min(1).max(255),
-  email: z.email(),
-  password: z.string().min(10),
-  full_name: z.string().min(1).max(255),
+    .min(2, 'Tên miền riêng tối thiểu 2 ký tự')
+    .max(64, 'Tên miền riêng tối đa 64 ký tự')
+    .regex(
+      /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/,
+      'Tên miền riêng chỉ gồm chữ thường không dấu, số và dấu gạch ngang ở giữa',
+    ),
+  tenant_display_name: z
+    .string()
+    .min(1, 'Nhập tên cơ sở kinh doanh')
+    .max(255, 'Tên cơ sở tối đa 255 ký tự'),
+  email: z.email('Email không hợp lệ'),
+  password: z.string().min(10, 'Mật khẩu tối thiểu 10 ký tự'),
+  full_name: z.string().min(1, 'Nhập họ tên của bạn').max(255, 'Họ tên tối đa 255 ký tự'),
 });
 export type RegisterTenantRequest = z.infer<typeof RegisterTenantRequestSchema>;
 
 export const ForgotPasswordRequestSchema = z.object({
-  email: z.email(),
+  email: z.email('Email không hợp lệ'),
 });
 export type ForgotPasswordRequest = z.infer<typeof ForgotPasswordRequestSchema>;
 
 export const ResetPasswordRequestSchema = z.object({
-  token: z.string().min(16),
-  new_password: z.string().min(10),
+  token: z.string().min(16, 'Liên kết đặt lại mật khẩu không hợp lệ'),
+  new_password: z.string().min(10, 'Mật khẩu mới tối thiểu 10 ký tự'),
 });
 export type ResetPasswordRequest = z.infer<typeof ResetPasswordRequestSchema>;
 
@@ -63,8 +75,8 @@ export type TwoFaVerifyRequest = z.infer<typeof TwoFaVerifyRequestSchema>;
 
 /** Đổi mật khẩu khi đã đăng nhập (task 6.7 S4) — xác minh mật khẩu hiện tại. */
 export const ChangePasswordRequestSchema = z.object({
-  current_password: z.string().min(1),
-  new_password: z.string().min(10),
+  current_password: z.string().min(1, 'Nhập mật khẩu hiện tại'),
+  new_password: z.string().min(10, 'Mật khẩu mới tối thiểu 10 ký tự'),
 });
 export type ChangePasswordRequest = z.infer<typeof ChangePasswordRequestSchema>;
 

@@ -86,7 +86,9 @@ export default function LoginPage() {
         </>
       }
     >
-      <form onSubmit={handleSubmit(onSubmit)} className="grid gap-5" noValidate>
+      {/* method="post": xem ghi chú ở trang đăng ký — tránh mật khẩu rơi vào URL
+          khi JS chưa chạy và trình duyệt submit form theo mặc định (GET). */}
+      <form onSubmit={handleSubmit(onSubmit)} method="post" className="grid gap-5" noValidate>
         {askTenant && (
           <div className="grid gap-2">
             <Label htmlFor="tenant-slug">Không gian làm việc</Label>
