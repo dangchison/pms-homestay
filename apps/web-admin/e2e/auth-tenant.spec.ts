@@ -39,6 +39,26 @@ test('đăng ký tenant riêng rồi đăng nhập được ngay trên cùng tr�
   await expect(page.getByRole('heading', { name: 'Tổng quan' })).toBeVisible();
 });
 
+test('mật khẩu ngắn báo lỗi tiếng Việt, yêu cầu độ dài luôn hiện', async ({ page }) => {
+  await page.goto('/register');
+
+  // Yêu cầu phải đọc được TRƯỚC khi nhập, không phải sau khi bị từ chối.
+  const hint = page.getByText('Tối thiểu 10 ký tự, tránh mật khẩu quá phổ biến');
+  await expect(hint).toBeVisible();
+
+  await page.getByLabel('Tên cơ sở kinh doanh').fill('Homestay Ngắn');
+  await page.getByLabel('Họ tên của bạn').fill('Chủ Nhà');
+  await page.getByLabel('Email').fill(`short-${Date.now()}@e2e.test`);
+  await page.getByLabel('Mật khẩu').fill('Abcd@1234'); // 9 ký tự
+  await page.getByRole('button', { name: 'Tạo tài khoản' }).click();
+
+  await expect(page.getByText('Mật khẩu tối thiểu 10 ký tự')).toBeVisible();
+  // Luật KHÔNG được biến mất khi lỗi hiện — trước đây nó bị thay thế.
+  await expect(hint).toBeVisible();
+  // Mật khẩu không được rơi vào URL (form GET khi JS chưa chạy).
+  expect(page.url()).not.toContain('Abcd');
+});
+
 test('nút demo vẫn vào đúng tenant demo dù trình duyệt đã nhớ tenant khác', async ({ page }) => {
   const unique = Date.now();
   const slug = `e2e-other-${unique}`;

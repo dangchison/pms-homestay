@@ -59,7 +59,10 @@ export default function RegisterPage() {
         </>
       }
     >
-      <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4" noValidate>
+      {/* method="post" là lưới an toàn khi JS chưa/không chạy: form không action sẽ
+          submit kiểu GET, đẩy mật khẩu vào query string → lưu vào lịch sử duyệt web
+          và log máy chủ. Đã quan sát thấy thật khi bundle 404. */}
+      <form onSubmit={handleSubmit(onSubmit)} method="post" className="grid gap-4" noValidate>
         <div className="grid gap-2">
           <Label htmlFor="tenant_display_name">Tên cơ sở kinh doanh</Label>
           <Input
@@ -123,11 +126,16 @@ export default function RegisterPage() {
             className="h-11"
             {...register('password')}
           />
-          {errors.password ? (
+          {errors.password && (
             <p className="text-sm text-destructive">{errors.password.message}</p>
-          ) : (
-            <p className="text-xs text-muted-foreground">Tối thiểu 10 ký tự</p>
           )}
+          {/* Yêu cầu hiện THƯỜNG TRỰC, không phải chỉ khi chưa có lỗi: trước đây nó
+              bị chính thông báo lỗi thay thế, nên đúng lúc người dùng cần biết luật
+              thì luật biến mất. "Tránh mật khẩu phổ biến" khớp COMMON_PASSWORDS mà
+              BE chặn — không nói trước thì bị từ chối mà không hiểu vì sao. */}
+          <p className="text-xs text-muted-foreground">
+            Tối thiểu 10 ký tự, tránh mật khẩu quá phổ biến
+          </p>
         </div>
 
         <Button type="submit" disabled={isSubmitting} className="mt-1 h-11 w-full text-base">
