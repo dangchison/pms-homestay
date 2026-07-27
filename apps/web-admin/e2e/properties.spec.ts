@@ -74,3 +74,91 @@ test('tab Block bảo trì — chọn phòng rồi thêm block mới', async ({ 
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('cell', { name: reason, exact: true })).toBeVisible();
 });
+
+/**
+ * Tab "Gói giá" — vòng tạo → đọc lại → sửa → xoá.
+ *
+ * Trọng tâm: ĐƠN VỊ CỌC. DB lưu basis point (3000 = 30%) nhưng người dùng nhập/đọc
+ * theo phần trăm. Sai chiều quy đổi thì cọc lệch 100 lần mà typecheck không bắt được,
+ * nên test khẳng định cả hai chiều: bảng hiện "30%" và form sửa nạp lại đúng "30".
+ *
+ * Tự dọn (xoá gói vừa tạo) để chạy lại nhiều lần không tích rác — khác các test trên
+ * vì gói giá KHÔNG bị chặn xoá bởi room_occupancy.
+ */
+test('tab Gói giá — tạo gói có cọc 30%, đọc lại đúng đơn vị, rồi xoá', async ({ page }) => {
+  await loginDemo(page);
+  await openProperties(page);
+
+  const planName = `Gói E2E ${Date.now()}`;
+  await page.getByRole('tab', { name: 'Gói giá', exact: true }).click();
+  await page.getByRole('button', { name: 'Tạo gói giá' }).click();
+
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', { name: 'Tạo gói giá' })).toBeVisible();
+  await dialog.getByLabel('Tên gói').fill(planName);
+  await dialog.getByLabel(/^Giá cơ bản/).fill('700000');
+
+  // Chọn cọc theo phần trăm rồi nhập 30 (KHÔNG phải 3000).
+  await dialog.getByRole('combobox', { name: 'Chính sách cọc' }).click();
+  await page.getByRole('option', { name: 'Theo phần trăm' }).click();
+  await dialog.getByLabel('Mức cọc (%)').fill('30');
+
+  await dialog.getByRole('button', { name: 'Tạo gói giá' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // Chiều 1 — bảng phải hiện "30%", không phải "3000%" hay "0.3%".
+  const row = page.getByRole('row', { name: new RegExp(planName) });
+  await expect(row).toBeVisible();
+  await expect(row.getByRole('cell', { name: '30%', exact: true })).toBeVisible();
+
+  // Chiều 2 — form sửa nạp lại phải là 30.
+  await row.getByRole('button', { name: 'Sửa', exact: true }).click();
+  const editDialog = page.getByRole('dialog');
+  await expect(editDialog.getByLabel('Mức cọc (%)')).toHaveValue('30');
+  // Phương thức thuê khoá khi sửa (UpdateRatePlanRequestSchema không nhận `mode`).
+  await expect(editDialog.getByRole('combobox', { name: 'Phương thức thuê' })).toBeDisabled();
+  await editDialog.getByRole('button', { name: 'Hủy' }).click();
+
+  // Dọn.
+  await row.getByRole('button', { name: 'Xoá', exact: true }).click();
+  await expect(page.getByRole('row', { name: new RegExp(planName) })).toHaveCount(0);
+});
+
+/**
+ * Dialog "Thêm cơ sở" — KHÔNG tạo thật (gói PRO giới hạn 5 cơ sở, chạy lại nhiều lần
+ * sẽ chạm trần và làm bẩn dữ liệu demo). Chỉ khẳng định hai điều dễ hỏng:
+ *   1) tỉnh/thành bắt buộc — nếu lỏng thì báo cáo lưu trú công an thiếu dữ liệu;
+ *   2) nhóm chủ nhà chỉ hiện khi bật thuê lại cho thuê, và hai mô hình trả tiền
+ *      loại trừ nhau (chọn chia doanh thu thì field tiền thuê cố định biến mất).
+ */
+test('dialog Thêm cơ sở — bắt buộc tỉnh/thành và hai mô hình trả chủ nhà loại trừ nhau', async ({
+  page,
+}) => {
+  await loginDemo(page);
+  await openProperties(page);
+
+  await page.getByRole('button', { name: 'Thêm cơ sở' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', { name: 'Thêm cơ sở' })).toBeVisible();
+
+  // Điền mọi thứ TRỪ tỉnh/thành → submit phải bị chặn tại client.
+  await dialog.getByLabel('Tên cơ sở').fill('Cơ sở E2E');
+  await dialog.getByLabel('Địa chỉ').fill('1 Đường Test');
+  await dialog.getByRole('button', { name: 'Tạo cơ sở' }).click();
+  await expect(dialog.getByText(/Bắt buộc.*báo cáo lưu trú công an/)).toBeVisible();
+
+  // Nhóm chủ nhà ẩn cho tới khi bật thuê lại cho thuê.
+  await expect(dialog.getByLabel('Tên chủ nhà')).toHaveCount(0);
+  await dialog.getByText('Cơ sở này đi thuê lại rồi cho thuê').click();
+  await expect(dialog.getByLabel('Tên chủ nhà')).toBeVisible();
+
+  // Mặc định là tiền thuê cố định; đổi sang chia doanh thu thì field kia phải biến mất.
+  await expect(dialog.getByLabel(/Tiền thuê hằng tháng/)).toBeVisible();
+  await dialog.getByRole('combobox', { name: 'Cách trả chủ nhà' }).click();
+  await page.getByRole('option', { name: 'Chia phần trăm doanh thu' }).click();
+  await expect(dialog.getByLabel(/Tiền thuê hằng tháng/)).toHaveCount(0);
+  await expect(dialog.getByLabel(/Chủ nhà hưởng/)).toBeVisible();
+
+  await dialog.getByRole('button', { name: 'Hủy' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});

@@ -4,8 +4,8 @@ import { loginDemo } from './helpers';
 /**
  * Task 2.1 (docs/19 §3 Đợt 2) — chuông thông báo TopBar (inbox IN_APP).
  *
- * 1) Smoke (dữ liệu thật): seed dev KHÔNG có dòng notifications → empty-state phải
- *    render sạch; mở popover không crash / không console error.
+ * 1) Smoke (dữ liệu thật): seed dev tạo 5 dòng notifications → popover render sạch,
+ *    không crash / không console error. Vẫn chấp nhận empty-state nếu seed đổi.
  * 2) Deterministic (page.route stub — KHÔNG phụ thuộc seed/worker): 1 chưa đọc + 1 đã
  *    đọc → badge "1", 2 dòng render; click dòng chưa đọc → POST /notifications/<id>/read
  *    + invalidate refetch (stub trả đã đọc) → badge biến mất.

@@ -13,26 +13,52 @@ import {
 } from '@pms/ui';
 import type {
   BookableResourceResponse,
+  BookingMode,
   HousekeepingStatus,
+  PropertyType,
+  RatePlanResponse,
   RoomBlockResponse,
   RoomResponse,
 } from '@pms/shared-types';
 import { ApiClientError } from '@/lib/api-client';
+import { useProperty } from '@/lib/hooks/use-properties';
+import { useDeleteRatePlan, useRatePlans } from '@/lib/hooks/use-rate-plans';
 import { useResources } from '@/lib/hooks/use-resources';
 import { useRoomBlocks, useDeleteRoomBlock } from '@/lib/hooks/use-room-blocks';
 import { useRooms, useUpdateHousekeeping } from '@/lib/hooks/use-rooms';
+import { bpToPercent, describeDeposit, formatVnd } from '@/lib/rate-plan-format';
 import { usePropertyStore } from '@/stores/property.store';
 import { PageContainer, PageHeader } from '@/components/layout/page';
+import { PropertyFormDialog } from '@/components/properties/PropertyFormDialog';
+import { RatePlanFormDialog } from '@/components/properties/RatePlanFormDialog';
+import { RatePlanResourcesDialog } from '@/components/properties/RatePlanResourcesDialog';
+import { RatePlanRulesDialog } from '@/components/properties/RatePlanRulesDialog';
+import { RatePlanTester } from '@/components/properties/RatePlanTester';
 import { RoomBlockFormDialog } from '@/components/properties/RoomBlockFormDialog';
 import { RoomFormDialog } from '@/components/properties/RoomFormDialog';
 import { WholeResourceFormDialog } from '@/components/properties/WholeResourceFormDialog';
 
-type Tab = 'rooms' | 'resources' | 'blocks';
+type Tab = 'info' | 'rooms' | 'resources' | 'rate-plans' | 'blocks';
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'info', label: 'Thông tin cơ sở' },
   { id: 'rooms', label: 'Phòng' },
   { id: 'resources', label: 'Bookable unit' },
+  { id: 'rate-plans', label: 'Gói giá' },
   { id: 'blocks', label: 'Block bảo trì' },
 ];
+
+const PROPERTY_TYPE_LABEL: Record<PropertyType, string> = {
+  HOMESTAY: 'Homestay',
+  RENT_TO_RENT: 'Thuê lại cho thuê',
+  APARTMENT: 'Căn hộ dịch vụ',
+  HOTEL: 'Khách sạn',
+};
+
+const MODE_LABEL: Record<BookingMode, string> = {
+  HOURLY: 'Theo giờ',
+  DAILY: 'Theo ngày',
+  MONTHLY: 'Theo tháng',
+};
 
 const HOUSEKEEPING: { value: HousekeepingStatus; label: string }[] = [
   { value: 'CLEAN', label: 'Sạch' },
@@ -55,16 +81,24 @@ const VN_DATETIME = new Intl.DateTimeFormat('vi-VN', {
 });
 const fmt = (iso: string) => VN_DATETIME.format(new Date(iso));
 
-/** Task 1.3 /properties — Phòng / Bookable unit / Block bảo trì (docs/19 §2 Đợt 1). */
+/** /properties — Thông tin cơ sở / Phòng / Bookable unit / Gói giá / Block bảo trì. */
 export default function PropertiesPage() {
   const propertyId = usePropertyStore((s) => s.selectedId);
   const [tab, setTab] = useState<Tab>('rooms');
+  const [createOpen, setCreateOpen] = useState(false);
 
+  const addButton = <Button onClick={() => setCreateOpen(true)}>Thêm cơ sở</Button>;
+
+  // Chưa có cơ sở nào = tenant vừa đăng ký. Nút tạo PHẢI có ở đây, nếu không
+  // người dùng mới không có đường nào tự thiết lập.
   if (!propertyId) {
     return (
       <PageContainer>
-        <PageHeader title="Cơ sở & Phòng" />
-        <p className="text-sm text-muted-foreground">Chọn cơ sở để quản lý phòng.</p>
+        <PageHeader title="Cơ sở & Phòng" action={addButton} />
+        <p className="text-sm text-muted-foreground">
+          Chưa có cơ sở nào được chọn. Tạo cơ sở đầu tiên để bắt đầu thêm phòng và gói giá.
+        </p>
+        {createOpen && <PropertyFormDialog property={null} onClose={() => setCreateOpen(false)} />}
       </PageContainer>
     );
   }
@@ -73,8 +107,10 @@ export default function PropertiesPage() {
     <PageContainer>
       <PageHeader
         title="Cơ sở & Phòng"
-        description="Quản lý phòng vật lý, đơn vị bán được (phòng / nguyên căn) và block bảo trì."
+        description="Quản lý phòng vật lý, đơn vị bán được (phòng / nguyên căn), gói giá và block bảo trì."
+        action={addButton}
       />
+      {createOpen && <PropertyFormDialog property={null} onClose={() => setCreateOpen(false)} />}
 
       <div role="tablist" aria-label="Nhóm quản lý" className="flex gap-1 border-b border-border">
         {TABS.map((t) => (
@@ -95,10 +131,86 @@ export default function PropertiesPage() {
         ))}
       </div>
 
+      {tab === 'info' && <PropertyInfoTab propertyId={propertyId} />}
       {tab === 'rooms' && <RoomsTab propertyId={propertyId} />}
       {tab === 'resources' && <ResourcesTab propertyId={propertyId} />}
+      {tab === 'rate-plans' && <RatePlansTab propertyId={propertyId} />}
       {tab === 'blocks' && <BlocksTab propertyId={propertyId} />}
     </PageContainer>
+  );
+}
+
+// ── Tab Thông tin cơ sở ─────────────────────────────────────────────────────
+function PropertyInfoTab({ propertyId }: { propertyId: string }) {
+  const { data: property, isLoading } = useProperty(propertyId);
+  const [editOpen, setEditOpen] = useState(false);
+
+  if (isLoading) return <Skeleton className="h-64 w-full" />;
+  if (!property) return <p className="text-sm text-muted-foreground">Không tải được thông tin cơ sở.</p>;
+
+  const address = [property.address_line, property.ward, property.district, property.province]
+    .filter(Boolean)
+    .join(', ');
+
+  const rows: { label: string; value: string }[] = [
+    { label: 'Tên cơ sở', value: property.name },
+    { label: 'Loại hình', value: PROPERTY_TYPE_LABEL[property.property_type] },
+    { label: 'Địa chỉ', value: address },
+    { label: 'Múi giờ', value: property.timezone },
+    { label: 'Mã kinh doanh lưu trú', value: property.police_business_code ?? '—' },
+    {
+      label: 'Thuê lại cho thuê',
+      value: property.is_rent_to_rent ? 'Có' : 'Không',
+    },
+  ];
+
+  if (property.is_rent_to_rent) {
+    rows.push(
+      { label: 'Chủ nhà', value: property.landlord_name ?? '—' },
+      { label: 'Điện thoại chủ nhà', value: property.landlord_phone ?? '—' },
+      {
+        label: 'Kỳ hợp đồng',
+        value:
+          property.rent_to_rent_contract_start != null
+            ? `${property.rent_to_rent_contract_start}${
+                property.rent_to_rent_contract_end ? ` → ${property.rent_to_rent_contract_end}` : ''
+              }`
+            : '—',
+      },
+      {
+        label: 'Cách trả chủ nhà',
+        value:
+          property.landlord_revenue_share_bp != null
+            ? `Chia ${bpToPercent(property.landlord_revenue_share_bp)}% doanh thu`
+            : property.monthly_landlord_rent_vnd != null
+              ? `${formatVnd(property.monthly_landlord_rent_vnd)} / tháng`
+              : '—',
+      },
+    );
+  }
+
+  return (
+    <section aria-label="Thông tin cơ sở" className="flex flex-col gap-3">
+      <div className="flex justify-end">
+        <Button onClick={() => setEditOpen(true)}>Sửa thông tin</Button>
+      </div>
+
+      <dl className="overflow-hidden rounded-lg border border-border">
+        {rows.map((row, i) => (
+          <div
+            key={row.label}
+            className={`grid grid-cols-1 gap-1 px-3 py-2 text-sm sm:grid-cols-[14rem_1fr] ${
+              i % 2 === 1 ? 'bg-muted/30' : ''
+            }`}
+          >
+            <dt className="text-muted-foreground">{row.label}</dt>
+            <dd>{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      {editOpen && <PropertyFormDialog property={property} onClose={() => setEditOpen(false)} />}
+    </section>
   );
 }
 
@@ -240,6 +352,128 @@ function ResourcesTab({ propertyId }: { propertyId: string }) {
           rooms={rooms ?? []}
           onClose={() => setAddOpen(false)}
         />
+      )}
+    </section>
+  );
+}
+
+// ── Tab Gói giá ─────────────────────────────────────────────────────────────
+type PlanDialog = 'form' | 'rules' | 'resources' | 'tester';
+
+function RatePlansTab({ propertyId }: { propertyId: string }) {
+  const { data: plans, isLoading } = useRatePlans(propertyId);
+  const del = useDeleteRatePlan();
+  const [dialog, setDialog] = useState<PlanDialog | null>(null);
+  const [active, setActive] = useState<RatePlanResponse | null>(null);
+
+  const open = (kind: PlanDialog, plan: RatePlanResponse | null) => {
+    setActive(plan);
+    setDialog(kind);
+  };
+  const close = () => {
+    setDialog(null);
+    setActive(null);
+  };
+
+  const onDelete = (plan: RatePlanResponse) =>
+    del.mutate(plan.id, {
+      onSuccess: () => toast.success('Đã xoá gói giá'),
+      onError: (err) =>
+        toast.error(err instanceof ApiClientError ? err.message : 'Xoá gói giá thất bại'),
+    });
+
+  return (
+    <section aria-label="Gói giá" className="flex flex-col gap-3">
+      <div className="flex justify-end">
+        <Button onClick={() => open('form', null)}>Tạo gói giá</Button>
+      </div>
+
+      {isLoading ? (
+        <Skeleton className="h-48 w-full" />
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 font-medium">Tên gói</th>
+                <th className="px-3 py-2 font-medium">Phương thức</th>
+                <th className="px-3 py-2 font-medium">Giá cơ bản</th>
+                <th className="px-3 py-2 font-medium">Cọc</th>
+                <th className="px-3 py-2 font-medium">Đơn vị áp dụng</th>
+                <th className="px-3 py-2 font-medium">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {(plans ?? []).length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">
+                    Chưa có gói giá nào — tạo một gói để bắt đầu nhận đặt phòng.
+                  </td>
+                </tr>
+              ) : (
+                (plans ?? []).map((plan) => (
+                  <tr key={plan.id}>
+                    <td className="px-3 py-2 font-medium">
+                      {plan.name}
+                      {plan.is_default && (
+                        <span className="ml-2 rounded border border-primary px-1.5 py-0.5 text-[0.65rem] uppercase text-primary">
+                          Mặc định
+                        </span>
+                      )}
+                      {!plan.is_active && (
+                        <span className="ml-2 text-xs text-muted-foreground">(ngừng dùng)</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">{MODE_LABEL[plan.mode]}</td>
+                    <td className="px-3 py-2 tabular-nums">{formatVnd(plan.base_price_vnd)}</td>
+                    <td className="px-3 py-2 tabular-nums">
+                      {describeDeposit(plan.deposit_type, plan.deposit_value)}
+                    </td>
+                    <td className="px-3 py-2 tabular-nums">{plan.resource_ids.length}</td>
+                    <td className="flex flex-wrap gap-2 px-3 py-2">
+                      <Button size="sm" variant="outline" onClick={() => open('form', plan)}>
+                        Sửa
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => open('rules', plan)}>
+                        Luật giá
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => open('resources', plan)}>
+                        Đơn vị
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => open('tester', plan)}>
+                        Thử giá
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={del.isPending}
+                        onClick={() => onDelete(plan)}
+                      >
+                        Xoá
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {dialog === 'form' && (
+        <RatePlanFormDialog
+          propertyId={propertyId}
+          plan={active}
+          defaultMode={active?.mode ?? 'DAILY'}
+          onClose={close}
+        />
+      )}
+      {dialog === 'rules' && active && <RatePlanRulesDialog plan={active} onClose={close} />}
+      {dialog === 'resources' && active && (
+        <RatePlanResourcesDialog propertyId={propertyId} plan={active} onClose={close} />
+      )}
+      {dialog === 'tester' && active && (
+        <RatePlanTester propertyId={propertyId} plan={active} onClose={close} />
       )}
     </section>
   );
