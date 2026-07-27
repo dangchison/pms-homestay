@@ -1,0 +1,32 @@
+# Danh sách lỗ hổng được MIỄN TRỪ có chủ đích cho job `security` (ci.yml).
+#
+# Quy tắc: chỉ miễn trừ khi (a) không có bản vá dùng được, VÀ (b) đã đánh giá
+# đường khai thác thực tế trong sản phẩm này. Mỗi mục phải ghi rõ lý do và mốc
+# rà lại. Không thêm mục nào chỉ để CI xanh.
+
+# ---------------------------------------------------------------------------
+# CVE-2026-14257 (GHSA-mh99-v99m-4gvg) — brace-expansion: DoS do chuỗi bung ra
+# không giới hạn, gây hết bộ nhớ.
+#
+# Vì sao không vá được: dải ảnh hưởng là `<= 5.0.7`, tức bao trọn cả nhánh 1.x và
+# 2.x, mà bản vá DUY NHẤT là 5.0.8. Nhánh 1.x/2.x không có bản vá riêng. Ép toàn
+# bộ lên 5.0.8 thì vỡ `minimatch@3` (nó gọi `require('brace-expansion')` như một
+# hàm CJS, bản 5.x đổi hình dạng export) — đã thử và làm hỏng ESLint:
+#     TypeError: expand is not a function
+#       at Minimatch.braceExpand (minimatch@3.1.5/minimatch.js:271)
+#
+# Nhánh cũ còn tồn tại vì ba chuỗi phụ thuộc có gói cha đã lỗi thời:
+#     exceljs → archiver → archiver-utils → glob@7 → minimatch@3
+#     gcp-metadata → gaxios → rimraf@2 → glob@7 → minimatch@3
+#     @sentry/nextjs → @sentry/bundler-plugin-core → glob → minimatch
+#
+# Đánh giá khai thác: lỗ hổng kích hoạt bằng chuỗi glob pattern độc hại. Ở cả ba
+# đường, pattern do chính thư viện sinh ra — KHÔNG nhận đầu vào từ người dùng hay
+# từ mạng. Hai đường đầu chỉ chạy khi xuất Excel (báo cáo lưu trú) và đóng gói
+# zip (data-export NĐ13); đường thứ ba chỉ chạy lúc build, không có trong sản
+# phẩm chạy thật. Không có bề mặt tấn công từ bên ngoài.
+#
+# Rà lại: khi nâng `archiver`/`exceljs` và chuỗi OTel GCP detector để loại bỏ
+# `minimatch@3` — lúc đó xoá dòng này đi. Xem PR #70.
+# Ghi nhận: 2026-07-27
+CVE-2026-14257

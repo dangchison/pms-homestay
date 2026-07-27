@@ -34,6 +34,12 @@
     "@types/node": "^22.10.0"
   },
   "pnpm": {
+    "auditConfig": {
+      "//": "Miễn trừ có chủ đích — lý do đầy đủ ở .trivyignore (cùng lỗ hổng, cổng khác).",
+      "ignoreGhsas": [
+        "GHSA-mh99-v99m-4gvg"
+      ]
+    },
     "overrides": {
       "multer": "^2.2.0",
       "@opentelemetry/propagator-jaeger": "^2.9.0",
