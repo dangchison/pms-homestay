@@ -8,3 +8,9 @@ export const DEMO_MODE =
 
 export const DEMO_PASSWORD = 'Demo@2026!';
 export const DEMO_OWNER = { email: 'owner@demo.vn', password: DEMO_PASSWORD } as const;
+/**
+ * Tenant chứa tài khoản demo. Nút demo PHẢI gửi kèm slug này: người dùng đã đăng
+ * nhập tenant riêng trước đó sẽ có slug khác được ghi nhớ, và nút demo sẽ đi tìm
+ * owner@demo.vn trong tenant của họ → 401.
+ */
+export const DEMO_TENANT_SLUG = 'demo';
