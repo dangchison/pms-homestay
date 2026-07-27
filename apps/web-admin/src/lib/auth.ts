@@ -1,5 +1,6 @@
 import { type AuthTokensResponse, type LoginRequest } from '@pms/shared-types';
 import { useAuthStore } from '@/stores/auth.store';
+import { usePropertyStore } from '@/stores/property.store';
 import { apiClient, ensureRefreshed, readCsrfToken } from './api-client';
 import { getQueryClient } from './query-client';
 import { rememberTenantSlug } from './tenant';
@@ -33,6 +34,7 @@ export async function logout(): Promise<void> {
     .catch(() => undefined); // best-effort: vẫn xoá local dù BE lỗi
   useAuthStore.getState().clear();
   getQueryClient().clear(); // xoá cache REST → đổi tài khoản trên cùng thiết bị không thấy dữ liệu phiên trước
+  usePropertyStore.getState().clearSelected(); // cơ sở ghi nhớ thuộc về người vừa đăng xuất
 }
 
 /**
