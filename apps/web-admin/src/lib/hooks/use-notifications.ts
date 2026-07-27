@@ -23,6 +23,28 @@ export function useNotifications() {
 }
 
 /**
+ * Danh sách đầy đủ cho trang /notifications.
+ *
+ * BE chỉ nhận `unread_only` + `limit` (tối đa 100 — shared-types/notification.ts),
+ * KHÔNG có phân trang con trỏ. Nên trang lấy trọn 100 dòng gần nhất; muốn cuộn vô
+ * hạn thì phải mở rộng endpoint trước.
+ */
+export const NOTIFICATIONS_PAGE_LIMIT = 100;
+
+export function useNotificationList(unreadOnly: boolean) {
+  return useQuery({
+    queryKey: ['notifications', 'page', unreadOnly],
+    queryFn: () => {
+      const qs = new URLSearchParams({ limit: String(NOTIFICATIONS_PAGE_LIMIT) });
+      if (unreadOnly) qs.set('unread_only', 'true');
+      return apiClient
+        .get<{ data: NotificationResponse[] }>(`/notifications?${qs.toString()}`)
+        .then((r) => r.data);
+    },
+  });
+}
+
+/**
  * Đánh dấu 1 thông báo đã đọc: POST /notifications/:id/read (không body) →
  * onSuccess invalidate ['notifications'] (refetch list + badge). Lỗi 404
  * NOTIFICATION_NOT_FOUND xử lý ở onError phía component (toast) — không crash popover.

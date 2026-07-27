@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import { Bell } from 'lucide-react';
 import { Button, Popover, PopoverContent, PopoverTrigger, cn, toast } from '@pms/ui';
 import { ApiClientError } from '@/lib/api-client';
@@ -93,6 +94,12 @@ export function NotificationBell() {
             ))}
           </ul>
         )}
+        <Link
+          href="/notifications"
+          className="block border-t border-border px-4 py-2.5 text-center text-sm font-medium text-primary transition-colors hover:bg-accent"
+        >
+          {t('notifications.viewAll')}
+        </Link>
       </PopoverContent>
     </Popover>
   );
