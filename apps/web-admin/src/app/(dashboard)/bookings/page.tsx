@@ -53,7 +53,7 @@ export default function BookingsPage() {
     return (
       <PageContainer>
         <PageHeader title="Đặt phòng" />
-        <p className="text-sm text-muted-foreground">{t('calendar.selectProperty')}</p>
+        <p className="text-sm text-muted-foreground">{t('bookings.selectProperty')}</p>
       </PageContainer>
     );
   }
@@ -65,7 +65,12 @@ export default function BookingsPage() {
 
   return (
     <PageContainer>
-      <PageHeader title="Đặt phòng" />
+      {/* Trang danh sách trước đây không có lối tạo nào — bảng rỗng chỉ ghi "Không có
+          booking." mà không nói tạo ở đâu. */}
+      <PageHeader
+        title="Đặt phòng"
+        action={<Button onClick={() => router.push('/bookings/new')}>Đặt phòng</Button>}
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <Select
