@@ -30,8 +30,10 @@ function baseHeaders(extra?: HeadersInit): Headers {
   const h = new Headers(extra);
   h.set('Content-Type', 'application/json');
   h.set('X-Request-Id', crypto.randomUUID());
+  // Caller được quyền chỉ định tenant (trang login gửi slug người dùng vừa nhập,
+  // trước khi có gì để ghi nhớ) — chỉ suy từ subdomain/storage khi caller im lặng.
   const slug = getTenantSlug();
-  if (slug) h.set('X-Tenant-Slug', slug);
+  if (slug && !h.has('X-Tenant-Slug')) h.set('X-Tenant-Slug', slug);
   const token = useAuthStore.getState().accessToken;
   if (token) h.set('Authorization', `Bearer ${token}`);
   return h;

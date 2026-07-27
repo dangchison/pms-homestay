@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { LoginRequestSchema, type LoginRequest } from '@pms/shared-types';
 import { Button, Input, Label, toast } from '@pms/ui';
@@ -11,7 +11,8 @@ import { useForm } from 'react-hook-form';
 import { AuthSplitLayout } from '@/components/auth/AuthSplitLayout';
 import { ApiClientError } from '@/lib/api-client';
 import { login } from '@/lib/auth';
-import { DEMO_MODE, DEMO_OWNER } from '@/lib/demo';
+import { DEMO_MODE, DEMO_OWNER, DEMO_TENANT_SLUG } from '@/lib/demo';
+import { getSubdomainTenantSlug, getTenantSlug } from '@/lib/tenant';
 
 /**
  * A1 /login (docs/ui/01). Validate bằng CHÍNH schema BE dùng (@pms/shared-types).
@@ -27,21 +28,42 @@ export default function LoginPage() {
 
   const [demoLoading, setDemoLoading] = useState(false);
 
+  // Có subdomain thì tenant đã xác định, không hỏi lại. Quyết định sau khi mount
+  // vì hostname chỉ có ở trình duyệt — đọc lúc render sẽ lệch hydration với SSR.
+  const [askTenant, setAskTenant] = useState(false);
+  const [tenantSlug, setTenantSlug] = useState('');
+  useEffect(() => {
+    if (getSubdomainTenantSlug()) return;
+    setAskTenant(true);
+    setTenantSlug(getTenantSlug() ?? '');
+  }, []);
+
   const onSubmit = async (values: LoginRequest) => {
+    const slug = tenantSlug.trim();
     try {
-      await login(values);
+      await login(values, askTenant && slug ? slug : undefined);
       router.replace('/');
     } catch (err) {
-      const msg =
-        err instanceof ApiClientError ? err.message : 'Đăng nhập thất bại — kiểm tra kết nối';
-      toast.error(msg);
+      if (!(err instanceof ApiClientError)) {
+        toast.error('Đăng nhập thất bại — kiểm tra kết nối');
+        return;
+      }
+      // 401 ở đây có HAI nguyên nhân không phân biệt được từ phía BE: sai mật khẩu,
+      // hoặc đúng mật khẩu nhưng tìm trong nhầm tenant (users unique theo
+      // (tenant_id, email)). Nói ra khả năng thứ hai, nếu không người dùng sẽ thử
+      // lại đúng mật khẩu đó mãi.
+      toast.error(
+        err.status === 401 && askTenant
+          ? `${err.message} — hoặc không gian làm việc "${slug}" chưa đúng`
+          : err.message,
+      );
     }
   };
 
   const demoLogin = async () => {
     setDemoLoading(true);
     try {
-      await login(DEMO_OWNER);
+      await login(DEMO_OWNER, DEMO_TENANT_SLUG);
       router.replace('/');
     } catch (err) {
       toast.error(
@@ -65,6 +87,26 @@ export default function LoginPage() {
       }
     >
       <form onSubmit={handleSubmit(onSubmit)} className="grid gap-5" noValidate>
+        {askTenant && (
+          <div className="grid gap-2">
+            <Label htmlFor="tenant-slug">Không gian làm việc</Label>
+            <div className="flex items-center rounded-md border border-input focus-within:ring-2 focus-within:ring-ring">
+              <Input
+                id="tenant-slug"
+                autoComplete="organization"
+                placeholder="bien-xanh"
+                className="h-11 border-0 focus-visible:ring-0"
+                value={tenantSlug}
+                onChange={(e) => setTenantSlug(e.target.value)}
+              />
+              <span className="shrink-0 px-3 text-sm text-muted-foreground">.pmsapp.vn</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Tên miền riêng bạn đặt khi đăng ký. Truy cập bằng tên miền riêng thì không cần điền.
+            </p>
+          </div>
+        )}
+
         <div className="grid gap-2">
           <Label htmlFor="email">Email</Label>
           <Input

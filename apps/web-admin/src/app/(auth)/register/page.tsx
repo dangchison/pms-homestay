@@ -9,6 +9,7 @@ import { Button, Input, Label, toast } from '@pms/ui';
 import { useForm } from 'react-hook-form';
 import { AuthSplitLayout } from '@/components/auth/AuthSplitLayout';
 import { ApiClientError, apiClient } from '@/lib/api-client';
+import { rememberTenantSlug } from '@/lib/tenant';
 
 /** A2 /register (docs/ui/01): tạo tenant + OWNER, trial 14 ngày. */
 function slugify(value: string): string {
@@ -35,6 +36,9 @@ export default function RegisterPage() {
   const onSubmit = async (values: RegisterTenantRequest) => {
     try {
       await apiClient.post('/auth/register', values);
+      // Ghi nhớ tenant vừa tạo, nếu không trang login (không subdomain trên
+      // localhost) rơi về tenant mặc định và báo sai mật khẩu dù mật khẩu đúng.
+      rememberTenantSlug(values.tenant_slug);
       toast.success('Đăng ký thành công — đăng nhập để bắt đầu');
       router.push('/login');
     } catch (err) {

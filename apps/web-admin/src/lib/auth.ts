@@ -2,10 +2,22 @@ import { type AuthTokensResponse, type LoginRequest } from '@pms/shared-types';
 import { useAuthStore } from '@/stores/auth.store';
 import { apiClient, ensureRefreshed } from './api-client';
 import { getQueryClient } from './query-client';
+import { rememberTenantSlug } from './tenant';
 
-/** Đăng nhập → lưu access/csrf/user in-memory (refresh cookie BE tự set). */
-export async function login(input: LoginRequest): Promise<void> {
-  const { data } = await apiClient.post<{ data: AuthTokensResponse }>('/auth/login', input);
+/**
+ * Đăng nhập → lưu access/csrf/user in-memory (refresh cookie BE tự set).
+ *
+ * `tenantSlug` để trang login chỉ định tenant khi không có subdomain. Chỉ ghi nhớ
+ * SAU khi BE nhận — slug sai mà ghi nhớ thì lần vào sau vẫn hỏng, và người dùng
+ * không có cách nào biết vì lỗi trả về là "sai mật khẩu".
+ */
+export async function login(input: LoginRequest, tenantSlug?: string): Promise<void> {
+  const { data } = await apiClient.post<{ data: AuthTokensResponse }>(
+    '/auth/login',
+    input,
+    tenantSlug ? { headers: { 'X-Tenant-Slug': tenantSlug } } : undefined,
+  );
+  if (tenantSlug) rememberTenantSlug(tenantSlug);
   useAuthStore.getState().setSession({
     accessToken: data.access_token,
     csrfToken: data.csrf_token,
