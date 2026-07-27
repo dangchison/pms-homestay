@@ -52,7 +52,7 @@ export default function ReportsPage() {
     return (
       <PageContainer>
         <PageHeader title="Báo cáo" />
-        <p className="text-sm text-muted-foreground">{t('calendar.selectProperty')}</p>
+        <p className="text-sm text-muted-foreground">{t('reports.selectProperty')}</p>
       </PageContainer>
     );
   }

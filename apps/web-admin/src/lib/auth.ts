@@ -19,6 +19,13 @@ export async function login(input: LoginRequest, tenantSlug?: string): Promise<v
     tenantSlug ? { headers: { 'X-Tenant-Slug': tenantSlug } } : undefined,
   );
   if (tenantSlug) rememberTenantSlug(tenantSlug);
+  // Cơ sở ghi nhớ thuộc về người đăng nhập TRƯỚC thì bỏ ngay tại đây, đừng đợi
+  // PropertySwitcher sửa trong effect: chỉ một nhịp render thôi là các hook đã kịp
+  // bắn request kèm property_id của tenant khác. RLS chặn nên chỉ trả 404 chứ không
+  // rò dữ liệu, nhưng vẫn là request sai và làm bẩn console của người dùng mới.
+  if (usePropertyStore.getState().ownerUserId !== data.user.id) {
+    usePropertyStore.getState().clearSelected();
+  }
   useAuthStore.getState().setSession({
     accessToken: data.access_token,
     csrfToken: data.csrf_token,

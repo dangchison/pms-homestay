@@ -41,7 +41,7 @@ export default function PaymentsPage() {
     return (
       <PageContainer>
         <PageHeader title="Sổ thanh toán" />
-        <p className="text-sm text-muted-foreground">{t('calendar.selectProperty')}</p>
+        <p className="text-sm text-muted-foreground">{t('payments.selectProperty')}</p>
       </PageContainer>
     );
   }

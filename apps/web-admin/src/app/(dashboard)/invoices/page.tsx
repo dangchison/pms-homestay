@@ -32,7 +32,7 @@ export default function InvoicesPage() {
     return (
       <PageContainer>
         <PageHeader title="Hoá đơn" />
-        <p className="text-sm text-muted-foreground">{t('calendar.selectProperty')}</p>
+        <p className="text-sm text-muted-foreground">{t('invoices.selectProperty')}</p>
       </PageContainer>
     );
   }
