@@ -174,7 +174,7 @@ export function PaymentMatch() {
         </div>
         <p className="shrink-0 text-sm font-semibold tabular-nums">2.400.000 ₫</p>
       </div>
-      <div className="flex items-center gap-2 pl-3 text-xs text-ink-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 pl-3 text-xs text-ink-2">
         <QrCode aria-hidden className="size-3.5" strokeWidth={1.75} />
         Khách quét VietQR, nội dung <span className="font-medium text-foreground">HD26080142</span>
       </div>
@@ -208,8 +208,8 @@ export function CheckinScan() {
           <dd className="font-medium">Đã tạo, chờ gửi</dd>
         </div>
         <div className="flex justify-between gap-3">
-          <dt className="text-ink-2">Thời gian nhập liệu</dt>
-          <dd className="font-medium tabular-nums">khoảng 8 giây</dd>
+          <dt className="text-ink-2">Lễ tân phải gõ tay</dt>
+          <dd className="font-medium">không trường nào</dd>
         </div>
       </dl>
     </div>
@@ -244,9 +244,9 @@ export function PnlRows() {
 /** Đồng bộ kênh: một lịch, nhiều nơi bán. */
 export function ChannelSync() {
   const channels = [
-    { name: 'Booking.com', at: '2 phút trước' },
-    { name: 'Airbnb', at: '2 phút trước' },
-    { name: 'Agoda', at: '5 phút trước' },
+    { name: 'Booking.com', at: '6 phút trước' },
+    { name: 'Airbnb', at: '6 phút trước' },
+    { name: 'Agoda', at: '14 phút trước' },
   ];
   return (
     <div className="grid gap-2">
@@ -267,6 +267,35 @@ export function ChannelSync() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Danh sách khách đến hôm nay, kèm nơi đặt. Khác hình lịch ở đầu trang có chủ ý:
+ * khoảnh khắc "khớp" đầu tiên phải cho thấy điều hero chưa nói — ba nguồn đặt rời
+ * rạc rơi đúng vào một dòng, có nguồn ghi rõ.
+ */
+export function ArrivalsToday() {
+  const rows = [
+    { room: '102', who: 'Lê Hà', via: 'Zalo', tone: 'confirmed' as const, note: '2 đêm' },
+    { room: '201', who: 'Phạm An', via: 'Booking.com', tone: 'ota' as const, note: '3 đêm' },
+    { room: '202', who: 'Nguyễn Vy', via: 'Gọi điện', tone: 'confirmed' as const, note: '3 đêm · đã cọc' },
+    { room: '301', who: 'Đỗ Khánh', via: 'Airbnb', tone: 'ota' as const, note: '1 đêm' },
+  ];
+  return (
+    <div className="grid gap-1.5">
+      {rows.map((r) => (
+        <div key={r.room} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5">
+          <span className="w-9 shrink-0 text-sm font-medium tabular-nums text-ink-2">{r.room}</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">{r.who}</span>
+          <span className="flex shrink-0 items-center gap-1.5 text-xs text-ink-2">
+            <span aria-hidden className={`size-1.5 rounded-full ${BOOKING_TONE[r.tone]}`} />
+            {r.via}
+          </span>
+          <span className="hidden shrink-0 text-xs text-ink-2 sm:inline">{r.note}</span>
+        </div>
+      ))}
     </div>
   );
 }

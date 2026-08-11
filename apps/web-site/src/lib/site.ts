@@ -30,7 +30,7 @@ export const PLAN_LABEL: Record<string, string> = {
 export const PLAN_FOR: Record<string, string> = {
   FREE: 'Một căn nhỏ, tự làm hết, muốn thử trước khi tin.',
   STARTER: 'Một cơ sở tới 15 phòng, có thể có một hai người phụ.',
-  PRO: 'Nhiều cơ sở, có nhân viên, cần P&L hợp nhất.',
+  PRO: 'Nhiều cơ sở, có nhân viên, cần báo cáo lãi lỗ hợp nhất.',
   ENTERPRISE: 'Chuỗi lớn hoặc cần tích hợp riêng.',
 };
 
@@ -45,16 +45,30 @@ export function priceLabel(plan: Pick<SubscriptionPlan, 'code' | 'monthly_price_
 }
 
 /**
- * Bảng giá đọc từ API để không lệch với hạn mức hệ thống đang chặn thật.
- * ISR 1 giờ. API chết thì trả mảng rỗng — trang render lời nhắn liên hệ chứ
- * không bịa số; giá sai còn tệ hơn không có giá.
+ * Bảng giá đọc từ API để không lệch với hạn mức hệ thống đang chặn thật. ISR 1 giờ.
+ *
+ * Lỗi thì NÉM, không trả mảng rỗng: trả rỗng nghĩa là lần render đó thành công và
+ * ISR đóng băng trang không-có-giá suốt một tiếng — một cú nấc 5 giây của API xoá
+ * bảng giá khỏi trang bán hàng 60 phút. Ném thì Next giữ nguyên bản tốt trước đó
+ * và thử lại ở lượt sau. Chỉ lần build đầu tiên mới thực sự không có gì để giữ,
+ * và lúc đó `PlanGrid` hiện lối liên hệ.
  */
 export async function fetchPlans(): Promise<SubscriptionPlan[]> {
+  const res = await fetch(`${API_URL}/api/v1/public/plans`, {
+    next: { revalidate: 3600 },
+    // API treo thì render treo theo — cắt sớm để lượt sau còn thử lại.
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!res.ok) throw new Error(`GET /public/plans → ${res.status}`);
+  const body = (await res.json()) as { data: SubscriptionPlan[] };
+  if (!Array.isArray(body.data)) throw new Error('GET /public/plans: thiếu mảng data');
+  return body.data;
+}
+
+/** Bọc cho trang: lần build đầu chưa có bản cũ để giữ thì đành render rỗng. */
+export async function fetchPlansOrEmpty(): Promise<SubscriptionPlan[]> {
   try {
-    const res = await fetch(`${API_URL}/api/v1/public/plans`, { next: { revalidate: 3600 } });
-    if (!res.ok) return [];
-    const body = (await res.json()) as { data: SubscriptionPlan[] };
-    return body.data ?? [];
+    return await fetchPlans();
   } catch {
     return [];
   }

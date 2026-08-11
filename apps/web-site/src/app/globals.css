@@ -25,13 +25,14 @@ body {
    * Teal của hệ (L 0.58) với chữ trắng chỉ đạt 3.4:1 — dưới ngưỡng AA cho chữ
    * thường. Trong app đó là nút thưa và người dùng đã quen; ở trang bán hàng thì
    * nút chính là thứ phải đọc được trên màn hình rẻ, ngoài sáng. Tối teal lại
-   * bằng chính foreground của hệ (không đưa màu thô mới vào) để đạt ~4.8:1.
+   * bằng relative color syntax: chỉ hạ L, GIỮ NGUYÊN chroma và hue. (color-mix
+   * với neutral hue 95 sẽ kéo teal 184 về xanh rêu 159 — phá One Accent.)
    *
    * Vênh này nằm ở token gốc `--primary`, ảnh hưởng cả web-admin lẫn web-staff —
    * chỗ này chỉ vá cho trang công khai, sửa gốc là việc riêng.
    */
-  --color-primary-strong: color-mix(in oklch, var(--primary) 72%, var(--foreground));
-  --color-primary-strong-hover: color-mix(in oklch, var(--primary) 56%, var(--foreground));
+  --color-primary-strong: oklch(from var(--primary) 0.48 c h);
+  --color-primary-strong-hover: oklch(from var(--primary) 0.42 c h);
 }
 
 /*

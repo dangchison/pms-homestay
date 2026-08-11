@@ -14,12 +14,12 @@ export function SiteHeader() {
         <Link href="/" className="text-[15px] font-semibold tracking-tight">
           PMS<span className="text-ink-2">&nbsp;Homestay</span>
         </Link>
-        <nav className="hidden flex-1 items-center gap-6 sm:flex">
+        <nav aria-label="Chính" className="hidden flex-1 items-center gap-6 sm:flex">
           {NAV.map((n) => (
             <Link
               key={n.href}
               href={n.href}
-              className="text-sm text-ink-2 transition-colors hover:text-foreground"
+              className="rounded-sm text-sm text-ink-2 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               {n.label}
             </Link>
@@ -28,7 +28,7 @@ export function SiteHeader() {
         <div className="ml-auto flex items-center gap-2 sm:ml-0">
           <a
             href={LOGIN_URL}
-            className="hidden rounded-md px-3 py-2 text-sm text-ink-2 transition-colors hover:text-foreground sm:inline-block"
+            className="hidden rounded-md px-3 py-2 text-sm text-ink-2 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:inline-block"
           >
             Đăng nhập
           </a>
@@ -46,19 +46,19 @@ export function SiteHeader() {
         xuống hàng riêng thay vì biến mất. Khách xem trên điện thoại vẫn phải
         tới được bảng giá mà không cần cuộn hết trang xuống footer.
       */}
-      <nav className="flex items-center gap-1 overflow-x-auto border-t border-border px-4 py-1.5 whitespace-nowrap sm:hidden">
+      <nav aria-label="Chính (màn hình hẹp)" className="flex items-center gap-1 overflow-x-auto border-t border-border px-4 py-1.5 whitespace-nowrap sm:hidden">
         {NAV.map((n) => (
           <Link
             key={n.href}
             href={n.href}
-            className="shrink-0 rounded-md px-2.5 py-2 text-sm text-ink-2 transition-colors hover:text-foreground"
+            className="shrink-0 rounded-md px-2.5 py-2 text-sm text-ink-2 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             {n.label}
           </Link>
         ))}
         <a
           href={LOGIN_URL}
-          className="ml-auto shrink-0 rounded-md px-2.5 py-2 text-sm text-ink-2 transition-colors hover:text-foreground"
+          className="ml-auto shrink-0 rounded-md px-2.5 py-2 text-sm text-ink-2 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           Đăng nhập
         </a>

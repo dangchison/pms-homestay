@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { LedgerRow } from '@/components/LedgerRow';
 import { PlanGrid } from '@/components/PlanGrid';
 import {
+  ArrivalsToday,
   CalendarStrip,
   ChannelSync,
   CheckinScan,
@@ -10,12 +11,12 @@ import {
   Scrap,
   Surface,
 } from '@/components/pieces';
-import { REGISTER_URL, SITE_URL, fetchPlans } from '@/lib/site';
+import { REGISTER_URL, SITE_URL, fetchPlansOrEmpty } from '@/lib/site';
 
 export const revalidate = 3600;
 
 export default async function HomePage() {
-  const plans = await fetchPlans();
+  const plans = await fetchPlansOrEmpty();
 
   return (
     <main>
@@ -40,8 +41,8 @@ export default async function HomePage() {
               </>
             }
             surface={
-              <Surface label="Lịch phòng, tất cả nguồn đặt về một chỗ">
-                <CalendarStrip />
+              <Surface label="Ba nguồn đặt, một lịch — nguồn nào vào chỗ nấy">
+                <ArrivalsToday />
               </Surface>
             }
           />
@@ -204,7 +205,7 @@ const COMPLIANCE = [
   },
   {
     title: 'Đọc CCCD gắn chip',
-    body: 'Chụp mặt trước là ra họ tên, số định danh, ngày sinh, thường trú. Lễ tân đỡ gõ, và đỡ gõ sai.',
+    body: 'Chụp mặt trước để hệ thống điền sẵn họ tên, số định danh, ngày sinh, thường trú; lễ tân soát lại rồi xác nhận. Đỡ gõ, và đỡ gõ sai.',
   },
   {
     title: 'VietQR và đối soát ngân hàng',
@@ -250,7 +251,7 @@ function Compliance() {
 
 /* ──────────────────────────────── Giá ──────────────────────────────── */
 
-async function Pricing({ plans }: { plans: Awaited<ReturnType<typeof fetchPlans>> }) {
+async function Pricing({ plans }: { plans: Awaited<ReturnType<typeof fetchPlansOrEmpty>> }) {
   return (
     <section className="mx-auto max-w-6xl px-5 py-16 md:px-8 md:py-24">
       <div className="flex flex-wrap items-end justify-between gap-4">

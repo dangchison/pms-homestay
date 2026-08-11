@@ -19,6 +19,9 @@ export function PlanGrid({ plans, compact = false }: { plans: SubscriptionPlan[]
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {plans.map((p) => {
         const recommended = p.code === 'STARTER';
+        // Gói giá 0 mà không phải FREE = "liên hệ báo giá"; đẩy sang /register là
+        // hứa một luồng tự phục vụ không tồn tại cho quy mô đó.
+        const contactOnly = p.code !== 'FREE' && p.monthly_price_vnd <= 0;
         return (
           <div
             key={p.id}
@@ -58,14 +61,14 @@ export function PlanGrid({ plans, compact = false }: { plans: SubscriptionPlan[]
             </dl>
 
             <a
-              href={REGISTER_URL}
+              href={contactOnly ? '/lien-he' : REGISTER_URL}
               className={`mt-1 rounded-md px-4 py-2.5 text-center text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
                 recommended
                   ? 'bg-primary-strong text-primary-foreground hover:bg-primary-strong-hover'
                   : 'border border-input text-foreground hover:bg-primary-muted'
               }`}
             >
-              {p.code === 'FREE' ? 'Bắt đầu miễn phí' : 'Dùng thử 14 ngày'}
+              {contactOnly ? 'Nhận báo giá' : p.code === 'FREE' ? 'Bắt đầu miễn phí' : 'Dùng thử 14 ngày'}
             </a>
           </div>
         );

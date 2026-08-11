@@ -23,29 +23,29 @@ export function SiteFooter() {
           )}
         </div>
 
-        <nav className="grid content-start gap-2 text-sm">
+        <nav aria-label="Sản phẩm" className="grid content-start gap-2 text-sm">
           <p className="text-xs font-medium tracking-wide text-ink-2 uppercase">
             Sản phẩm
           </p>
-          <Link href="/tinh-nang" className="-my-1 inline-block py-1.5 text-ink-2 transition-colors hover:text-foreground">
+          <Link href="/tinh-nang" className="-my-1 inline-block rounded-sm py-1.5 text-ink-2 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
             Tính năng
           </Link>
-          <Link href="/bang-gia" className="-my-1 inline-block py-1.5 text-ink-2 transition-colors hover:text-foreground">
+          <Link href="/bang-gia" className="-my-1 inline-block rounded-sm py-1.5 text-ink-2 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
             Bảng giá
           </Link>
-          <Link href="/lien-he" className="-my-1 inline-block py-1.5 text-ink-2 transition-colors hover:text-foreground">
+          <Link href="/lien-he" className="-my-1 inline-block rounded-sm py-1.5 text-ink-2 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
             Liên hệ
           </Link>
         </nav>
 
-        <nav className="grid content-start gap-2 text-sm">
+        <nav aria-label="Pháp lý" className="grid content-start gap-2 text-sm">
           <p className="text-xs font-medium tracking-wide text-ink-2 uppercase">
             Pháp lý
           </p>
-          <Link href="/dieu-khoan" className="-my-1 inline-block py-1.5 text-ink-2 transition-colors hover:text-foreground">
+          <Link href="/dieu-khoan" className="-my-1 inline-block rounded-sm py-1.5 text-ink-2 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
             Điều khoản sử dụng
           </Link>
-          <Link href="/bao-mat" className="-my-1 inline-block py-1.5 text-ink-2 transition-colors hover:text-foreground">
+          <Link href="/bao-mat" className="-my-1 inline-block rounded-sm py-1.5 text-ink-2 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
             Chính sách bảo mật
           </Link>
         </nav>

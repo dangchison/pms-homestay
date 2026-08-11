@@ -5,7 +5,7 @@ import { REGISTER_URL } from '@/lib/site';
 export const metadata: Metadata = {
   title: 'Tính năng',
   description:
-    'Lịch phòng chống trùng, vòng đời booking, hoá đơn và VietQR, chi phí và P&L, đồng bộ OTA, dọn phòng, tuân thủ pháp lý Việt Nam.',
+    'Lịch phòng chống trùng, vòng đời đặt phòng, hoá đơn và VietQR, chi phí và báo cáo lãi lỗ, đồng bộ OTA, dọn phòng, tuân thủ pháp lý Việt Nam.',
   alternates: { canonical: '/tinh-nang' },
 };
 
@@ -40,7 +40,7 @@ const GROUPS = [
     title: 'Khách và giấy tờ',
     lead: 'Nhập một lần lúc nhận phòng, dùng cho mọi thứ về sau.',
     items: [
-      ['Đọc CCCD gắn chip', 'Chụp mặt trước là ra họ tên, số định danh, ngày sinh, thường trú.'],
+      ['Đọc CCCD gắn chip', 'Chụp mặt trước để hệ thống điền sẵn họ tên, số định danh, ngày sinh, thường trú; lễ tân soát lại trước khi lưu.'],
       ['Khai báo lưu trú TT56', 'Tờ khai sinh từ dữ liệu đã nhập, không phải chép lại sang sổ khác.'],
       ['Khách nước ngoài', 'Mẫu khai tạm trú cho người nước ngoài nằm trong cùng luồng nhận phòng.'],
       ['Quyền dữ liệu theo NĐ13', 'Khách xin bản sao dữ liệu hoặc yêu cầu xoá thì có sẵn đường xử lý và có ghi vết.'],
@@ -56,7 +56,7 @@ const GROUPS = [
       ['Dọn phòng', 'Trạng thái phòng và việc dọn hiện trên điện thoại nhân viên, đánh dấu xong ngay tại chỗ.'],
       ['Ứng dụng cho nhân viên', 'Chạy trên điện thoại, làm được cả khi mạng chập chờn, nút to để thao tác một tay.'],
       ['Phân quyền theo vai trò', 'Lễ tân, buồng phòng, kế toán, chủ — mỗi người thấy đúng phần của mình.'],
-      ['Thông báo realtime', 'Dữ liệu tự cập nhật trên màn hình, không phải bấm tải lại.'],
+      ['Dữ liệu tự cập nhật', 'Màn hình tự đổi khi có việc mới, không phải bấm tải lại.'],
     ],
   },
   {

@@ -13,7 +13,10 @@ import { Client } from 'pg';
  * số phòng vì phòng là thứ tạo cả giá trị lẫn chi phí vận hành.
  *
  * `priceVnd: 0` ở ENTERPRISE = "liên hệ báo giá" (charge chặn gói giá 0).
- * `features` là cổng bật/tắt tính năng — PlanFeatureGuard đọc trực tiếp cột này.
+ * `features` là cổng bật/tắt tính năng — PlanFeatureGuard đọc trực tiếp cột này,
+ * và bảng giá công khai render tick từ đúng cột này. Vì vậy CHỈ bật cờ của tính
+ * năng đã giao được: `zns` (provider zalo chưa cấu hình) và `api_access` (chưa có
+ * API công khai) cố ý để tắt cho tới khi chạy thật.
  */
 const PLANS = [
   {
@@ -53,7 +56,6 @@ const PLANS = [
       multi_property_reports: true,
       assets: true,
       shifts: true,
-      zns: true,
     },
   },
   {
@@ -73,8 +75,6 @@ const PLANS = [
       multi_property_reports: true,
       assets: true,
       shifts: true,
-      zns: true,
-      api_access: true,
     },
   },
 ] as const;

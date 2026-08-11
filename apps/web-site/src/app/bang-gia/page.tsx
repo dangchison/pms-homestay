@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { PLAN_FEATURES, PLAN_FEATURE_LABEL, type SubscriptionPlan } from '@pms/shared-types';
 import { PlanGrid } from '@/components/PlanGrid';
-import { PLAN_LABEL, fetchPlans } from '@/lib/site';
+import { PLAN_LABEL, fetchPlansOrEmpty } from '@/lib/site';
 
 export const revalidate = 3600;
 
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 export default async function PricingPage() {
-  const plans = await fetchPlans();
+  const plans = await fetchPlansOrEmpty();
 
   return (
     <main className="mx-auto max-w-6xl px-5 py-16 md:px-8 md:py-24">
@@ -25,13 +25,16 @@ export default async function PricingPage() {
         miễn phí và dữ liệu vẫn còn nguyên.
       </p>
 
-      <div className="mt-12">
+      <section className="mt-12">
+        <h2 className="sr-only">Các gói</h2>
         <PlanGrid plans={plans} />
-      </div>
+      </section>
 
       {plans.length > 0 && <FeatureMatrix plans={plans} />}
 
-      <section className="mt-16 grid gap-6 border-t border-border pt-10 sm:grid-cols-2 lg:grid-cols-3">
+      <section className="mt-16 border-t border-border pt-10">
+        <h2 className="text-xl font-semibold tracking-tight">Vài điều nên biết trước</h2>
+        <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         <Note title="Vượt hạn mức thì sao?">
           Dữ liệu đã có giữ nguyên, bạn vẫn xem và vận hành bình thường. Hệ thống chỉ chặn tạo
           thêm cơ sở hoặc phòng mới cho tới khi nâng gói.
@@ -43,6 +46,7 @@ export default async function PricingPage() {
           Chuyển khoản qua VietQR. Hệ thống sinh mã QR đúng số tiền và nội dung, xác nhận xong là
           gói mới chạy.
         </Note>
+        </div>
       </section>
     </main>
   );
@@ -77,7 +81,7 @@ function FeatureMatrix({ plans }: { plans: SubscriptionPlan[] }) {
             {rows.map((f) => (
               <tr key={f} className="border-b border-border">
                 <th scope="row" className="py-3 pr-4 text-left font-normal text-ink-2">
-                  <span className="first-letter:uppercase">{PLAN_FEATURE_LABEL[f]}</span>
+                  {capitalize(PLAN_FEATURE_LABEL[f])}
                 </th>
                 {plans.map((p) => (
                   <td key={p.id} className="px-3 py-3 text-center">
@@ -103,6 +107,11 @@ function FeatureMatrix({ plans }: { plans: SubscriptionPlan[] }) {
       </div>
     </section>
   );
+}
+
+/** ::first-letter không áp cho span inline — viết hoa ở nguồn. */
+function capitalize(s: string): string {
+  return s.charAt(0).toLocaleUpperCase('vi-VN') + s.slice(1);
 }
 
 function Note({ title, children }: { title: string; children: React.ReactNode }) {

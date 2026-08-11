@@ -28,7 +28,7 @@ export function LedgerRow({
       />
 
       <div className="md:pr-2">
-        <h3 className="text-xl font-semibold tracking-tight md:text-2xl">{job}</h3>
+        <h2 className="text-xl font-semibold tracking-tight md:text-2xl">{job}</h2>
         <p className="mt-2 max-w-[42ch] text-[15px] leading-relaxed text-ink-2">{pain}</p>
         <div className="mt-6 grid gap-2.5 sm:max-w-md">{scraps}</div>
       </div>
