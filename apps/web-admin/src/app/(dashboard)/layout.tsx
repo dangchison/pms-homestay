@@ -1,14 +1,17 @@
 import { AuthGate } from '@/components/auth/AuthGate';
+import { RequirePropertySetup } from '@/components/layout/RequirePropertySetup';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 
 /**
  * Layout dashboard (docs/13 §3): AuthGate (bootstrap + redirect + SSE) bọc shell
- * sidebar + PropertySwitcher (trong TopBar).
+ * sidebar + PropertySwitcher (trong TopBar). RequirePropertySetup đưa tenant chưa
+ * có cơ sở nào về màn thiết lập.
  */
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGate>
+      <RequirePropertySetup />
       <div className="flex h-dvh overflow-hidden">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">

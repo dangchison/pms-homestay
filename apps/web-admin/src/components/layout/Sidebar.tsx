@@ -92,10 +92,21 @@ function activeHrefFor(pathname: string): string {
   );
 }
 
+/** Chữ cái đầu của hai từ cuối trong tên — "Nguyễn Văn An" → "VA". */
+function initialsOf(fullName: string | undefined): string {
+  const words = fullName?.trim().split(/\s+/).filter(Boolean) ?? [];
+  if (words.length === 0) return '?';
+  return words
+    .slice(-2)
+    .map((w) => w[0]!.toUpperCase())
+    .join('');
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const activeHref = activeHrefFor(pathname);
-  const role = useAuthStore((s) => s.user?.role);
+  const user = useAuthStore((s) => s.user);
+  const role = user?.role;
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface md:flex">
@@ -149,14 +160,16 @@ export function Sidebar() {
         })}
       </nav>
 
+      {/* Trước đây khối này hardcode "CD / Chủ Demo / OWNER", nên MỌI tài khoản đều
+          thấy tên người khác ở góc màn hình — dữ liệu user đã có sẵn trong store. */}
       <div className="border-t border-border p-3">
         <div className="flex items-center gap-3 rounded-lg px-2 py-1.5">
           <span className="flex size-8 items-center justify-center rounded-full bg-chip-brand-soft text-xs font-semibold text-chip-brand">
-            CD
+            {initialsOf(user?.full_name)}
           </span>
           <div className="min-w-0 leading-tight">
-            <div className="truncate text-sm font-medium">Chủ Demo</div>
-            <div className="truncate text-[11px] text-muted-foreground">OWNER</div>
+            <div className="truncate text-sm font-medium">{user?.full_name ?? '—'}</div>
+            <div className="truncate text-[11px] text-muted-foreground">{role ?? ''}</div>
           </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { type AuthTokensResponse, type LoginRequest } from '@pms/shared-types';
 import { useAuthStore } from '@/stores/auth.store';
-import { apiClient, ensureRefreshed } from './api-client';
+import { usePropertyStore } from '@/stores/property.store';
+import { apiClient, ensureRefreshed, readCsrfToken } from './api-client';
 import { getQueryClient } from './query-client';
 import { rememberTenantSlug } from './tenant';
 
@@ -18,6 +19,13 @@ export async function login(input: LoginRequest, tenantSlug?: string): Promise<v
     tenantSlug ? { headers: { 'X-Tenant-Slug': tenantSlug } } : undefined,
   );
   if (tenantSlug) rememberTenantSlug(tenantSlug);
+  // Cơ sở ghi nhớ thuộc về người đăng nhập TRƯỚC thì bỏ ngay tại đây, đừng đợi
+  // PropertySwitcher sửa trong effect: chỉ một nhịp render thôi là các hook đã kịp
+  // bắn request kèm property_id của tenant khác. RLS chặn nên chỉ trả 404 chứ không
+  // rò dữ liệu, nhưng vẫn là request sai và làm bẩn console của người dùng mới.
+  if (usePropertyStore.getState().ownerUserId !== data.user.id) {
+    usePropertyStore.getState().clearSelected();
+  }
   useAuthStore.getState().setSession({
     accessToken: data.access_token,
     csrfToken: data.csrf_token,
@@ -27,12 +35,13 @@ export async function login(input: LoginRequest, tenantSlug?: string): Promise<v
 
 /** Đăng xuất → thu hồi refresh token (CSRF double-submit) + xoá session in-memory. */
 export async function logout(): Promise<void> {
-  const csrf = useAuthStore.getState().csrfToken;
+  const csrf = readCsrfToken(); // in-memory rỗng sau reload → lấy từ cookie
   await apiClient
     .post('/auth/logout', undefined, csrf ? { headers: { 'X-CSRF-Token': csrf } } : undefined)
     .catch(() => undefined); // best-effort: vẫn xoá local dù BE lỗi
   useAuthStore.getState().clear();
   getQueryClient().clear(); // xoá cache REST → đổi tài khoản trên cùng thiết bị không thấy dữ liệu phiên trước
+  usePropertyStore.getState().clearSelected(); // cơ sở ghi nhớ thuộc về người vừa đăng xuất
 }
 
 /**

@@ -15,7 +15,7 @@ function NewBookingInner() {
   const propertyId = usePropertyStore((s) => s.selectedId);
 
   if (!propertyId) {
-    return <p className="text-sm text-muted-foreground">{t('calendar.selectProperty')}</p>;
+    return <p className="text-sm text-muted-foreground">{t('bookings.newSelectProperty')}</p>;
   }
 
   return (

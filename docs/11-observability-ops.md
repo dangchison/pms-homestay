@@ -64,7 +64,7 @@ LoggerModule.forRoot({
 **Triển khai (task 8.2):**
 - **BE** (`@core/sentry/sentry.ts`): `initSentry(env)` ở `main.ts` (no-op nếu thiếu `SENTRY_DSN`). `captureError()` gắn `request_id`/`tenant_id`, gọi trong `HttpExceptionFilter`/`PgErrorFilter` (mọi 5xx) + sanity-guard iCal. **Coexist OTel**: `skipOpenTelemetrySetup: true` (app đã chạy `@core/otel` NodeSDK riêng) — Sentry chỉ bắt LỖI, tracing để OTel (§4).
 - **FE** (`@sentry/nextjs`, web-admin + web-staff): `sentry.{client,server,edge}.config.ts` + `src/instrumentation.ts` (`onRequestError`) + `global-error.tsx`; `withSentryConfig` ở `next.config.ts` upload source map khi CI có `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT`. No-op nếu thiếu `NEXT_PUBLIC_SENTRY_DSN`.
-- **Kích hoạt**: set DSN (env BE + `NEXT_PUBLIC_SENTRY_DSN` FE) lúc deploy; thêm token source-map vào CI secrets. Alert rules (§9) + log dashboards/uptime cấu hình trên Sentry + Better Stack (ops). _Next 15.3+/Turbopack: chuyển `sentry.client.config.ts` → `instrumentation-client.ts`._
+- **Kích hoạt**: set DSN (env BE + `NEXT_PUBLIC_SENTRY_DSN` FE) lúc deploy; thêm token source-map vào CI secrets. Alert rules (§9) + log dashboards/uptime cấu hình trên Sentry + Better Stack (ops). _web-admin đã chuyển `sentry.client.config.ts` → `src/instrumentation-client.ts` (Next 15.3+ nạp native cho cả webpack lẫn Turbopack, nên `pnpm dev:turbo` vẫn có Sentry). web-staff thì chưa._
 
 ## 4. Metrics & Tracing
 

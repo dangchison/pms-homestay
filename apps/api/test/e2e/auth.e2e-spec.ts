@@ -160,6 +160,49 @@ describe('Auth e2e (task 1.7)', () => {
       expect(res.body.error.code).toBe('AUTH_INVALID_CREDENTIALS');
     });
 
+    /**
+     * Hồi quy: cookie csrf_token từng đặt HttpOnly + Path=/api/v1/auth, khiến JS
+     * không đọc lại được sau khi tải lại trang → /auth/refresh trả 403 → người dùng
+     * bị đăng xuất mỗi lần F5. Double-submit ĐÒI HỎI cookie đọc được, và path phải
+     * là '/' vì document.cookie chỉ trả cookie path-match với trang đang mở.
+     */
+    it('cookie csrf_token đọc được từ JS ở mọi path; refresh_token vẫn HttpOnly', async () => {
+      const res = await login().expect(200);
+      const lines = (res.headers['set-cookie'] ?? []) as unknown as string[];
+
+      // Có HAI dòng csrf_token: một dòng xoá cookie ở path cũ (giá trị rỗng) và
+      // dòng set thật. Lấy đúng dòng có giá trị.
+      const csrf = lines.find((l) => /^csrf_token=[^;]+/.test(l));
+      expect(csrf, 'thiếu Set-Cookie csrf_token có giá trị').toBeTruthy();
+      expect(csrf!.toLowerCase()).not.toContain('httponly');
+      expect(csrf).toMatch(/;\s*Path=\/(?:;|$)/);
+
+      // Dòng dọn cookie ở path cũ phải còn — thiếu nó thì trình duyệt của người dùng
+      // hiện tại giữ hai cookie trùng tên và assertCsrf hỏng vĩnh viễn.
+      expect(lines.some((l) => /^csrf_token=;/.test(l) && l.includes('/api/v1/auth'))).toBe(true);
+
+      const refresh = lines.find((l) => l.startsWith('refresh_token='));
+      expect(refresh!.toLowerCase()).toContain('httponly');
+      expect(refresh).toContain('Path=/api/v1/auth');
+    });
+
+    /**
+     * Trong lúc cookie csrf chuyển từ Path=/api/v1/auth sang Path=/, client có thể
+     * gửi HAI cookie trùng tên và cái cũ/rỗng đứng trước. cookie-parser chỉ giữ lần
+     * đầu tiên, nên đọc qua nó sẽ hỏng vĩnh viễn dù cookie đúng nằm ngay sau.
+     */
+    it('csrf vẫn khớp khi client gửi kèm cookie cũ rỗng đứng trước', async () => {
+      const loginRes = await login().expect(200);
+      const jar = cookiesOf(loginRes);
+      const csrf = loginRes.body.data.csrf_token as string;
+
+      await request(http)
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', `refresh_token=${jar.refresh_token}; csrf_token=; csrf_token=${csrf}`)
+        .set('X-CSRF-Token', csrf)
+        .expect(200);
+    });
+
     it('full flow: login → sessions → refresh rotation → grace → reuse detection', async () => {
       // 1) Login
       const loginRes = await login().expect(200);

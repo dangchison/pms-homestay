@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Button,
   Select,
@@ -82,10 +83,20 @@ const VN_DATETIME = new Intl.DateTimeFormat('vi-VN', {
 const fmt = (iso: string) => VN_DATETIME.format(new Date(iso));
 
 /** /properties — Thông tin cơ sở / Phòng / Bookable unit / Gói giá / Block bảo trì. */
-export default function PropertiesPage() {
+function PropertiesPageInner() {
+  const params = useSearchParams();
+  // `?setup=1` do RequirePropertySetup gắn khi tenant chưa có cơ sở nào.
+  const isSetup = params.get('setup') === '1';
   const propertyId = usePropertyStore((s) => s.selectedId);
   const [tab, setTab] = useState<Tab>('rooms');
   const [createOpen, setCreateOpen] = useState(false);
+
+  // Mở form qua effect chứ không qua giá trị khởi tạo của useState: trong lúc SSR,
+  // useSearchParams chưa có tham số nên khởi tạo bằng `isSetup` sẽ ra false và form
+  // không bao giờ bật. Đóng form rồi thì effect không chạy lại (dep không đổi).
+  useEffect(() => {
+    if (isSetup) setCreateOpen(true);
+  }, [isSetup]);
 
   const addButton = <Button onClick={() => setCreateOpen(true)}>Thêm cơ sở</Button>;
 
@@ -94,9 +105,14 @@ export default function PropertiesPage() {
   if (!propertyId) {
     return (
       <PageContainer>
-        <PageHeader title="Cơ sở & Phòng" action={addButton} />
+        <PageHeader
+          title={isSetup ? 'Thiết lập cơ sở đầu tiên' : 'Cơ sở & Phòng'}
+          action={addButton}
+        />
         <p className="text-sm text-muted-foreground">
-          Chưa có cơ sở nào được chọn. Tạo cơ sở đầu tiên để bắt đầu thêm phòng và gói giá.
+          {isSetup
+            ? 'Chào mừng bạn. Mọi thứ trong phần mềm — lịch phòng, đặt phòng, hoá đơn, báo cáo — đều xoay quanh một cơ sở, nên hãy tạo cơ sở đầu tiên để bắt đầu.'
+            : 'Chưa có cơ sở nào được chọn. Tạo cơ sở đầu tiên để bắt đầu thêm phòng và gói giá.'}
         </p>
         {createOpen && <PropertyFormDialog property={null} onClose={() => setCreateOpen(false)} />}
       </PageContainer>
@@ -137,6 +153,15 @@ export default function PropertiesPage() {
       {tab === 'rate-plans' && <RatePlansTab propertyId={propertyId} />}
       {tab === 'blocks' && <BlocksTab propertyId={propertyId} />}
     </PageContainer>
+  );
+}
+
+// useSearchParams cần Suspense bao ngoài, cùng khuôn với /bookings/new.
+export default function PropertiesPage() {
+  return (
+    <Suspense fallback={<p className="text-sm text-muted-foreground">Đang tải…</p>}>
+      <PropertiesPageInner />
+    </Suspense>
   );
 }
 

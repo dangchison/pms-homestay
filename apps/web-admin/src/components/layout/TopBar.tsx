@@ -1,13 +1,14 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Button, cn, toast } from '@pms/ui';
+import { Button, cn } from '@pms/ui';
 import { Globe, LogOut, Plus } from 'lucide-react';
 import { useT } from '@/lib/i18n';
 import { logout } from '@/lib/auth';
 import { useRealtimeStore } from '@/lib/hooks/use-events';
 import { useAuthStore } from '@/stores/auth.store';
 import { useLocaleStore } from '@/stores/locale.store';
+import { usePropertyStore } from '@/stores/property.store';
 import { NotificationBell } from './NotificationBell';
 import { PropertySwitcher } from './PropertySwitcher';
 
@@ -21,6 +22,7 @@ export function TopBar() {
   const connected = useRealtimeStore((s) => s.connected);
   const { locale, setLocale } = useLocaleStore();
   const user = useAuthStore((s) => s.user);
+  const propertyId = usePropertyStore((s) => s.selectedId);
 
   const onLogout = async () => {
     await logout();
@@ -53,7 +55,14 @@ export function TopBar() {
         </button>
 
         <NotificationBell />
-        <Button onClick={() => toast.info('Đặt phòng nhanh mở từ calendar — task 6.2/6.3')}>
+        {/* Trước đây nút này chỉ bắn toast lộ mã task nội bộ, dù /bookings/new đã có
+            form đặt phòng đầy đủ (báo giá sống, chọn khách). Form cần propertyId nên
+            vô hiệu khi chưa chọn cơ sở, kèm lý do thay vì bấm rồi mới biết. */}
+        <Button
+          disabled={!propertyId}
+          title={propertyId ? undefined : 'Chọn hoặc tạo một cơ sở trước khi đặt phòng'}
+          onClick={() => router.push('/bookings/new')}
+        >
           <Plus className="size-4" />
           {t('topbar.newBooking')}
         </Button>

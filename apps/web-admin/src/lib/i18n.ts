@@ -17,6 +17,7 @@ const messages = {
     'notifications.viewAll': 'Xem tất cả',
     'property.placeholder': 'Chọn cơ sở',
     'property.loading': 'Đang tải cơ sở…',
+    'property.createFirst': 'Tạo cơ sở đầu tiên',
     'auth.logout': 'Đăng xuất',
     'common.loading': 'Đang tải…',
     'calendar.title': 'Lịch phòng',
@@ -24,7 +25,14 @@ const messages = {
     'calendar.filter': 'Trạng thái',
     'calendar.prev': 'Khoảng trước',
     'calendar.next': 'Khoảng sau',
+    // Mỗi trang một câu riêng: dùng chung 'calendar.selectProperty' khiến trang Hoá
+    // đơn / Thanh toán / Báo cáo hiện "để xem lịch" — sai hẳn ngữ cảnh.
     'calendar.selectProperty': 'Chọn một cơ sở để xem lịch.',
+    'bookings.selectProperty': 'Chọn một cơ sở để xem danh sách đặt phòng.',
+    'bookings.newSelectProperty': 'Chọn một cơ sở trước khi tạo đặt phòng.',
+    'invoices.selectProperty': 'Chọn một cơ sở để xem hoá đơn.',
+    'payments.selectProperty': 'Chọn một cơ sở để xem thanh toán.',
+    'reports.selectProperty': 'Chọn một cơ sở để xem báo cáo.',
   },
   en: {
     'topbar.realtime': 'Live',
@@ -38,6 +46,7 @@ const messages = {
     'notifications.viewAll': 'View all',
     'property.placeholder': 'Select property',
     'property.loading': 'Loading properties…',
+    'property.createFirst': 'Create your first property',
     'auth.logout': 'Sign out',
     'common.loading': 'Loading…',
     'calendar.title': 'Calendar',
@@ -46,6 +55,11 @@ const messages = {
     'calendar.prev': 'Previous range',
     'calendar.next': 'Next range',
     'calendar.selectProperty': 'Select a property to view the calendar.',
+    'bookings.selectProperty': 'Select a property to view bookings.',
+    'bookings.newSelectProperty': 'Select a property before creating a booking.',
+    'invoices.selectProperty': 'Select a property to view invoices.',
+    'payments.selectProperty': 'Select a property to view payments.',
+    'reports.selectProperty': 'Select a property to view reports.',
   },
 } as const;
 

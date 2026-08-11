@@ -19,4 +19,19 @@ describe('invalidateForEvent → luôn seed ["notifications"]', () => {
     invalidateForEvent(qc, eventType);
     expect(spy).toHaveBeenCalledWith({ queryKey: ['notifications'] });
   });
+
+  /**
+   * Mọi event đều phải đi qua invalidateQueries CÓ queryKey. Từng có sự cố ở nhánh
+   * reconnect gọi invalidateQueries() KHÔNG tham số — dạng đó đánh stale toàn bộ
+   * cache, kể cả query inactive, nên tốn hàng chục request mỗi 15 phút.
+   */
+  it('không bao giờ invalidate toàn bộ cache (gọi thiếu queryKey)', () => {
+    const qc = new QueryClient();
+    const spy = vi.spyOn(qc, 'invalidateQueries').mockResolvedValue(undefined);
+    invalidateForEvent(qc, 'payment.received');
+    expect(spy).toHaveBeenCalled();
+    for (const [arg] of spy.mock.calls) {
+      expect(arg, 'invalidateQueries phải luôn kèm queryKey').toHaveProperty('queryKey');
+    }
+  });
 });
