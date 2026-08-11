@@ -20,7 +20,7 @@ export class SubscriptionController {
   @Get('subscription')
   @RequirePermissions('tenant.billing.manage')
   async summary(@CurrentUser() user: JwtClaims) {
-    return { data: await this.subscription.getSummary(user) };
+    return { data: await this.subscription.getSummary(user.tnt) };
   }
 
   /** Danh sách gói khả dụng (task 6.7 S3 — chọn để nâng cấp). */

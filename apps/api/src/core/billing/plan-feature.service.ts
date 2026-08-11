@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type Redis from 'ioredis';
 import { PrismaService } from '@core/prisma/prisma.service';
 import { REDIS } from '@core/redis/redis.module';
-import { type PlanFeature } from './plan-feature';
+import { type PlanFeature } from '@pms/shared-types';
 
 const FEATURES_CACHE_TTL_SECONDS = 60;
 

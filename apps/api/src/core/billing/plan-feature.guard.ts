@@ -1,10 +1,11 @@
 import { Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { PLAN_FEATURE_LABEL, type PlanFeature } from '@pms/shared-types';
 import { type Request } from 'express';
 import { IS_PUBLIC_KEY } from '@core/http/decorators/public.decorator';
 import { SKIP_TENANT_KEY } from '@core/http/decorators/skip-tenant.decorator';
 import { AppException } from '@core/http/exceptions/app.exception';
-import { PLAN_FEATURE_KEY, PLAN_FEATURE_LABEL, type PlanFeature } from './plan-feature';
+import { PLAN_FEATURE_KEY } from './plan-feature';
 import { PlanFeatureService } from './plan-feature.service';
 
 /**

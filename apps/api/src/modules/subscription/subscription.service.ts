@@ -60,6 +60,21 @@ const RESOURCE_LABEL: Record<ResourceKind, string> = {
  */
 const ALIVE = { deleted_at: null } as const;
 
+/**
+ * Thứ tự bậc thang gói. KHÔNG sắp theo giá: ENTERPRISE có giá 0 (= "liên hệ") nên
+ * sắp theo giá sẽ đẩy nó lên đứng thứ hai, ngay sau FREE — sai cả ở bảng giá công
+ * khai lẫn console.
+ */
+const PLAN_TIER_ORDER: readonly string[] = ['FREE', 'STARTER', 'PRO', 'ENTERPRISE'];
+
+export function sortByTier<T extends { code: string }>(plans: T[]): T[] {
+  const rank = (code: string) => {
+    const i = PLAN_TIER_ORDER.indexOf(code);
+    return i === -1 ? PLAN_TIER_ORDER.length : i; // mã lạ xếp cuối
+  };
+  return [...plans].sort((a, b) => rank(a.code) - rank(b.code) || a.code.localeCompare(b.code));
+}
+
 function toPlan(p: subscription_plans): SubscriptionPlan {
   return {
     id: p.id,
@@ -106,12 +121,16 @@ export class SubscriptionService {
     @InjectQueue(QUEUE_BILLING_GATEWAY) private readonly gatewayQueue: Queue,
   ) {}
 
-  // ── Trang billing: gói + trạng thái + usage ────────────────────────────────
-  async getSummary(user: JwtClaims): Promise<SubscriptionSummaryResponse> {
-    const tenant = await this.loadTenant(user.tnt);
+  /**
+   * Gói + trạng thái + usage của một tenant. Nhận tenantId (không phải JwtClaims)
+   * để web-platform tra được tenant bất kỳ — usage phải đi qua withTenant vì
+   * properties/rooms/users đều có RLS, đọc chéo tenant không set GUC là ra 0.
+   */
+  async getSummary(tenantId: string): Promise<SubscriptionSummaryResponse> {
+    const tenant = await this.loadTenant(tenantId);
     const usage = await withTenant(
       this.prisma,
-      user.tnt,
+      tenantId,
       async (tx) => {
         const [properties, rooms, users, byProperty] = await Promise.all([
           tx.properties.count({ where: ALIVE }),
@@ -216,10 +235,8 @@ export class SubscriptionService {
   // ── Danh sách gói (task 6.7 S3 — chọn gói để nâng cấp) ──────────────────────
   async listPlans(): Promise<SubscriptionPlan[]> {
     // eslint-disable-next-line no-restricted-syntax -- subscription_plans GLOBAL không RLS (ADR-0002 §5)
-    const plans = await this.prisma.subscription_plans.findMany({
-      orderBy: { monthly_price_vnd: 'asc' },
-    });
-    return plans.map(toPlan);
+    const plans = await this.prisma.subscription_plans.findMany();
+    return sortByTier(plans).map(toPlan);
   }
 
   // ── Lịch sử thanh toán của tenant ───────────────────────────────────────────
