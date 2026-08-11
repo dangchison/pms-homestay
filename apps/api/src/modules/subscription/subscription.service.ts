@@ -11,6 +11,7 @@ import {
 } from '@pms/shared-types';
 import { type Prisma, type subscription_payments, type subscription_plans } from '@prisma/client';
 import { Queue } from 'bullmq';
+import { PlanFeatureService } from '@core/billing/plan-feature.service';
 import { QUEUE_BILLING_GATEWAY } from '@core/bullmq/queues';
 import { ENV, type Env } from '@core/config/env.schema';
 import { AppException } from '@core/http/exceptions/app.exception';
@@ -46,6 +47,18 @@ const MAX_FIELD: Record<ResourceKind, 'max_properties' | 'max_rooms' | 'max_user
   room: 'max_rooms',
   user: 'max_users',
 };
+/** Tên tiếng Việt của tài nguyên — dùng trong thông báo chạm trần. */
+const RESOURCE_LABEL: Record<ResourceKind, string> = {
+  property: 'cơ sở',
+  room: 'phòng',
+  user: 'người dùng',
+};
+/**
+ * Hạn mức đếm bản ghi CÒN SỐNG. properties/rooms/users đều soft-delete
+ * (`deleted_at`) — không lọc thì cơ sở/phòng đã xoá vẫn ăn quota và khách không
+ * tạo lại được, rất dễ chạm với trần nhỏ của gói FREE.
+ */
+const ALIVE = { deleted_at: null } as const;
 
 function toPlan(p: subscription_plans): SubscriptionPlan {
   return {
@@ -53,6 +66,7 @@ function toPlan(p: subscription_plans): SubscriptionPlan {
     code: p.code as SubscriptionPlanCode,
     max_properties: p.max_properties,
     max_rooms: p.max_rooms,
+    max_rooms_per_property: p.max_rooms_per_property,
     max_users: p.max_users,
     monthly_price_vnd: Number(p.monthly_price_vnd),
     features: (p.features ?? {}) as Record<string, unknown>,
@@ -87,6 +101,7 @@ export class SubscriptionService {
     private readonly prisma: PrismaService,
     private readonly vietqr: VietqrService,
     private readonly tenantStatus: TenantStatusService,
+    private readonly planFeatures: PlanFeatureService,
     @Inject(ENV) private readonly env: Env,
     @InjectQueue(QUEUE_BILLING_GATEWAY) private readonly gatewayQueue: Queue,
   ) {}
@@ -98,12 +113,28 @@ export class SubscriptionService {
       this.prisma,
       user.tnt,
       async (tx) => {
-        const [properties, rooms, users] = await Promise.all([
-          tx.properties.count(),
-          tx.rooms.count(),
-          tx.users.count(),
+        const [properties, rooms, users, byProperty] = await Promise.all([
+          tx.properties.count({ where: ALIVE }),
+          tx.rooms.count({ where: ALIVE }),
+          tx.users.count({ where: ALIVE }),
+          // Trần theo từng cơ sở (max_rooms_per_property) → cần số phòng của mỗi cơ sở,
+          // kể cả cơ sở 0 phòng (groupBy trên rooms bỏ sót) → đi từ properties.
+          tx.properties.findMany({
+            where: ALIVE,
+            select: { id: true, name: true, _count: { select: { rooms: { where: ALIVE } } } },
+            orderBy: { name: 'asc' },
+          }),
         ]);
-        return { properties, rooms, users };
+        return {
+          properties,
+          rooms,
+          users,
+          rooms_by_property: byProperty.map((p) => ({
+            property_id: p.id,
+            property_name: p.name,
+            rooms: p._count.rooms,
+          })),
+        };
       },
       { readOnly: true },
     );
@@ -124,30 +155,62 @@ export class SubscriptionService {
     tenantId: string,
     resource: ResourceKind,
   ): Promise<void> {
-    // tenants/subscription_plans GLOBAL — đọc được trong tx (không RLS).
+    const plan = await this.loadPlanTx(tx, tenantId);
+    if (!plan) return; // chưa gán gói → không áp giới hạn (an toàn)
+
+    const count =
+      resource === 'property'
+        ? await tx.properties.count({ where: ALIVE })
+        : resource === 'room'
+          ? await tx.rooms.count({ where: ALIVE })
+          : await tx.users.count({ where: ALIVE });
+
+    this.assertUnderCap(count, plan[MAX_FIELD[resource]], plan.code, RESOURCE_LABEL[resource]);
+  }
+
+  /**
+   * Guard riêng cho phòng: gói có HAI trần độc lập — `max_rooms` (tổng toàn
+   * tenant) và `max_rooms_per_property` (từng cơ sở). Chạm trần nào báo trần đó,
+   * vì cách xử lý khác nhau: chạm trần cơ sở thì mở cơ sở mới cũng được, chạm
+   * trần tổng thì buộc phải nâng gói.
+   */
+  async assertRoomWithinPlanTx(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    propertyId: string,
+  ): Promise<void> {
+    const plan = await this.loadPlanTx(tx, tenantId);
+    if (!plan) return;
+
+    const [total, inProperty] = await Promise.all([
+      tx.rooms.count({ where: ALIVE }),
+      tx.rooms.count({ where: { ...ALIVE, property_id: propertyId } }),
+    ]);
+
+    this.assertUnderCap(inProperty, plan.max_rooms_per_property, plan.code, 'phòng mỗi cơ sở');
+    this.assertUnderCap(total, plan.max_rooms, plan.code, 'phòng');
+  }
+
+  private assertUnderCap(count: number, max: number, planCode: string, label: string): void {
+    if (count < max) return;
+    throw new AppException({
+      code: 'PLAN_LIMIT_REACHED',
+      title: 'Đã đạt giới hạn gói thuê bao',
+      status: 422,
+      detail: `Gói ${planCode} cho phép tối đa ${max} ${label}. Nâng gói để thêm (POST /billing/charge).`,
+    });
+  }
+
+  /** tenants/subscription_plans GLOBAL — đọc được trong tx (không RLS). */
+  private async loadPlanTx(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+  ): Promise<subscription_plans | null> {
     const tenant = await tx.tenants.findUnique({
       where: { id: tenantId },
       include: { subscription_plans: true },
     });
-    const plan = tenant?.subscription_plans;
-    if (!plan) return; // chưa gán gói → không áp giới hạn (an toàn)
-
-    const max = plan[MAX_FIELD[resource]];
-    const count =
-      resource === 'property'
-        ? await tx.properties.count()
-        : resource === 'room'
-          ? await tx.rooms.count()
-          : await tx.users.count();
-
-    if (count >= max) {
-      throw new AppException({
-        code: 'PLAN_LIMIT_REACHED',
-        title: 'Đã đạt giới hạn gói thuê bao',
-        status: 422,
-        detail: `Gói ${plan.code} cho phép tối đa ${max} ${resource}. Nâng gói để thêm (POST /billing/charge).`,
-      });
-    }
+    return tenant?.subscription_plans ?? null;
   }
 
   // ── Danh sách gói (task 6.7 S3 — chọn gói để nâng cấp) ──────────────────────
@@ -260,7 +323,11 @@ export class SubscriptionService {
       });
     });
 
-    await this.tenantStatus.invalidate(payment.tenant_id); // bỏ chặn write NGAY
+    // Bỏ chặn write NGAY + mở tính năng của gói mới NGAY (không chờ TTL 60s)
+    await Promise.all([
+      this.tenantStatus.invalidate(payment.tenant_id),
+      this.planFeatures.invalidate(payment.tenant_id),
+    ]);
     this.logger.log(`Subscription confirmed: tenant=${payment.tenant_id} plan=${payment.plan_code} ref=${payment.payment_ref}`);
     return toPaymentResponse(updated);
   }
@@ -307,16 +374,28 @@ export class SubscriptionService {
   }
 
   // ── Cron lifecycle (night-audit gọi) — cross-tenant trên bảng tenants ────────
-  async runLifecycleSweep(now: Date): Promise<{ suspended: number; churned: number }> {
+  async runLifecycleSweep(
+    now: Date,
+  ): Promise<{ downgraded: number; suspended: number; churned: number }> {
     const churnCutoff = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
 
-    // TRIAL hết hạn dùng thử → SUSPENDED
+    // TRIAL hết hạn → HẠ VỀ FREE, KHÔNG khoá. Dùng thử 14 ngày chạy ở mức STARTER
+    // (auth.service.register); hết hạn thì tài khoản vẫn dùng được ở hạn mức FREE.
+    // Dữ liệu giữ nguyên — vượt trần chỉ chặn TẠO MỚI, không xoá gì.
+    // eslint-disable-next-line no-restricted-syntax -- bảng subscription_plans GLOBAL không RLS
+    const freePlan = await this.prisma.subscription_plans.findUnique({ where: { code: 'FREE' } });
     // eslint-disable-next-line no-restricted-syntax -- platform cross-tenant, bảng non-RLS (ADR-0002 §5)
     const trialExpired = await this.prisma.tenants.updateMany({
       where: { status: 'TRIAL', trial_ends_at: { lt: now } },
-      data: { status: 'SUSPENDED', suspended_at: now },
+      // current_period_end để NULL: nhánh "ACTIVE hết hạn" dưới đây so `lt: now`
+      // nên NULL không lọt → tenant FREE không bị treo ở vòng cron kế tiếp.
+      data: {
+        status: 'ACTIVE',
+        trial_ends_at: null,
+        ...(freePlan ? { subscription_plan_id: freePlan.id } : {}),
+      },
     });
-    // ACTIVE hết hạn thuê bao → SUSPENDED
+    // ACTIVE hết hạn thuê bao ĐÃ TRẢ TIỀN → SUSPENDED (khác chuyện hết trial)
     // eslint-disable-next-line no-restricted-syntax -- platform cross-tenant, bảng non-RLS (ADR-0002 §5)
     const lapsed = await this.prisma.tenants.updateMany({
       where: { status: 'ACTIVE', current_period_end: { lt: now } },
@@ -329,11 +408,15 @@ export class SubscriptionService {
       data: { status: 'CHURNED' },
     });
 
-    const suspended = trialExpired.count + lapsed.count;
-    if (suspended > 0 || churned.count > 0) {
-      this.logger.log(`Subscription lifecycle: suspended=${suspended} churned=${churned.count}`);
+    if (trialExpired.count > 0 || lapsed.count > 0 || churned.count > 0) {
+      this.logger.log(
+        `Subscription lifecycle: downgraded=${trialExpired.count} suspended=${lapsed.count} churned=${churned.count}`,
+      );
     }
-    return { suspended, churned: churned.count };
+    if (trialExpired.count > 0 && !freePlan) {
+      this.logger.warn('Không tìm thấy gói FREE — tenant hết trial giữ nguyên gói cũ. Chạy pnpm db:seed:required.');
+    }
+    return { downgraded: trialExpired.count, suspended: lapsed.count, churned: churned.count };
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────

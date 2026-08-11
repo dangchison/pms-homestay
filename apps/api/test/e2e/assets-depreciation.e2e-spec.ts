@@ -8,6 +8,7 @@ import { AssetsService } from '@modules/assets/assets.service';
 import { AppModule } from '@/app.module';
 import { configureApp } from '@/app.setup';
 import { loadEnv } from '@core/config/env.schema';
+import { setTenantPlan } from '../helpers/plan';
 
 /**
  * ★ Acceptance task 3.5 (docs/03 §4.7, docs/09 §7): CRUD tài sản; khấu hao
@@ -79,6 +80,8 @@ describe('Assets & Depreciation (task 3.5)', () => {
         full_name: 'Owner',
       })
       .expect(201);
+    // Tài sản + khấu hao là tính năng gói PRO trở lên (PlanFeatureGuard).
+    await setTenantPlan(admin, tenantSlug, 'PRO');
     token = (
       await request(http)
         .post('/api/v1/auth/login')

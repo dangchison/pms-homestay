@@ -13,6 +13,7 @@ import {
 import { type JwtClaims } from '@pms/shared-types';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
+import { RequirePlanFeature } from '@core/billing/plan-feature';
 import { parseIfMatch } from '@/shared/if-match';
 import { CleaningService } from './cleaning.service';
 import {
@@ -35,6 +36,7 @@ import {
  * Auto-sinh khi CHECKED_OUT/switch do bookings.service gọi trực tiếp — không endpoint.
  */
 @Controller('cleaning-tasks')
+@RequirePlanFeature('cleaning')
 export class CleaningController {
   constructor(private readonly cleaning: CleaningService) {}
 

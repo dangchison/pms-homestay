@@ -13,6 +13,7 @@ import {
 import { type JwtClaims } from '@pms/shared-types';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
+import { RequirePlanFeature } from '@core/billing/plan-feature';
 import { AssetsService } from './assets.service';
 import { AssetListQueryDto, CreateAssetDto, DisposeAssetDto, UpdateAssetDto } from './dto';
 
@@ -23,6 +24,7 @@ import { AssetListQueryDto, CreateAssetDto, DisposeAssetDto, UpdateAssetDto } fr
  * (task 4.6) gọi `AssetsService.runMonthlyDepreciation` — không có endpoint thủ công.
  */
 @Controller('assets')
+@RequirePlanFeature('assets')
 export class AssetsController {
   constructor(private readonly assets: AssetsService) {}
 

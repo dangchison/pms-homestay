@@ -2,11 +2,13 @@ import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } fr
 import { type JwtClaims } from '@pms/shared-types';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
+import { RequirePlanFeature } from '@core/billing/plan-feature';
 import { CreateInvoiceDto, InvoiceListQueryDto, VoidInvoiceDto } from './dto';
 import { InvoicesService } from './invoices.service';
 
 /** /api/v1/invoices (docs/09 §4). DEPOSIT/STAY auto-sinh từ booking; đây là ad-hoc + tra cứu. */
 @Controller('invoices')
+@RequirePlanFeature('invoices')
 export class InvoicesController {
   constructor(private readonly invoices: InvoicesService) {}
 

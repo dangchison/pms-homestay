@@ -15,6 +15,7 @@ import { type Response } from 'express';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
 import { SkipAudit } from '@core/http/decorators/skip-audit.decorator';
+import { RequirePlanFeature } from '@core/billing/plan-feature';
 import {
   CreateForeignResidenceDto,
   ForeignResidenceListQueryDto,
@@ -31,6 +32,7 @@ const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.s
  * (pha-2 trong service) — như báo cáo lưu trú TT56.
  */
 @Controller('compliance/foreign-residence')
+@RequirePlanFeature('compliance')
 export class ForeignResidenceController {
   constructor(private readonly service: ForeignResidenceService) {}
 

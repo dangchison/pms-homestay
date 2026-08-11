@@ -3,6 +3,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { AuthCoreModule } from '@core/auth/auth-core.module';
 import { JwtAuthGuard } from '@core/auth/jwt-auth.guard';
 import { PermissionsGuard } from '@core/auth/permissions.guard';
+import { PlanFeatureGuard } from '@core/billing/plan-feature.guard';
+import { PlanFeatureModule } from '@core/billing/plan-feature.module';
 import { BullmqModule } from '@core/bullmq/bullmq.module';
 import { AppConfigModule } from '@core/config/config.module';
 import { type Env } from '@core/config/env.schema';
@@ -62,6 +64,7 @@ export class AppModule implements NestModule {
         PrismaModule,
         RedisModule,
         TenantStatusModule,
+        PlanFeatureModule,
         CryptoModule,
         CountersModule,
         BullmqModule,
@@ -107,6 +110,8 @@ export class AppModule implements NestModule {
         { provide: APP_GUARD, useClass: PermissionsGuard },
         // Sau RBAC: chặn write khi tenant SUSPENDED / mọi truy cập khi CHURNED (task 4.7)
         { provide: APP_GUARD, useClass: TenantStatusGuard },
+        // Cuối cùng: tính năng gói chưa mua → 402 (@RequirePlanFeature)
+        { provide: APP_GUARD, useClass: PlanFeatureGuard },
       ],
     };
   }

@@ -7,12 +7,76 @@
 import 'dotenv/config';
 import { Client } from 'pg';
 
-// TODO(task 4.7 billing-lite): chốt hạn mức + giá chính thức với product
+/**
+ * Bộ gói chính thức (chốt 2026-08-11). Hai trần phòng độc lập: `maxRooms` là tổng
+ * toàn tài khoản, `maxRoomsPerProperty` là trần của MỘT cơ sở (0036). Giá neo theo
+ * số phòng vì phòng là thứ tạo cả giá trị lẫn chi phí vận hành.
+ *
+ * `priceVnd: 0` ở ENTERPRISE = "liên hệ báo giá" (charge chặn gói giá 0).
+ * `features` là cổng bật/tắt tính năng — PlanFeatureGuard đọc trực tiếp cột này.
+ */
 const PLANS = [
-  { code: 'FREE', name: 'Miễn phí', maxProperties: 1, maxRooms: 5, maxUsers: 2, priceVnd: 0 },
-  { code: 'STARTER', name: 'Khởi nghiệp', maxProperties: 2, maxRooms: 20, maxUsers: 5, priceVnd: 199_000 },
-  { code: 'PRO', name: 'Chuyên nghiệp', maxProperties: 5, maxRooms: 100, maxUsers: 15, priceVnd: 499_000 },
-  { code: 'ENTERPRISE', name: 'Doanh nghiệp', maxProperties: 99, maxRooms: 1000, maxUsers: 99, priceVnd: 0 },
+  {
+    code: 'FREE',
+    name: 'Miễn phí',
+    maxProperties: 1,
+    maxRoomsPerProperty: 5,
+    maxRooms: 5,
+    maxUsers: 2,
+    priceVnd: 0,
+    features: {},
+  },
+  {
+    code: 'STARTER',
+    name: 'Khởi nghiệp',
+    maxProperties: 1,
+    maxRoomsPerProperty: 15,
+    maxRooms: 15,
+    maxUsers: 3,
+    priceVnd: 299_000,
+    features: { ota_sync: true, vietqr: true, invoices: true, compliance: true, cleaning: true },
+  },
+  {
+    code: 'PRO',
+    name: 'Chuyên nghiệp',
+    maxProperties: 3,
+    maxRoomsPerProperty: 25,
+    maxRooms: 75,
+    maxUsers: 10,
+    priceVnd: 799_000,
+    features: {
+      ota_sync: true,
+      vietqr: true,
+      invoices: true,
+      compliance: true,
+      cleaning: true,
+      multi_property_reports: true,
+      assets: true,
+      shifts: true,
+      zns: true,
+    },
+  },
+  {
+    code: 'ENTERPRISE',
+    name: 'Doanh nghiệp',
+    maxProperties: 20,
+    maxRoomsPerProperty: 100,
+    maxRooms: 2000,
+    maxUsers: 50,
+    priceVnd: 0,
+    features: {
+      ota_sync: true,
+      vietqr: true,
+      invoices: true,
+      compliance: true,
+      cleaning: true,
+      multi_property_reports: true,
+      assets: true,
+      shifts: true,
+      zns: true,
+      api_access: true,
+    },
+  },
 ] as const;
 
 /**
@@ -59,15 +123,27 @@ async function main(): Promise<void> {
   try {
     for (const plan of PLANS) {
       await client.query(
-        `INSERT INTO subscription_plans (code, name, max_properties, max_rooms, max_users, monthly_price_vnd)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO subscription_plans
+           (code, name, max_properties, max_rooms, max_rooms_per_property, max_users, monthly_price_vnd, features)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
          ON CONFLICT (code) DO UPDATE SET
            name = EXCLUDED.name,
            max_properties = EXCLUDED.max_properties,
            max_rooms = EXCLUDED.max_rooms,
+           max_rooms_per_property = EXCLUDED.max_rooms_per_property,
            max_users = EXCLUDED.max_users,
-           monthly_price_vnd = EXCLUDED.monthly_price_vnd`,
-        [plan.code, plan.name, plan.maxProperties, plan.maxRooms, plan.maxUsers, plan.priceVnd],
+           monthly_price_vnd = EXCLUDED.monthly_price_vnd,
+           features = EXCLUDED.features`,
+        [
+          plan.code,
+          plan.name,
+          plan.maxProperties,
+          plan.maxRooms,
+          plan.maxRoomsPerProperty,
+          plan.maxUsers,
+          plan.priceVnd,
+          JSON.stringify(plan.features),
+        ],
       );
     }
     const { rows } = await client.query('SELECT code FROM subscription_plans ORDER BY code');

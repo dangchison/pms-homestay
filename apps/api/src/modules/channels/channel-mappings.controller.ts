@@ -2,6 +2,7 @@ import { Controller, Delete, HttpCode, Param, ParseUUIDPipe, Patch, Post, Body }
 import { type JwtClaims } from '@pms/shared-types';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
+import { RequirePlanFeature } from '@core/billing/plan-feature';
 import { ChannelsService } from './channels.service';
 import { UpdateChannelMappingDto } from './dto';
 import { IcalSyncService } from './ical-sync.service';
@@ -12,6 +13,7 @@ import { IcalSyncService } from './ical-sync.service';
  * authorizeOnProperty (property_id từ channel của mapping).
  */
 @Controller('channel-mappings')
+@RequirePlanFeature('ota_sync')
 export class ChannelMappingsController {
   constructor(
     private readonly channels: ChannelsService,

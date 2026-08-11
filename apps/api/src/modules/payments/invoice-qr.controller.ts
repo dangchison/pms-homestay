@@ -3,6 +3,7 @@ import { type JwtClaims } from '@pms/shared-types';
 import { type Response } from 'express';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
+import { RequirePlanFeature } from '@core/billing/plan-feature';
 import { InvoicesService } from '@modules/invoices/invoices.service';
 import { VietqrService } from './vietqr.service';
 
@@ -12,6 +13,7 @@ import { VietqrService } from './vietqr.service';
  * /invoices để FE gọi tự nhiên. `@Res` trả binary trực tiếp (không bọc {data}).
  */
 @Controller('invoices')
+@RequirePlanFeature('vietqr')
 export class InvoiceQrController {
   constructor(
     private readonly invoices: InvoicesService,

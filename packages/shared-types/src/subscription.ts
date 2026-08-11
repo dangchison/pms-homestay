@@ -9,11 +9,21 @@ import { SubscriptionPlanCodeSchema, SubscriptionPlanSchema, TenantStatusSchema 
 export const SubscriptionPaymentStatusSchema = z.enum(['PENDING', 'CONFIRMED', 'CANCELLED']);
 export type SubscriptionPaymentStatus = z.infer<typeof SubscriptionPaymentStatusSchema>;
 
+/** Số phòng của MỘT cơ sở — đối chiếu với plan.max_rooms_per_property. */
+export const PropertyRoomUsageSchema = z.object({
+  property_id: z.uuid(),
+  property_name: z.string(),
+  rooms: z.number().int().nonnegative(),
+});
+export type PropertyRoomUsage = z.infer<typeof PropertyRoomUsageSchema>;
+
 /** Số lượng tài nguyên đang dùng (so với plan.max_*). */
 export const SubscriptionUsageSchema = z.object({
   properties: z.number().int().nonnegative(),
   rooms: z.number().int().nonnegative(),
   users: z.number().int().nonnegative(),
+  /** Chi tiết từng cơ sở — trang billing hiện "cơ sở A: 5/15 phòng". */
+  rooms_by_property: z.array(PropertyRoomUsageSchema),
 });
 export type SubscriptionUsage = z.infer<typeof SubscriptionUsageSchema>;
 

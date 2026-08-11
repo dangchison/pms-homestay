@@ -13,6 +13,7 @@ import {
 import { type JwtClaims } from '@pms/shared-types';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
+import { RequirePlanFeature } from '@core/billing/plan-feature';
 import { ChannelsService } from './channels.service';
 import {
   ChannelListQueryDto,
@@ -29,6 +30,7 @@ import { IcalSyncService } from './ical-sync.service';
  * ChannelMappingsController (/channel-mappings/:id).
  */
 @Controller('channels')
+@RequirePlanFeature('ota_sync')
 export class ChannelsController {
   constructor(
     private readonly channels: ChannelsService,

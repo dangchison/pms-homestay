@@ -2,6 +2,7 @@ import { Body, Controller, Get, Headers, HttpCode, Param, ParseUUIDPipe, Post, Q
 import { type JwtClaims } from '@pms/shared-types';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
+import { RequirePlanFeature } from '@core/billing/plan-feature';
 import { CloseShiftDto, OpenShiftDto, ShiftsListQueryDto } from './dto';
 import { ShiftsService } from './shifts.service';
 
@@ -12,6 +13,7 @@ import { ShiftsService } from './shifts.service';
  * `report.financial` nên STAFF vẫn KHÔNG đọc được ca.
  */
 @Controller('shifts')
+@RequirePlanFeature('shifts')
 export class ShiftsController {
   constructor(private readonly shifts: ShiftsService) {}
 

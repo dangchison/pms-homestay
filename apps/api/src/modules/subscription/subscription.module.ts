@@ -6,6 +6,7 @@ import { PlatformAuthModule } from '@modules/platform-auth/platform-auth.module'
 import { BillingGatewayProcessor } from './billing-gateway.processor';
 import { MockGatewayController } from './mock-gateway.controller';
 import { PlatformBillingController } from './platform-billing.controller';
+import { PublicPlansController } from './public-plans.controller';
 import { SubscriptionController } from './subscription.controller';
 import { SubscriptionService } from './subscription.service';
 
@@ -21,7 +22,12 @@ import { SubscriptionService } from './subscription.service';
  */
 @Module({
   imports: [PlatformAuthModule, BullModule.registerQueue({ name: QUEUE_BILLING_GATEWAY })],
-  controllers: [SubscriptionController, PlatformBillingController, MockGatewayController],
+  controllers: [
+    SubscriptionController,
+    PlatformBillingController,
+    PublicPlansController,
+    MockGatewayController,
+  ],
   providers: [SubscriptionService, VietqrService, BillingGatewayProcessor],
   exports: [SubscriptionService],
 })
