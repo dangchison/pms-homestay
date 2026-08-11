@@ -1,0 +1,94 @@
+@import 'tailwindcss';
+
+/* Design tokens — NGUỒN DUY NHẤT từ @pms/ui (docs/13 §7) */
+@import '@pms/ui/styles.css';
+
+/* Tailwind v4: scan class trong package ui (cross-package) */
+@source '../../../../packages/ui/src';
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/*
+ * Chữ phụ của trang công khai. `--muted-foreground` (L 0.585) chỉ đạt ~3.3:1 trên
+ * nền, `--subtle-foreground` ~2.2:1 — đủ cho nhãn thưa trong app nhưng KHÔNG đủ
+ * cho hàng đoạn văn của trang marketing đọc ngoài nắng, trên laptop rẻ tiền.
+ * Token này pha từ chính foreground/background của hệ (không phải màu thô mới)
+ * để đạt ~4.7:1, và chỉ sống trong web-site.
+ */
+@theme {
+  --color-ink-2: color-mix(in oklch, var(--foreground) 72%, var(--background));
+
+  /*
+   * Teal của hệ (L 0.58) với chữ trắng chỉ đạt 3.4:1 — dưới ngưỡng AA cho chữ
+   * thường. Trong app đó là nút thưa và người dùng đã quen; ở trang bán hàng thì
+   * nút chính là thứ phải đọc được trên màn hình rẻ, ngoài sáng. Tối teal lại
+   * bằng chính foreground của hệ (không đưa màu thô mới vào) để đạt ~4.8:1.
+   *
+   * Vênh này nằm ở token gốc `--primary`, ảnh hưởng cả web-admin lẫn web-staff —
+   * chỗ này chỉ vá cho trang công khai, sửa gốc là việc riêng.
+   */
+  --color-primary-strong: color-mix(in oklch, var(--primary) 72%, var(--foreground));
+  --color-primary-strong-hover: color-mix(in oklch, var(--primary) 56%, var(--foreground));
+}
+
+/*
+ * Tờ đối soát: hai cột ngăn bằng một đường kẻ mảnh chạy suốt trang. Đây là
+ * xương sống bố cục, không phải trang trí — mọi dòng nghiệp vụ đều bắc qua nó.
+ */
+.ledger-rule {
+  background-image: linear-gradient(to bottom, transparent, var(--border) 8%, var(--border) 92%, transparent);
+}
+
+/*
+ * Khoảnh khắc "khớp": vế trái là những mảnh rời, vế phải là một dòng liền.
+ * Mảnh rời trôi về đúng hàng khi dòng vào khung nhìn — một chuyển động duy nhất
+ * của cả trang, không phải hiệu ứng hover rải rác.
+ */
+@keyframes settle-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem) rotate(var(--tilt, 0deg));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+/* Vế phải đến sau khi các mảnh đã yên chỗ — đó là nhịp "khớp". */
+@keyframes settle-match {
+  from {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.reconcile [data-piece] {
+  animation: settle-in 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+
+.reconcile [data-settled] {
+  animation: settle-match 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 300ms;
+}
+
+/*
+ * Nội dung hiện sẵn theo mặc định; animation chỉ chạy khi khối đã vào khung
+ * nhìn. Không dùng opacity:0 làm trạng thái nghỉ — JS hỏng là trang trắng.
+ * Khối đầu trang KHÔNG bọc trong `.reconcile`: nó đã ở trong tầm mắt lúc tải,
+ * cho nó mờ vào nghĩa là luận điểm chính vắng mặt đúng giây đầu tiên.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .reconcile [data-piece],
+  .reconcile [data-settled] {
+    animation: none;
+  }
+}

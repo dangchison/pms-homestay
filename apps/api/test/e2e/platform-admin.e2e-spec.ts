@@ -50,7 +50,7 @@ describe('Platform admin console', () => {
 
   const auth = () => ({ Authorization: `Bearer ${token}` });
   const platformAuth = () => ({ Authorization: `Bearer ${platformToken}` });
-  const patchPlan = (body: unknown) =>
+  const patchPlan = (body: object) =>
     request(http).patch(`/api/v1/platform/plans/${sandbox.id}`).set(platformAuth()).send(body);
   const createRoom = (num: string) =>
     request(http).post('/api/v1/rooms').set(auth()).send({ property_id: propertyId, room_number: num });
