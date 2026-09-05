@@ -1,3 +1,12 @@
+# Design context (bắt buộc cho mọi việc UI)
+
+Mọi task đụng giao diện (web-admin, web-staff, landing_page) phải đọc trước 2 file ở root:
+
+- **`PRODUCT.md`** — sự thật sản phẩm: 2 phân khúc khách hàng, positioning pháp lý VN, nguyên tắc sản phẩm.
+- **`DESIGN.md`** — design system: token OKLCH (frontmatter là chuẩn), North Star "The Quiet Concierge", named rules (Two-Tier: chỉ dùng utility semantic, cấm màu thô; Status Language: màu trạng thái bất biến theme, chữ luôn neutral; One Accent; One Voice: chỉ Inter; Quiet Surface: phẳng khi nghỉ). Sidecar máy-đọc: `.impeccable/design.json`.
+
+Áp cho cả agent trong pipeline (/corp, /team, roadmap): coder theo token/rules, reviewer/QC đối chiếu vi phạm. Session có skill `impeccable` thì dùng nó cho việc design (critique/audit/polish…).
+
 <!-- rtk-instructions v2 -->
 # RTK (Rust Token Killer) - Token-Optimized Commands
 

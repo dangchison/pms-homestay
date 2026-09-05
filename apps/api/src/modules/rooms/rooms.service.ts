@@ -66,8 +66,9 @@ export class RoomsService {
     await this.permissionService.authorizeOnProperty(user, dto.property_id, 'room.crud');
 
     const row = await withTenant(this.prisma, user.tnt, async (tx) => {
-      // Plan-limit (task 4.7): chặn vượt subscription_plans.max_rooms (cùng tx → không race)
-      await this.subscription.assertWithinPlanLimitTx(tx, user.tnt, 'room');
+      // Plan-limit (task 4.7): chặn vượt max_rooms (tổng) VÀ max_rooms_per_property
+      // (trần từng cơ sở) — cùng tx → không race
+      await this.subscription.assertRoomWithinPlanTx(tx, user.tnt, dto.property_id);
       const room = await tx.rooms.create({ data: this.toCreateData(dto, user.tnt) });
       await this.resources.createRoomResourceTx(tx, {
         tenantId: user.tnt,

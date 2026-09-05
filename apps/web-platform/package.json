@@ -1,0 +1,39 @@
+{
+  "name": "@pms/web-platform",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "next dev --port 3003",
+    "build": "next build",
+    "start": "next start --port 3003",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"@pms/web-platform: no unit tests\""
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.0.0",
+    "@pms/shared-types": "workspace:*",
+    "@pms/ui": "workspace:*",
+    "@tanstack/react-query": "^5.62.0",
+    "lucide-react": "^0.469.0",
+    "next": "^15.5.22",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.54.0",
+    "zod": "^4.0.0",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@pms/eslint-config": "workspace:*",
+    "@pms/tsconfig": "workspace:*",
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.17.0",
+    "postcss": "^8.5.23",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.8.0"
+  }
+}

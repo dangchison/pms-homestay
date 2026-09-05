@@ -36,6 +36,8 @@ const ARGON2_OPTIONS: argon2.Options = {
 };
 
 const TRIAL_DAYS = 14;
+/** Hạn mức áp cho tenant trong thời gian dùng thử; hết trial cron hạ về FREE. */
+const TRIAL_PLAN_CODE = 'STARTER';
 const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 ngày sliding
 const ROTATION_GRACE_MS = 60_000;
 const RESET_TOKEN_TTL_SECONDS = 30 * 60;
@@ -116,7 +118,10 @@ export class AuthService {
           status: 409,
         });
       }
-      const freePlan = await tx.subscription_plans.findUnique({ where: { code: 'FREE' } });
+      // Dùng thử 14 ngày chạy ở hạn mức STARTER, không phải FREE — chủ nhà phải
+      // dựng được cơ sở thật mới đánh giá được sản phẩm. Hết trial, cron lifecycle
+      // hạ về FREE (subscription.service.runLifecycleSweep), dữ liệu giữ nguyên.
+      const trialPlan = await tx.subscription_plans.findUnique({ where: { code: TRIAL_PLAN_CODE } });
 
       const tenant = await tx.tenants.create({
         data: {
@@ -125,7 +130,7 @@ export class AuthService {
           display_name: dto.tenant_display_name,
           status: 'TRIAL',
           trial_ends_at: trialEndsAt,
-          subscription_plan_id: freePlan?.id,
+          subscription_plan_id: trialPlan?.id,
         },
       });
       const user = await tx.users.create({

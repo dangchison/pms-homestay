@@ -94,6 +94,19 @@ export default function BillingPage() {
               <UsageBar label="Người dùng" used={sub.usage.users} max={sub.plan.max_users} />
             </div>
           )}
+          {/* Gói còn trần riêng cho TỪNG cơ sở — tổng chưa đầy vẫn có thể bị chặn ở một cơ sở. */}
+          {sub.plan && sub.usage.rooms_by_property.length > 0 && (
+            <div className="grid gap-3 border-t border-border pt-4 sm:grid-cols-3">
+              {sub.usage.rooms_by_property.map((p) => (
+                <UsageBar
+                  key={p.property_id}
+                  label={`Phòng · ${p.property_name}`}
+                  used={p.rooms}
+                  max={sub.plan!.max_rooms_per_property}
+                />
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -108,10 +121,23 @@ export default function BillingPage() {
                   <span className="font-semibold">{p.code}</span>
                   {current && <Badge className="text-[10px]">Hiện tại</Badge>}
                 </div>
-                <p className="text-lg font-bold">{vnd(p.monthly_price_vnd)}<span className="text-xs font-normal text-muted-foreground">/tháng</span></p>
+                {/* Giá 0 ở gói không phải FREE = "liên hệ báo giá", không phải miễn phí. */}
+                <p className="text-lg font-bold">
+                  {p.code === 'FREE' ? (
+                    'Miễn phí'
+                  ) : p.monthly_price_vnd <= 0 ? (
+                    'Liên hệ'
+                  ) : (
+                    <>
+                      {vnd(p.monthly_price_vnd)}
+                      <span className="text-xs font-normal text-muted-foreground">/tháng</span>
+                    </>
+                  )}
+                </p>
                 <ul className="text-xs text-muted-foreground">
                   <li>{p.max_properties} cơ sở</li>
-                  <li>{p.max_rooms} phòng</li>
+                  <li>{p.max_rooms_per_property} phòng mỗi cơ sở</li>
+                  <li>{p.max_rooms} phòng tổng</li>
                   <li>{p.max_users} người dùng</li>
                 </ul>
                 <Button
@@ -121,7 +147,7 @@ export default function BillingPage() {
                   onClick={() => upgrade(p)}
                   className="mt-1"
                 >
-                  {current ? 'Đang dùng' : p.monthly_price_vnd <= 0 ? 'Miễn phí' : 'Nâng cấp'}
+                  {current ? 'Đang dùng' : p.code === 'FREE' ? 'Miễn phí' : p.monthly_price_vnd <= 0 ? 'Liên hệ' : 'Nâng cấp'}
                 </Button>
               </CardContent>
             </Card>

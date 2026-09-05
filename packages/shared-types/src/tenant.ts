@@ -11,7 +11,10 @@ export const SubscriptionPlanSchema = z.object({
   id: z.uuid(),
   code: SubscriptionPlanCodeSchema,
   max_properties: z.number().int().nonnegative(),
+  /** Trần tổng phòng toàn tenant. */
   max_rooms: z.number().int().nonnegative(),
+  /** Trần phòng của MỘT cơ sở — enforce độc lập với max_rooms. */
+  max_rooms_per_property: z.number().int().nonnegative(),
   max_users: z.number().int().nonnegative(),
   monthly_price_vnd: MoneyVndSchema,
   features: z.record(z.string(), z.unknown()).default({}),

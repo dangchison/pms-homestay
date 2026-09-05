@@ -4,6 +4,7 @@ import { type Response } from 'express';
 import { CurrentUser } from '@core/http/decorators/current-user.decorator';
 import { RequirePermissions } from '@core/http/decorators/require-permissions.decorator';
 import { SkipAudit } from '@core/http/decorators/skip-audit.decorator';
+import { RequirePlanFeature } from '@core/billing/plan-feature';
 import { ComplianceService } from './compliance.service';
 import { PoliceReportQueryDto, SubmitPoliceReportDto } from './dto';
 
@@ -15,6 +16,7 @@ const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.s
  * property-scope (pha-2 trong service) vì giải mã số giấy tờ (PII nhạy cảm).
  */
 @Controller('compliance')
+@RequirePlanFeature('compliance')
 export class ComplianceController {
   constructor(private readonly compliance: ComplianceService) {}
 

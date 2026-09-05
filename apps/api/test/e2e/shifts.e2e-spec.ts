@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '@/app.module';
 import { configureApp } from '@/app.setup';
 import { loadEnv } from '@core/config/env.schema';
+import { setTenantPlan } from '../helpers/plan';
 
 /**
  * ★ Acceptance TASK 9.4 (docs/16 #10 — Wave 1 chống thất thoát tiền mặt): sổ quỹ ca.
@@ -109,6 +110,9 @@ describe('Cash shifts (task 9.4, docs/16 #10)', () => {
         .expect(201);
     await register(slugA, ownerA, 'SHIFT A');
     await register(slugB, ownerB, 'SHIFT B');
+    // Bàn giao ca quầy là tính năng gói PRO trở lên (PlanFeatureGuard).
+    await setTenantPlan(admin, slugA, 'PRO');
+    await setTenantPlan(admin, slugB, 'PRO');
 
     const login = (slug: string, email: string) =>
       request(http).post('/api/v1/auth/login').set('X-Tenant-Slug', slug).send({ email, password: PASSWORD }).expect(200);
