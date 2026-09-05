@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-11T06:52:17Z",
+  "title": "Design System: PMS Homestay",
+  "extensions": {
+    "colorMeta": {
+      "teal-lan-bien-som": {
+        "role": "primary",
+        "displayName": "Teal Lặn Biển Sớm",
+        "canonical": "oklch(0.58 0.094 184)",
+        "tonalRamp": [
+          "oklch(0.255 0.039 187)",
+          "oklch(0.36 0.051 186)",
+          "oklch(0.42 0.065 185)",
+          "oklch(0.495 0.079 184)",
+          "oklch(0.58 0.094 184)",
+          "oklch(0.66 0.1 184)",
+          "oklch(0.758 0.094 184)",
+          "oklch(0.905 0.056 183)",
+          "oklch(0.972 0.017 184)"
+        ]
+      },
+      "xam-lanh-am": {
+        "role": "neutral",
+        "displayName": "Xám Lanh Ấm",
+        "canonical": "oklch(0.985 0.002 95)",
+        "tonalRamp": [
+          "oklch(0.165 0.004 95)",
+          "oklch(0.225 0.004 95)",
+          "oklch(0.305 0.005 95)",
+          "oklch(0.49 0.007 95)",
+          "oklch(0.585 0.007 95)",
+          "oklch(0.715 0.006 95)",
+          "oklch(0.874 0.005 95)",
+          "oklch(0.928 0.004 95)",
+          "oklch(0.985 0.002 95)"
+        ]
+      },
+      "thanh-cong": { "role": "semantic", "displayName": "Thành Công (emerald)", "canonical": "oklch(0.52 0.12 163)" },
+      "canh-bao": { "role": "semantic", "displayName": "Cảnh Báo (amber)", "canonical": "oklch(0.55 0.12 60)" },
+      "nguy-hiem": { "role": "semantic", "displayName": "Nguy Hiểm (rose)", "canonical": "oklch(0.585 0.207 17)" },
+      "thong-tin": { "role": "semantic", "displayName": "Thông Tin (blue)", "canonical": "oklch(0.55 0.17 254)" },
+      "booking-confirmed": { "role": "status", "displayName": "Đã xác nhận", "canonical": "oklch(0.58 0.094 184)" },
+      "booking-hold": { "role": "status", "displayName": "Giữ chỗ", "canonical": "oklch(0.83 0.155 85)" },
+      "booking-pending": { "role": "status", "displayName": "Chờ cọc", "canonical": "oklch(0.7 0.18 47)" },
+      "booking-checkedin": { "role": "status", "displayName": "Đang ở", "canonical": "oklch(0.55 0.17 254)" },
+      "booking-ota": { "role": "status", "displayName": "Booking OTA", "canonical": "oklch(0.62 0.18 290)" },
+      "hk-clean": { "role": "status", "displayName": "Sạch", "canonical": "oklch(0.72 0.19 145)" },
+      "hk-dirty": { "role": "status", "displayName": "Bẩn", "canonical": "oklch(0.64 0.21 25)" },
+      "hk-cleaning": { "role": "status", "displayName": "Đang dọn", "canonical": "oklch(0.79 0.15 75)" },
+      "hk-inspection": { "role": "status", "displayName": "Chờ kiểm tra", "canonical": "oklch(0.7 0.13 230)" }
+    },
+    "typographyMeta": {
+      "title": { "displayName": "Title", "purpose": "Tiêu đề card, section, dialog." },
+      "body": { "displayName": "Body", "purpose": "Cỡ mặc định toàn app: bảng, form, nội dung (14px)." },
+      "label": { "displayName": "Label", "purpose": "Badge, chip, nhãn phụ, meta (12px medium)." }
+    },
+    "shadows": [
+      { "name": "elevation-xs", "value": "0 1px 2px 0 oklch(0.3 0.02 95 / 0.05)", "purpose": "Input, phần tử nhỏ." },
+      { "name": "elevation-sm", "value": "0 1px 3px 0 oklch(0.3 0.02 95 / 0.07), 0 1px 2px -1px oklch(0.3 0.02 95 / 0.05)", "purpose": "Card mặc định (elevation=low)." },
+      { "name": "elevation-md", "value": "0 4px 10px -2px oklch(0.3 0.02 95 / 0.08), 0 2px 6px -2px oklch(0.3 0.02 95 / 0.05)", "purpose": "Card raised, dropdown, popover." },
+      { "name": "elevation-lg", "value": "0 12px 24px -6px oklch(0.3 0.02 95 / 0.1), 0 6px 12px -6px oklch(0.3 0.02 95 / 0.06)", "purpose": "Dialog, hover của card interactive. Không dùng cho phần tử tĩnh." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Easing chuẩn cho mọi transition (màu, transform, loading bar)." },
+      { "name": "hover-lift", "value": "transform: translateY(-2px); transition: all 150ms", "purpose": "Card interactive nhấc nhẹ khi hover, kèm elevation-lg." }
+    ],
+    "breakpoints": [
+      { "name": "md", "value": "768px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Hành động chính — teal duy nhất trên màn hình phần lớn neutral.",
+      "html": "<button class=\"ds-btn-primary\">Tạo đặt phòng</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 8px 16px; background: var(--primary, oklch(0.58 0.094 184)); color: var(--primary-foreground, #fff); font-family: Inter, ui-sans-serif, sans-serif; font-size: 14px; font-weight: 500; border: none; border-radius: 8px; cursor: pointer; transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-btn-primary:hover { background: color-mix(in oklch, var(--primary, oklch(0.58 0.094 184)) 90%, transparent); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring, oklch(0.58 0.094 184)); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Hành động phụ — viền input, hover chuyển nền teal sương.",
+      "html": "<button class=\"ds-btn-outline\">Hủy</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; height: 36px; padding: 8px 16px; background: var(--background, oklch(0.985 0.002 95)); color: var(--foreground, oklch(0.225 0.004 95)); font-family: Inter, ui-sans-serif, sans-serif; font-size: 14px; font-weight: 500; border: 1px solid var(--input, oklch(0.874 0.005 95)); border-radius: 8px; cursor: pointer; transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-btn-outline:hover { background: var(--accent, oklch(0.972 0.017 184)); color: var(--accent-foreground, oklch(0.42 0.065 185)); } .ds-btn-outline:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring, oklch(0.58 0.094 184)); }"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Trường nhập chuẩn — viền mảnh, focus ring teal 2px.",
+      "html": "<input class=\"ds-input\" placeholder=\"Tên khách…\" />",
+      "css": ".ds-input { display: flex; height: 36px; width: 100%; max-width: 280px; padding: 4px 12px; background: transparent; color: var(--foreground, oklch(0.225 0.004 95)); font-family: Inter, ui-sans-serif, sans-serif; font-size: 14px; border: 1px solid var(--input, oklch(0.874 0.005 95)); border-radius: 8px; box-shadow: 0 1px 2px 0 oklch(0.3 0.02 95 / 0.05); transition: box-shadow 150ms; } .ds-input::placeholder { color: var(--muted-foreground, oklch(0.585 0.007 95)); } .ds-input:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring, oklch(0.58 0.094 184)); }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Bề mặt nội dung chuẩn — bo 12px, viền 1px, bóng thì thầm.",
+      "html": "<div class=\"ds-card\"><h3 class=\"ds-card-title\">Doanh thu tháng</h3><p class=\"ds-card-body\">128.500.000 ₫ · 42 đêm phòng</p></div>",
+      "css": ".ds-card { background: var(--card, #fff); color: var(--card-foreground, oklch(0.225 0.004 95)); border: 1px solid var(--border, oklch(0.928 0.004 95)); border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px 0 oklch(0.3 0.02 95 / 0.07), 0 1px 2px -1px oklch(0.3 0.02 95 / 0.05); } .ds-card-title { margin: 0 0 6px; font-family: Inter, ui-sans-serif, sans-serif; font-size: 16px; font-weight: 600; letter-spacing: -0.025em; } .ds-card-body { margin: 0; font-family: Inter, ui-sans-serif, sans-serif; font-size: 14px; color: var(--muted-foreground, oklch(0.585 0.007 95)); }"
+    },
+    {
+      "name": "Booking Status Badge",
+      "kind": "chip",
+      "refersTo": "booking-confirmed",
+      "description": "Ngôn ngữ trạng thái chung: chấm màu + viền + nền tint, chữ luôn neutral.",
+      "html": "<span class=\"ds-badge-confirmed\"><span class=\"ds-badge-dot\"></span>Đã xác nhận</span>",
+      "css": ".ds-badge-confirmed { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; font-family: Inter, ui-sans-serif, sans-serif; font-size: 12px; font-weight: 500; color: var(--foreground, oklch(0.225 0.004 95)); border: 1px solid color-mix(in oklch, var(--booking-confirmed, oklch(0.58 0.094 184)) 40%, transparent); background: color-mix(in oklch, var(--booking-confirmed, oklch(0.58 0.094 184)) 12%, transparent); border-radius: 8px; white-space: nowrap; } .ds-badge-dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--booking-confirmed, oklch(0.58 0.094 184)); flex-shrink: 0; }"
+    },
+    {
+      "name": "Housekeeping Dot",
+      "kind": "custom",
+      "refersTo": "hk-clean",
+      "description": "Chấm trạng thái buồng phòng trên calendar / room board / list.",
+      "html": "<span class=\"ds-hk\"><span class=\"ds-hk-dot\"></span><span class=\"ds-hk-label\">Sạch</span></span>",
+      "css": ".ds-hk { display: inline-flex; align-items: center; gap: 6px; font-family: Inter, ui-sans-serif, sans-serif; font-size: 12px; } .ds-hk-dot { width: 10px; height: 10px; border-radius: 9999px; background: var(--hk-clean, oklch(0.72 0.19 145)); flex-shrink: 0; } .ds-hk-label { color: var(--muted-foreground, oklch(0.585 0.007 95)); }"
+    },
+    {
+      "name": "Stat Chip",
+      "kind": "chip",
+      "refersTo": "card",
+      "description": "Icon chip của StatCard — cặp token chip màu + nền tint soft.",
+      "html": "<span class=\"ds-chip-brand\">₫</span>",
+      "css": ".ds-chip-brand { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; font-family: Inter, ui-sans-serif, sans-serif; font-size: 16px; font-weight: 600; color: var(--chip-brand, oklch(0.495 0.079 184)); background: var(--chip-brand-soft, color-mix(in oklch, oklch(0.66 0.1 184) 14%, transparent)); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Concierge",
+    "overview": "Người quản gia thầm lặng: hệ thống nói ít, làm chuẩn, và không bao giờ chen giữa người lễ tân với công việc của họ. Giao diện phẳng và điềm tĩnh khi nghỉ, phản hồi nhẹ khi tương tác; số liệu tài chính và trạng thái phòng luôn là nhân vật chính, còn khung UI lùi lại phía sau. Sự cao cấp thể hiện bằng tiết chế — khoảng cách chuẩn, tương phản đủ, màu dùng có mục đích — chứ không bằng trang trí. Toàn hệ màu chạy trên OKLCH với kiến trúc 2 tầng: primitive không component nào gọi trực tiếp, semantic mới map vào Tailwind. Ba theme (light, dark, warm) chỉ đổi tầng semantic. Nền là neutral ấm hue 95 — chất hospitality nằm ở độ ấm kín đáo đó.",
+    "keyCharacteristics": [
+      "Điềm tĩnh, chuẩn xác, phục vụ mà không phô trương",
+      "Nền ấm + accent teal dùng tiết kiệm, có chủ đích",
+      "Trạng thái nghiệp vụ (booking/buồng phòng) là ngôn ngữ màu chung, bất biến theo theme",
+      "Phẳng khi nghỉ, phản hồi nhẹ khi tương tác; motion tôn trọng prefers-reduced-motion"
+    ],
+    "rules": [
+      { "name": "The Two-Tier Rule", "body": "Component và trang chỉ được nói ngôn ngữ semantic (bg-primary, text-muted-foreground, bg-booking-hold). Màu thô --p-* không map vào Tailwind nên gọi không được — đó là tính năng, không phải hạn chế.", "section": "colors" },
+      { "name": "The Status Language Rule", "body": "Màu trạng thái booking/buồng phòng là ngôn ngữ chung mọi màn hình và CỐ Ý bất biến theo theme — màu mang nghĩa. Chữ luôn là foreground neutral; màu trạng thái thể hiện qua chấm + viền + nền tint, không nhuộm chữ.", "section": "colors" },
+      { "name": "The One Accent Rule", "body": "Teal xuất hiện có chủ đích (hành động chính, focus, xác nhận). Màn hình bình thường phần lớn là neutral; teal hiếm nên teal có nghĩa.", "section": "colors" },
+      { "name": "The One Voice Rule", "body": "Không thêm font thứ hai. Cần nhấn mạnh: tăng weight hoặc đổi màu mực, không đổi font.", "section": "typography" },
+      { "name": "The Quiet Surface Rule", "body": "Bề mặt phẳng khi nghỉ. Bóng lớn chỉ xuất hiện như phản hồi trạng thái (hover nhấc -translate-y-0.5 + shadow-lg, dialog mở). Không bao giờ dùng shadow-lg cho phần tử tĩnh.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do dùng utility semantic (bg-surface, text-muted-foreground, bg-booking-confirmed) cho mọi màu.",
+      "Do giữ chữ trạng thái bằng foreground neutral; thể hiện màu qua dot + viền + tint (The Status Language Rule).",
+      "Do touch target ≥44px trên web-staff (nút to, thao tác 1 tay/găng tay).",
+      "Do tôn trọng prefers-reduced-motion cho mọi animation lặp.",
+      "Do format tiền 1.500.000 ₫ (vi-VN), ngày dd/MM/yyyy, giờ 24h."
+    ],
+    "donts": [
+      "Don't gọi màu thô — không hex/oklch inline trong component, không tự chế bảng màu trạng thái riêng cho màn hình nào.",
+      "Don't thêm font thứ hai hay đổi radius gốc cục bộ.",
+      "Don't dùng shadow đậm cho phần tử tĩnh, hay gradient trang trí — hệ này phẳng và điềm tĩnh.",
+      "Don't để lọt chuỗi tiếng Anh ra UI người dùng (tiếng Việt mặc định).",
+      "Don't thiết kế nút Refresh làm cơ chế chính — dữ liệu sống qua SSE."
+    ]
+  }
+}
