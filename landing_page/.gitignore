@@ -1,0 +1,13 @@
+node_modules/
+
+# Vercel CLI sinh ra khi `vercel link` / `vercel dev`
+.vercel
+
+# Biến môi trường thật — KHÔNG commit.
+# Luật phủ định PHẢI đứng cuối: git lấy luật khớp SAU CÙNG, nên `.env*` đặt dưới
+# `!.env.example` sẽ nuốt luôn file mẫu. (Vercel CLI tự nối `.env*` vào cuối file
+# khi chạy `vercel link` — nếu nó thêm lại, nhớ đẩy dòng `!` xuống dưới.)
+.env
+.env.*
+.env*
+!.env.example
